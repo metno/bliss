@@ -733,6 +733,28 @@ oiIT<-function(par,eps2=0.25,dz=250,lafmn=0.5,cv=FALSE,nmaxo=20) {
   return(c(xa,xidi,xav,xidiv))
 }
 
+#---------------------------------------------------------------------------------------------------
+#+ 
+KNG_TA_ObsOp<-function(s,m,xm,ym,zm,xs,ys,zs,
+                       ifield,oval,mMinElevDiff,
+                       mMinGradient,mMaxGradient,
+                       mSearchRadius) {
+  .C("obsop_LapseRateConst",s=as.integer(s),
+                    m=as.integer(m),
+                    xm=as.double(xm),
+                    ym=as.double(ym),
+                    zm=as.double(zm),
+                    xs=as.double(xs),
+                    ys=as.double(ys),
+                    zs=as.double(zs),
+                    ifield=as.double(ifield),
+                    oval=as.double(oval),
+                    mMinElevDiff=as.double(mMinElevDiff),
+                    mMinGradient=as.double(mMinGradient),
+                    mMaxGradient=as.double(mMaxGradient),
+                    mSearchRadius=as.double(mSearchRadius))
+}
+
 
 #
 #==============================================================================
@@ -773,7 +795,7 @@ p <- add_argument(p, "--twostep_superobbing",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\")",
+                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"hyletkf\",\"letkf\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1504,6 +1526,8 @@ if (argv$mode=="OI_multiscale") {
   }
 } else if (argv$mode=="hyletkf") {
   print("Hybrid Local Ensemble Transform Kalman Filter")
+} else if (argv$mode=="letkf") {
+  print("Local Ensemble Transform Kalman Filter")
 } else {
   boom("error statistical interpolation scheme undefined")
 }
@@ -1524,6 +1548,7 @@ dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
 dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
+dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
 #
 #------------------------------------------------------------------------------
 # Create master grid
@@ -1948,7 +1973,8 @@ if (file.exists(argv$iff_fg)) {
     rm(xb1)
   }
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
+    print(paste("# grid points (not NAs)=",length(aix)))
+    print("+...............................................................+")
   }
 }
 #
@@ -2110,11 +2136,15 @@ if (any(!is.na(argv$prId.exclude))) {
   ix0<-which(data$dqc==0 & 
              !(data$prId %in% argv$prId.exclude) &
              flag_in_master &
-             flag_in_fg   )
+             flag_in_fg &
+             !is.na(data$value) &
+             !is.nan(data$value) )
 } else {
   ix0<-which(data$dqc==0 &
              flag_in_master &
-             flag_in_fg   )
+             flag_in_fg  &
+             !is.na(data$value) &
+             !is.nan(data$value) )
 }
 n0<-length(ix0)
 # definitive station list
@@ -2164,6 +2194,7 @@ if (argv$verbose) {
   } else {
     print(paste("#observations =",n0))
   }
+  print("+...............................................................+")
 }
 #
 #------------------------------------------------------------------------------
@@ -2713,6 +2744,7 @@ if (argv$mode=="OI_firstguess") {
     }
   }
   elev_for_verif<-VecZ
+# END of OI two-step spatial interpolation (without background)
 #..............................................................................
 # ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
 } else if (argv$mode=="hyletkf") {
@@ -2986,7 +3018,172 @@ if (argv$mode=="OI_firstguess") {
       }
     }
   } # end prepare for gridded output
+# END of Hybrid Local Ensemble Transform Kalman Filter
+#..............................................................................
+# ===>  Local Ensemble Transform Kalman Filter  <===
+} else if (argv$mode=="letkf") {
+  # save original vectors for future use
+  VecX_orig<-VecX
+  VecY_orig<-VecY
+  VecZ_orig<-VecZ
+  prId_orig<-prId
+  yo_orig<-yo
+  xb_orig<-xb
+  aix<-which(!is.na(xgrid) & !is.na(ygrid) & !is.na(dem))
+  if (argv$cv_mode) {
+    xgrid<-VecX_cv
+    ygrid<-VecY_cv
+  } else {
+    xgrid_orig<-xgrid
+    ygrid_orig<-ygrid
+    dem_orig<-dem
+    # define grid-space
+    # note: xb is defined only over "aix" points
+    xgrid<-xgrid[aix]
+    ygrid<-ygrid[aix]
+    dem<-dem[aix]
+  }
+  # define obs-space, background
+  t00<-Sys.time()
+  r<-rmaster
+  yb0<-array(data=NA,dim=c(n0,nens))
+  argv$letkf.box_east<-100000
+  argv$letkf.box_north<-100000
+  argv$letkf.dzmin<-30
+  argv$letkf.vmin<-(-50)
+  argv$letkf.vmax<-50
+
+#-----------
+
+
+
+
+  ui<-matrix(ncol=5,nrow=10,data=0)
+  ci<-vector(length=10)
+  for (i in 1:5) {
+    ui[(2*i-1),i]<-1
+    ui[(2*i),i]<-(-1)
+  }
+  aux<-sort(c(0.5*argv$gamma.standard,2*argv$gamma.standard))
+  ci[3:4]<-c(aux[1],-aux[2])
+  ci[5:6]<-c(0,-20)
+  obsop_par<-array(data=NA,dim=c(n0,nens,6))
+  ragg0<-aggregate(rmaster,fact=20)
+  r<-rmaster
+  r[]<-NA
+  r[aix]<-dem
+  r1<-rmaster
+  r1[]<-NA
+  for (i in 1:n0) {
+    print(paste(i,n0))
+    rdem<-resample(r,
+                   crop(ragg0,
+                         y=extent( max(extent(rmaster)[1],(VecX[i]-argv$letkf.box_east)),
+                                   min(extent(rmaster)[2],(VecX[i]+argv$letkf.box_east)),
+                                   max(extent(rmaster)[3],(VecY[i]-argv$letkf.box_north)),
+                                   min(extent(rmaster)[4],(VecY[i]+argv$letkf.box_north)) )))
+    if (length(!is.na(getValues(rdem)))>5) {
+      aux_ix<-which(!is.na(getValues(rdem)))
+      xdem<-xyFromCell(rdem,aux_ix)[,1]
+      ydem<-xyFromCell(rdem,aux_ix)[,2]
+      zopt<-getValues(rdem)[aux_ix]
+#      rm(aux_ix)
+      zel_95<-as.numeric(quantile(zopt,probs=0.95))
+      zel_05<-as.numeric(quantile(zopt,probs=0.05))
+      zel_10<-as.numeric(quantile(zopt,probs=0.10))
+      zel_25<-as.numeric(quantile(zopt,probs=0.25))
+      zel_75<-as.numeric(quantile(zopt,probs=0.75))
+      for (e in 1:nens) {
+        r1[aix]<-xb[,e] 
+        rval<-resample(r1,crop(ragg0,rdem))
+        topt<-getValues(rval)[aux_ix]
+        if ( (zel_95-zel_05) < argv$letkf.dzmin ) {
+          par<-c(mean(topt))
+          opt<-optimize(f=tvertprofbasic2opt,interval=c(argv$letkf.vmin,argv$letkf.vmax))
+          obsop_par[i,e,]<-c(1,opt$minimum,argv$gamma.standard,NA,NA,NA)
+        } else {
+          ci[1:2]<-c(range(topt)[1],-range(topt)[2])
+          if (zel_10==zel_25) {
+            aux<-zel_25+ mean(zel)/10
+          } else {
+            aux<-zel_25
+          }
+          ci[7:8]<-c(-10,-aux)
+          aux<-zel_75-zel_25
+          ci[9:10]<-c(0,-aux)
+          par<-c(mean(range(topt)),
+                 argv$gamma.standard,
+                 5,
+                 zel_10,
+                 -ci[10]/2)
+          opt<-constrOptim(theta=par,
+                           f=tvertprofFrei2opt,
+                           ui=ui,
+                           ci=ci,
+                           grad=NULL)
+          obsop_par[i,e,]<-c(2,opt$par[1],opt$par[2],opt$par[3],opt$par[4],opt$par[5])
+        }
+      }
+    }
+  }
+#    ix<-which( abs(xgrid-VecX[i])<=argv$letkf.box_east &
+#               abs(ygrid-VecY[i])<=argv$letkf.box_north )
+#    print(paste(length(xgrid),length(ix)))
+#    if (length(ix)>0) {
+#      zel<-dem[ix]
+#      zopt<-dem[ix]
+#      zel_95<-as.numeric(quantile(dem[ix],probs=0.95))
+#      zel_05<-as.numeric(quantile(dem[ix],probs=0.05))
+#      zel_10<-as.numeric(quantile(dem[ix],probs=0.10))
+#      zel_25<-as.numeric(quantile(dem[ix],probs=0.25))
+#      zel_75<-as.numeric(quantile(dem[ix],probs=0.75))
+#      for (e in 1:nens) {
+#        val<-xb[ix,e]
+#        topt<-xb[ix,e]
+#        if ( (zel_95-zel_05) < argv$letkf.dzmin ) {
+#          par<-c(mean(val))
+#          opt<-optimize(f=tvertprofbasic2opt,interval=c(argv$letkf.vmin,argv$letkf.vmax))
+#          obsop_par[i,e,]<-c(1,opt$minimum,argv$gamma.standard,NA,NA,NA)
+#        } else {
+#          ci[1:2]<-c(range(val)[1],-range(val)[2])
+#          if (zel_10==zel_25) {
+#            aux<-zel_25+ mean(zel)/10
+#          } else {
+#            aux<-zel_25
+#          }
+#          ci[7:8]<-c(-10,-aux)
+#          aux<-zel_75-zel_25
+#          ci[9:10]<-c(0,-aux)
+#          par<-c(mean(range(val)),
+#                 argv$gamma.standard,
+#                 5,
+#                 zel_10,
+#                 -ci[10]/2)
+#          opt<-constrOptim(theta=par,
+#                           f=tvertprofFrei2opt,
+#                           ui=ui,
+#                           ci=ci,
+#                           grad=NULL)
+#          obsop_par[i,e,]<-c(2,opt$par[1],opt$par[2],opt$par[3],opt$par[4],opt$par[5])
+#        }
+#      }
+#    }      
+#  }
+  if (argv$verbose) {
+    t11<-Sys.time()
+    print(paste("oi time=",round(t11-t00,1),attr(t11-t00,"unit")))
+  }
+q()
+  rm(r)
+  ix<-which(apply(yb0,MAR=1,
+                  FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
+            ==nens)
+  n1<-length(ix)
+  yb<-array(data=NA,dim=c(n1,nens))
+  for (e in 1:nens) yb[,e]<-yb0[ix,e]
+  rm(yb0)
 } # end if for the selection among OIs
+q()
 #
 #------------------------------------------------------------------------------
 # set dry regions to no-rain
