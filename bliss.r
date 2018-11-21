@@ -54,7 +54,12 @@ rasters_match<-function(r1,r2) {
 #+
 set_NAs_to_NULL<-function(x) {
   if (!is.null(x)) {
-    if (is.na(x)) x<-NULL
+    if (length(x)>1) {
+      ix<-which(is.na(x))
+      x[ix]<-NULL
+    } else {
+      if (is.na(x)) x<-NULL
+    }
   }
   x
 }
@@ -440,8 +445,9 @@ background_incAv<-function(ixynp, # sub-region centroids
   # (S+R) definition, inversion and sum-up rows. Just in one line of code.
   disth<-sqrt(outer(x_aux,x_aux,FUN="-")**2.+
               outer(y_aux,y_aux,FUN="-")**2.)
-  # maxboxl/6 is the max limit for dh
-  dh_oi<-min((maxboxl/6.),mean(findRow(x=disth,n=(length(x_aux)-closeNth+1))))
+  # maxboxl/4.5 is the max limit for dh
+  # NOTE: maxboxl/4.5, seNorge_2018 (maxboxl=250km so maxboxl/4.5=55km)
+  dh_oi<-min((maxboxl/4.5),mean(findRow(x=disth,n=(length(x_aux)-closeNth+1))))
   # more than 100 bg_obs (10*10) then reduce dh_oi
   if (length(ix)>100) dh_oi<-dh_oi/2.
   vec1<-rowSums(chol2inv(chol( 
@@ -727,6 +733,28 @@ oiIT<-function(par,eps2=0.25,dz=250,lafmn=0.5,cv=FALSE,nmaxo=20) {
   return(c(xa,xidi,xav,xidiv))
 }
 
+#---------------------------------------------------------------------------------------------------
+#+ 
+obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
+                               ifield,oval,mMinElevDiff,
+                               mMinGradient,mMaxGradient,
+                               mSearchRadius) {
+  .C("obsop_LapseRateConst",s=as.integer(s),
+                            m=as.integer(m),
+                            xm=as.double(xm),
+                            ym=as.double(ym),
+                            zm=as.double(zm),
+                            xs=as.double(xs),
+                            ys=as.double(ys),
+                            zs=as.double(zs),
+                            ifield=as.double(ifield),
+                            oval=as.double(oval),
+                            mMinElevDiff=as.double(mMinElevDiff),
+                            mMinGradient=as.double(mMinGradient),
+                            mMaxGradient=as.double(mMaxGradient),
+                            mSearchRadius=as.double(mSearchRadius))
+}
+
 
 #
 #==============================================================================
@@ -767,7 +795,7 @@ p <- add_argument(p, "--twostep_superobbing",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\")",
+                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"hyletkf\",\"letkf\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -858,13 +886,57 @@ p <- add_argument(p, "--nclose.bg",
                   type="numeric",
                   default=4)
 p <- add_argument(p, "--maxboxl",
-                  help="maximum lenght (m) of the box used to define a sub-region",
+                  help="maximum length (m) of the box used to define a sub-region",
                   type="numeric",
                   default=250000)
 p <- add_argument(p, "--obs.outbuffer",
                   help="distance (m) defining the \"buffer\" region outside the masked region where to consider the observation, so to reduce border effects",
                   type="numeric",
                   default=50000)
+#------------------------------------------------------------------------------
+# hyletkf
+p <- add_argument(p, "--hyletkf.eps2_prec_default",
+                  help="LETKF default value for the ratio between obs error variance and backg error variance in case of precipitation",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--hyletkf.eps2_noprec_default",
+                  help="LETKF default value for the ratio between obs error variance and backg error variance in case of no-precipitation",
+                  type="numeric",
+                  default=0.05)
+p <- add_argument(p, "--hyletkf.Dh",
+                  help="horizontal de-correlation length for the LETKF localization",
+                  type="numeric",
+                  default=10)
+p <- add_argument(p, "--hyletkf.pmax",
+                  help="maximum number of observations in the neighbourhood of a gridpoint for LETKF",
+                  type="numeric",
+                  default=200)
+p <- add_argument(p, "--hyletkf.sigma2_min",
+                  help="minimum allowed background variance (in the transformed space) for LETKF",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--hyletkf.eps2_prId",
+                  help="provider identifier corresponding to the specified ratio between obs error variance and backg error variance (LETKF)",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NULL)
+p <- add_argument(p, "--hyletkf.eps2",
+                  help="observation-provider dependent ratio between obs error variance and backg error variance (LETKF)",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NULL)
+p <- add_argument(p, "--hyletkf.Dh_oi",
+                  help="horizontal de-correlation length for the OI step of the HyLETKF (km)",
+                  type="numeric",
+                  default=10)
+p <- add_argument(p, "--hyletkf.eps2_oi",
+                  help="ratio between obs error variance and backg error variance for the OI step of the HyLETKF",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--hyletkf.rloc_min",
+                  help="use an observation in LETKF only if the localization weight is greater than the specified minimum value",
+                  type="numeric",
+                  default=0.0013)
 #------------------------------------------------------------------------------
 # paths
 p <- add_argument(p, "--path2src",
@@ -888,6 +960,10 @@ p <- add_argument(p, "--iff_fg",
                   default="none")
 p <- add_argument(p, "--iff_rf",
                   help="full file name for the rescaling factor (nc)",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--iff_dem",
+                  help="full file name for the digital elevation model (nc)",
                   type="character",
                   default="none")
 p <- add_argument(p, "--iff_laf",
@@ -932,14 +1008,53 @@ p <- add_argument(p, "--off_grd",
                   help="full file name for output at gridpoints (nc)",
                   type="character",
                   default="none")
+p <- add_argument(p, "--off_vernc_a",
+                  help="full file name for output at station locations, verif-type analyses versus observations (nc)",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_vernc_b",
+                  help="full file name for output at station locations, verif-type background versus observations (nc)",
+                  type="character",
+                  default="none")
+# output cv-mode
 p <- add_argument(p, "--off_cvstn",
-                  help="full file name for output at gridpoints (nc)",
+                  help="full file name for output at station locations (txt)",
                   type="character",
                   default="none")
 p <- add_argument(p, "--off_cvver",
-                  help="full file name for output at gridpoints (nc)",
+                  help="full file name for output at station location, verif-type (txt)",
                   type="character",
                   default="none")
+p <- add_argument(p, "--off_cvvernc_a",
+                  help="full file name for output at station locations, verif-type analyses versus observations (nc)",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_cvvernc_b",
+                  help="full file name for output at station locations, verif-type background versus observations (nc)",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_vernc.varname",
+                  help="name of the verif variable for off_vernc files",
+                  type="character",
+                  default="Precipitation")
+p <- add_argument(p, "--off_vernc.stdvarname",
+                  help="standard name of the verif variable for off_vernc files",
+                  type="character",
+                  default="precipitation_amount")
+p <- add_argument(p, "--off_vernc.varunits",
+                  help="units of the verif variable for off_vernc files",
+                  type="character",
+                  default="mm")
+p <- add_argument(p, "--off_vernc.thresholds",
+                  help="thresholds for the off_vernc files",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NULL)
+p <- add_argument(p, "--off_vernc.quantile",
+                  help="quantiles for the off_vernc files",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NULL)
 #------------------------------------------------------------------------------
 # customization of the observation file
 p <- add_argument(p, "--iff_obs.sep",
@@ -1102,6 +1217,14 @@ p <- add_argument(p, "--iff_rf.e",
                   help="label of the ensemble member to read from file (default is null)",
                   type="numeric",
                   default=NULL)
+p <- add_argument(p, "--iff_rf.adjfact",
+                  help="correction factor",
+                  type="character",
+                  default="1")
+p <- add_argument(p, "--iff_rf.adjval",
+                  help="adjustment value",
+                  type="character",
+                  default="0")
 #------------------------------------------------------------------------------
 # Land area fraction file netcdf parameters
 p <- add_argument(p, "--iff_laf.varname",
@@ -1155,8 +1278,12 @@ p <- add_argument(p, "--iff_laf.e",
                   default=NULL)
 p <- add_argument(p, "--iff_laf.adjfact",
                   help="correction factor (laf should be 0-1)",
-                  type="numeric",
-                  default=1)
+                  type="character",
+                  default="1")
+p <- add_argument(p, "--iff_laf.adjval",
+                  help="adjustment value",
+                  type="character",
+                  default="0")
 #------------------------------------------------------------------------------
 # Land area fraction file netcdf parameters
 p <- add_argument(p, "--iff_dem.varname",
@@ -1208,6 +1335,14 @@ p <- add_argument(p, "--iff_dem.e",
                   help="label of the ensemble member to read from file (default is null)",
                   type="numeric",
                   default=NULL)
+p <- add_argument(p, "--iff_dem.adjfact",
+                  help="correction factor",
+                  type="character",
+                  default="1")
+p <- add_argument(p, "--iff_dem.adjval",
+                  help="adjustment value",
+                  type="character",
+                  default="0")
 #------------------------------------------------------------------------------
 # first-guess file netcdf parameters
 p <- add_argument(p, "--iff_fg.varname",
@@ -1251,6 +1386,14 @@ p <- add_argument(p, "--iff_fg.e",
                   help="label of the ensemble member to read from file (default is null)",
                   type="numeric",
                   default=NULL)
+p <- add_argument(p, "--iff_fg.adjfact",
+                  help="correction factor",
+                  type="character",
+                  default="1")
+p <- add_argument(p, "--iff_fg.adjval",
+                  help="adjustment value",
+                  type="character",
+                  default="0")
 #------------------------------------------------------------------------------
 # output file netcdf parameters
 p <- add_argument(p, "--off_grd.grid",
@@ -1381,6 +1524,10 @@ if (argv$mode=="OI_multiscale") {
     if (!(file.exists(argv$iff_dem))) 
       print("warning: file not found",argv$iff_dem)
   }
+} else if (argv$mode=="hyletkf") {
+  print("Hybrid Local Ensemble Transform Kalman Filter")
+} else if (argv$mode=="letkf") {
+  print("Local Ensemble Transform Kalman Filter")
 } else {
   boom("error statistical interpolation scheme undefined")
 }
@@ -1388,11 +1535,20 @@ if (argv$mode=="OI_multiscale") {
 if ( !(file.exists(argv$path2src)) ) 
   ext<-boom("path not found")
 #
+argv$iff_rf.adjfact<-as.numeric(gsub("_","-",argv$iff_rf.adjfact))
+argv$iff_rf.adjval<-as.numeric(gsub("_","-",argv$iff_rf.adjval))
+argv$iff_laf.adjfact<-as.numeric(gsub("_","-",argv$iff_laf.adjfact))
+argv$iff_laf.adjval<-as.numeric(gsub("_","-",argv$iff_laf.adjval))
+argv$iff_dem.adjfact<-as.numeric(gsub("_","-",argv$iff_dem.adjfact))
+argv$iff_dem.adjval<-as.numeric(gsub("_","-",argv$iff_dem.adjval))
+argv$iff_fg.adjfact<-as.numeric(gsub("_","-",argv$iff_fg.adjfact))
+argv$iff_fg.adjval<-as.numeric(gsub("_","-",argv$iff_fg.adjval))
 # load external C functions
 dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
 dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
+dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
 #
 #------------------------------------------------------------------------------
 # Create master grid
@@ -1499,6 +1655,8 @@ if (file.exists(argv$iff_rf)) {
                                       e=argv$iff_rf.e)))
   if (is.null(raux)) 
     boom("error reading the rescaling file")
+  if (argv$iff_rf.adjfact!=1 | argv$iff_rf.adjval!=0) 
+    raux$stack[]<-getValues(raux$stack)*argv$iff_rf.adjfact+argv$iff_rf.adjval
   rrf<-raux$stack; rm(raux)
   if (!rasters_match(rrf,rmaster)) {
     if (argv$iff_rf.varname_lat=="none") {
@@ -1583,12 +1741,14 @@ if (file.exists(argv$iff_laf)) {
                                       e=argv$iff_laf.e)))
   if (is.null(raux)) 
     boom("error reading the land area fraction file")
+  if (argv$iff_laf.adjfact!=1 | argv$iff_laf.adjval!=0) 
+    raux$stack[]<-getValues(raux$stack)*argv$iff_laf.adjfact+argv$iff_laf.adjval
   rlaf<-raux$stack; rm(raux)
-  laf<-getValues(rlaf)*argv$iff_laf.adjfact
+  laf<-getValues(rlaf)
   if (!rasters_match(rlaf,rmaster)) {
     if (argv$iff_laf.varname_lat=="none") {
       rlaf<-projectRaster(rlaf,rmaster)
-      laf<-getValues(rlaf)*argv$iff_laf.adjfact
+      laf<-getValues(rlaf)
       rlaf[]<-laf
     } else {
       raux<-try(read_dotnc(nc.file=argv$iff_laf,
@@ -1634,7 +1794,7 @@ if (file.exists(argv$iff_laf)) {
       rlaf<-mask( crop( disaggregate(rlafagg,fact=4,method="bilinear"),
                        rmaster),
                  rmaster)
-      laf<-getValues(rlaf)*argv$iff_laf.adjfact
+      laf<-getValues(rlaf)
       rlaf[]<-laf
     }
   }
@@ -1670,6 +1830,8 @@ if (file.exists(argv$iff_dem)) {
                                       e=argv$iff_dem.e)))
   if (is.null(raux)) 
     boom("error reading the digital elevation model file")
+  if (argv$iff_dem.adjfact!=1 | argv$iff_dem.adjval!=0) 
+    raux$stack[]<-getValues(raux$stack)*argv$iff_dem.adjfact+argv$iff_dem.adjval
   rdem<-raux$stack; rm(raux)
   dem<-getValues(rdem)
   if (!rasters_match(rdem,rmaster)) {
@@ -1736,30 +1898,83 @@ if (file.exists(argv$iff_fg)) {
   argv$iff_fg.tpos<-set_NAs_to_NULL(argv$iff_fg.tpos)
   argv$iff_fg.e<-set_NAs_to_NULL(argv$iff_fg.e)
   if (argv$iff_fg.t=="none") argv$iff_fg.t<-nc4.getTime(argv$iff_fg)[1]
-  raux<-try(read_dotnc(nc.file=argv$iff_fg,
-                       nc.varname=argv$iff_fg.varname,
-                       topdown=argv$iff_fg.topdown,
-                       out.dim=list(ndim=argv$iff_fg.ndim,
-                                    tpos=argv$iff_fg.tpos,
-                                    epos=argv$iff_fg.epos,
-                                    names=argv$iff_fg.names),
-                       proj4=argv$iff_fg.proj4,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_fg.t,
-                                      format=argv$iff_fg.tfmt,
-                                      e=argv$iff_fg.e)))
-  if (is.null(raux)) 
-    boom("error reading the rescaling file")
-  rfg<-raux$stack; rm(raux)
-  if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster)
-  rfg<-mask(rfg,rmaster)
-  xb0<-getValues(rfg)
-  aix<-which(!is.na(xb0))
-  xb<-xb0[aix]
-  rm(xb0)
+  # First-guess is not an ensemble
+  if (is.null(argv$iff_fg.epos)) {
+    raux<-try(read_dotnc(nc.file=argv$iff_fg,
+                         nc.varname=argv$iff_fg.varname,
+                         topdown=argv$iff_fg.topdown,
+                         out.dim=list(ndim=argv$iff_fg.ndim,
+                                      tpos=argv$iff_fg.tpos,
+                                      epos=argv$iff_fg.epos,
+                                      names=argv$iff_fg.names),
+                         proj4=argv$iff_fg.proj4,
+                         nc.proj4=list(var=NULL,
+                                       att=NULL),
+                         selection=list(t=argv$iff_fg.t,
+                                        format=argv$iff_fg.tfmt,
+                                        e=argv$iff_fg.e[e])))
+    if (is.null(raux)) 
+      boom("error reading the first-guess file")
+    if (argv$iff_fg.adjfact!=1 | argv$iff_fg.adjval!=0) 
+      raux$stack[]<-getValues(raux$stack)*argv$iff_fg.adjfact+argv$iff_fg.adjval
+    rfg<-raux$stack; rm(raux)
+    if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster)
+    rfg<-mask(rfg,rmaster)
+    xb0<-getValues(rfg)
+    aix<-which(!is.na(xb0))
+    xb<-xb0[aix]
+    rm(xb0)
+  # First-guess is an ensemble
+  } else {
+    nens<-0 # number of ensemble members having at least one value different from NA
+    for (e in 1:length(argv$iff_fg.e)) {
+      raux<-try(read_dotnc(nc.file=argv$iff_fg,
+                           nc.varname=argv$iff_fg.varname,
+                           topdown=argv$iff_fg.topdown,
+                           out.dim=list(ndim=argv$iff_fg.ndim,
+                                        tpos=argv$iff_fg.tpos,
+                                        epos=argv$iff_fg.epos,
+                                        names=argv$iff_fg.names),
+                           proj4=argv$iff_fg.proj4,
+                           nc.proj4=list(var=NULL,
+                                         att=NULL),
+                           selection=list(t=argv$iff_fg.t,
+                                          format=argv$iff_fg.tfmt,
+                                          e=argv$iff_fg.e[e])))
+      if (is.null(raux)) 
+        boom("error reading the first-guess file")
+      if (argv$iff_fg.adjfact!=1 | argv$iff_fg.adjval!=0) 
+        raux$stack[]<-getValues(raux$stack)*argv$iff_fg.adjfact+argv$iff_fg.adjval
+      rfg<-raux$stack; rm(raux)
+      if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster)
+      rfg<-mask(rfg,rmaster)
+      xb0<-getValues(rfg)
+      aix<-which(!is.na(xb0))
+      if (length(aix)>0) {
+        if (!exists("xb1")) xb1<-array(data=NA,
+                                       dim=c(length(aix),length(argv$iff_fg.e)))
+        if (length(aix)!=dim(xb1)[1]) boom("ERROR while reading the background file")
+        xb1[,e]<-xb0[aix]
+        nens<-nens+1
+        if (!exists("valens")) valens<-integer(0)
+        valens<-c(valens,argv$iff_fg.e[e])
+      }
+      rm(xb0)
+    }
+    if (nens==0) boom("ERROR while reading the background file")
+    xb<-array(data=NA,dim=c(dim(xb1)[1],nens))
+    e<-0
+    for (i in 1:length(argv$iff_fg.e)) {
+      if (any(!is.na(xb1[,i]))) {
+        e<-e+1
+        xb[,e]<-xb1[,i]
+      }
+    }
+    rm(xb1)
+  }
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
+    print(paste("# grid points (not NAs)=",length(aix)))
+    print("+...............................................................+")
   }
 }
 #
@@ -1910,16 +2125,26 @@ if (argv$cv_mode) {
   data$value[ixcv]<-NA
   data$dqc[ixcv]<-999
   ncv<-length(ixcv)
+  if (!is.na(argv$rrinf)) {
+    ixwet_cv<-which(yo_cv>=argv$rrinf)
+    ixdry_cv<-which(yo_cv< argv$rrinf)
+    nwet_cv<-length(ixwet_cv)
+    ndry_cv<-length(ixdry_cv)
+  }
 }
 if (any(!is.na(argv$prId.exclude))) {
   ix0<-which(data$dqc==0 & 
              !(data$prId %in% argv$prId.exclude) &
              flag_in_master &
-             flag_in_fg   )
+             flag_in_fg &
+             !is.na(data$value) &
+             !is.nan(data$value) )
 } else {
   ix0<-which(data$dqc==0 &
              flag_in_master &
-             flag_in_fg   )
+             flag_in_fg  &
+             !is.na(data$value) &
+             !is.nan(data$value) )
 }
 n0<-length(ix0)
 # definitive station list
@@ -1934,7 +2159,7 @@ VecZ<-data$z[ix0]
 VecS<-data$sourceId[ix0]
 yo<-data$value[ix0]
 if (exists("rrf"))  yrf<-extract(rrf,cbind(VecX,VecY),na.rm=T)
-if (exists("rlaf")) VecLaf<-extract(rlaf,cbind(VecX,VecY),na.rm=T)*argv$iff_laf.adjfact
+if (exists("rlaf")) VecLaf<-extract(rlaf,cbind(VecX,VecY),na.rm=T)
 prId<-data$prId[ix0]
 ydqc.flag<-rep(0,length=n0)
 rm(data)
@@ -1963,9 +2188,13 @@ if (argv$verbose) {
   print("+---------------------------------------------------------------+")
   if (!is.na(argv$rrinf)) {
     print(paste("#observations (wet/dry) =",n0,"(",nwet,"/",ndry,")"))
+    if (argv$cv_mode) {
+      print(paste("#cv-observations (wet/dry) =",ncv,"(",nwet_cv,"/",ndry_cv,")"))
+    }
   } else {
     print(paste("#observations =",n0))
   }
+  print("+...............................................................+")
 }
 #
 #------------------------------------------------------------------------------
@@ -2332,7 +2561,7 @@ if (argv$mode=="OI_firstguess") {
                 argv$grid.bg[1],"x",argv$grid.bg[2],"boxes"))
     print(paste("sub-regional area extensions (length x (m),length y (m))=",
           round(res[1],0),round(res[2],0)))
-    print(paste("reference (horizontal) lenght scale to weight the sub-regional backgrounds (m)=",round(mures,0)))
+    print(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mures,0)))
     print(paste("# sub-regional centroids",length(irx)))
   }
   # count the number of observations in each box
@@ -2515,6 +2744,536 @@ if (argv$mode=="OI_firstguess") {
     }
   }
   elev_for_verif<-VecZ
+# END of OI two-step spatial interpolation (without background)
+#..............................................................................
+# ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
+} else if (argv$mode=="hyletkf") {
+# xb, aix,nens
+# yo, VecX,VecY, prId
+  # save original vectors for future use
+  VecX_orig<-VecX
+  VecY_orig<-VecY
+  prId_orig<-prId
+  yo_orig<-yo
+  xb_orig<-xb
+  if (argv$cv_mode) {
+    xgrid<-VecX_cv
+    ygrid<-VecY_cv
+  } else {
+    xgrid_orig<-xgrid
+    ygrid_orig<-ygrid
+    # define grid-space
+    # note: xb is defined only over "aix" points
+    xgrid<-xgrid[aix]
+    ygrid<-ygrid[aix]
+  }
+  # define obs-space, background
+  r<-rmaster
+  yb0<-array(data=NA,dim=c(n0,nens))
+  for (e in 1:nens) {
+    r[]<-NA
+    r[aix]<-xb[,e]
+    yb0[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+    auxx<-which(yb0[,e]<0 | is.na(yb0[,e]) | is.nan(yb0[,e]))
+    if (length(auxx)>0) yb0[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+    rm(auxx)
+  }
+  rm(r)
+  ix<-which(apply(yb0,MAR=1,
+                  FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
+            ==nens)
+  n1<-length(ix)
+  yb<-array(data=NA,dim=c(n1,nens))
+  for (e in 1:nens) yb[,e]<-yb0[ix,e]
+  rm(yb0)
+  # background, probability of rain
+  yb_pwet<-apply(yb,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
+  # define obs-space, observations
+  ix_orig<-ix
+  yo<-yo[ix]
+  VecX<-VecX[ix]
+  VecY<-VecY[ix]
+  prId<-prId[ix] 
+  rm(ix)
+  # yo_wet, 1=wet 0=dry
+  yo_wet<-yo
+  yo_wet[]<-0
+  yo_wet[which(yo>argv$rrinf)]<-1
+  # define the inverse of the diagonal observation error matrix
+  diagRinv<-rep(argv$hyletkf.eps2_prec_default,n1)
+  for (i in 1:length(argv$hyletkf.eps2_prId)) {
+    ix<-which(prId==argv$hyletkf.eps2_prId[i])
+    if (length(ix)>0) diagRinv[ix]<-argv$hyletkf.eps2[i]
+    rm(ix)
+  }
+  diagRinv[which(yo<argv$rrinf)]<-argv$hyletkf.eps2_noprec_default
+  if (any(diagRinv==0 | is.na(diagRinv) | is.nan(diagRinv))) 
+    boom("ERROR in the definition of Rinv")
+  diagRinv<-1./diagRinv
+  # if CVmode, then adjust the background
+  if (argv$cv_mode) {
+    xb<-array(data=NA,dim=c(ncv,nens))
+    r<-rmaster
+    for (e in 1:nens) {
+      r[]<-NA
+      r[aix]<-xb_orig[,e]
+      xb[,e]<-extract(r,cbind(VecX_cv,VecY_cv),method="bilinear")
+      auxx<-which(xb[,e]<0 | is.na(xb[,e]) | is.nan(xb[,e]))
+      if (length(auxx)>0) 
+        xb[auxx,e]<-extract(r,cbind(VecX_cv[auxx],VecY_cv[auxx]))
+      rm(auxx)
+    }
+    rm(r)
+  }
+  # Gaussian anamorphosis  
+  if (argv$transf=="Box-Cox") {
+    yo<-boxcox(yo,argv$transf.boxcox_lambda)
+    yb<-boxcox(yb,argv$transf.boxcox_lambda)
+    xb<-boxcox(xb,argv$transf.boxcox_lambda)
+  }
+  # ensemble mean
+  xbm<-apply(xb,MAR=1,FUN=mean)
+  ybm<-apply(yb,MAR=1,FUN=mean)
+  # ensemble perturbations
+  Xb<-xb-xbm
+  Yb<-yb-ybm
+  # ensemble variances
+  ybvar<-apply(Yb,MAR=1,FUN=mean)**2
+  # intialize analysis vector
+  xa<-xb
+  xa[]<-NA
+  # letkf: loop over gridpoints
+  if (argv$verbose) t00<-Sys.time()
+  for (i in 1:length(xgrid)) {
+    dist<-(((xgrid[i]-VecX)**2+(ygrid[i]-VecY)**2 )**0.5)/1000.
+    rloc<-exp(-0.5*(dist**2./argv$hyletkf.Dh**2))
+    sel<-which(rloc>argv$hyletkf.rloc_min)
+    # i-th gridpoint analysis 
+    if (length(sel)>0) {
+      if (length(sel)>argv$hyletkf.pmax) sel<-order(dist)[1:argv$hyletkf.pmax]
+      sel_wet<-sel[which(yb_pwet[sel]>=0.5)]
+      if (length(sel_wet)>0) {
+        sigma2<-max(c(mean(ybvar[sel]),argv$hyletkf.sigma2_min))
+      } else {
+        sigma2<-argv$hyletkf.sigma2_min
+      }
+      Yb.i<-Yb[sel,,drop=F]
+      d.i<-yo[sel]-ybm[sel]
+      C.i<-t(1./sigma2*diagRinv[sel]*rloc[sel]*Yb.i)
+      C1.i<-crossprod(t(C.i),Yb.i)
+      Cd.i<-crossprod(t(C.i),d.i)
+      rm(C.i)
+      diag(C1.i)<-diag(C1.i) + (nens-1)
+      Pa.i<-chol2inv(chol(C1.i))
+      rm(C1.i)
+      # Pa*(k-1) is the matrix for which we want to square root:
+      a.eig <- eigen(Pa.i*(nens-1),symmetric=T)
+      Wa <- tcrossprod(
+             tcrossprod( a.eig$vectors, diag(sqrt(a.eig$values))),
+             t(solve(a.eig$vectors)) )
+      waa<-crossprod(Pa.i, Cd.i )
+      rm(Cd.i)
+      W<-Wa+as.vector(waa)
+      xa[i,]<-xbm[i]+Xb[i,] %*% W
+      rm(W,Wa,waa,a.eig)
+    # i-th gridpoint is isolated
+    } else {
+      xa[i,]<-xb[i,]
+    }
+  } # end: letkf loop over gridpoints
+  if (argv$verbose) {
+    t11<-Sys.time()
+    print(paste("letkf time=",round(t11-t00,1),attr(t11-t00,"unit")))
+  }
+  # OI
+  sel_oi<-which(yb_pwet<0.5 & yo_wet==1)  
+  if (length(sel_oi)>0) {
+    if (argv$verbose) t00<-Sys.time()
+    noi<-length(sel_oi)
+    Disth<-matrix(ncol=noi,nrow=noi,data=0.)
+    Disth<-(outer(VecY[sel_oi],VecY[sel_oi],FUN="-")**2.+
+            outer(VecX[sel_oi],VecX[sel_oi],FUN="-")**2.)**0.5/1000.
+    D<-exp(-0.5*(Disth/argv$hyletkf.Dh_oi)**2.)
+    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+    InvD<-chol2inv(chol(D))
+    xam<-OI_RR_fast(yo=yo[sel_oi],
+                    yb=ybm[sel_oi],
+                    xb=rowMeans(xa),
+                    xgrid=xgrid,
+                    ygrid=ygrid,
+                    VecX=VecX[sel_oi],
+                    VecY=VecY[sel_oi],
+                    Dh=argv$hyletkf.Dh_oi) 
+    xa<-xa-rowMeans(xa)+xam
+    rm(xam)
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("oi time=",round(t11-t00,1),
+                             attr(t11-t00,"unit")))
+    }
+  }
+  # Back-transformation
+  if (argv$transf=="Box-Cox") {
+    xa<-tboxcox(xa,argv$transf.boxcox_lambda)
+    xb<-tboxcox(xb,argv$transf.boxcox_lambda)
+  }
+  if (!argv$cv_mode & 
+      ("idi" %in% argv$off_grd.variables | 
+       argv$idiv_instead_of_elev)) {
+    if (argv$verbose) t00<-Sys.time()
+    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                 /argv$hyletkf.Dh_oi)**2.)
+    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+    InvD<-chol2inv(chol(D))
+    rm(D)
+    xidi<-OI_RR_fast(yo=rep(1,length(VecX)),
+                     yb=rep(0,length(VecX)),
+                     xb=rep(0,length(xgrid)),
+                     xgrid=xgrid,
+                     ygrid=ygrid,
+                     VecX=VecX,
+                     VecY=VecY,
+                     Dh=argv$hyletkf.Dh_oi)
+    if (argv$idiv_instead_of_elev) {
+      G<-exp(-0.5*((outer(VecY_orig,VecY,FUN="-")**2.+
+                    outer(VecX_orig,VecX,FUN="-")**2.)**0.5/1000.
+                    /argv$hyletkf.Dh_oi)**2.)
+      W<-tcrossprod(G,InvD)
+      rm(G,InvD)
+      # this is the cross-validation integral data influence ("yidiv")
+      elev_for_verif<-rep(1,n0) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,n0))
+      rm(W)
+    }
+    # InvD could be used in the following
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("idi time=",round(t11-t00,1),
+                              attr(t11-t00,"unit")))
+    }
+  }
+  if (!argv$idiv_instead_of_elev) elev_for_verif<-VecZ
+  # back to the original vectors
+  yo<-yo_orig
+  prId<-prId_orig
+  VecX<-VecX_orig
+  VecY<-VecY_orig
+  rm(yo_orig,prId_orig,VecX_orig,VecY_orig)
+  # prepare point / gridded output
+  if (!argv$cv_mode) {
+    ya<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
+    yb<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
+    for (j in 1:length(argv$off_grd.variables)) {
+      if (!exists("r.list")) r.list<-list()
+      if (argv$off_grd.variables[j]=="analysis") {
+        r<-rmaster
+        r[]<-NA
+        grid<-array(data=NA,dim=c(length(x),length(y),length(argv$iff_fg.e),1))
+        for (e in 1:length(argv$iff_fg.e)) {
+          if (argv$iff_fg.e[e] %in% valens) {
+            i<-which(valens==argv$iff_fg.e[e])
+            r[aix]<-xa[,i]
+            grid[,,e,1]<-matrix(data=getValues(r),
+                                ncol=length(y),
+                                nrow=length(x))
+            ya[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+            auxx<-which(ya[,e]<0 | is.na(ya[,e]) | is.nan(ya[,e]))
+            if (length(auxx)>0) 
+              ya[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+            rm(auxx)
+          }
+        }
+        rm(r)
+        r.list[[j]]<-grid
+        rm(grid)
+      } else if (argv$off_grd.variables[j]=="background") {
+        r<-rmaster
+        r[]<-NA
+        grid<-array(data=NA,dim=c(length(x),length(y),length(argv$iff_fg.e),1))
+        for (e in 1:length(argv$iff_fg.e)) {
+          if (argv$iff_fg.e[e] %in% valens) {
+            i<-which(valens==argv$iff_fg.e[e])
+            r[aix]<-xb[,i]
+            grid[,,e,1]<-matrix(data=getValues(r),
+                                ncol=length(y),
+                                nrow=length(x))
+            yb[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+            auxx<-which(yb[,e]<0 | is.na(yb[,e]) | is.nan(yb[,e]))
+            if (length(auxx)>0) 
+              yb[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+            rm(auxx)
+          }
+        }
+        rm(r)
+        r.list[[j]]<-grid
+        rm(grid)
+      } else if (argv$off_grd.variables[j]=="idi") {
+        r<-rmaster
+        r[]<-NA
+        r[aix]<-xidi
+        r.list[[j]]<-matrix(data=getValues(r),
+                            ncol=length(y),
+                            nrow=length(x))
+        rm(r)
+      }
+    }
+  } # end prepare for gridded output
+# END of Hybrid Local Ensemble Transform Kalman Filter
+#..............................................................................
+# ===>  Local Ensemble Transform Kalman Filter  <===
+} else if (argv$mode=="letkf") {
+  if (argv$verbose) t00<-Sys.time()
+  # save original vectors for future use
+  VecX_orig<-VecX
+  VecY_orig<-VecY
+  VecZ_orig<-VecZ
+  prId_orig<-prId
+  yo_orig<-yo
+  xb_orig<-xb
+  aix<-which(!is.na(xgrid) & !is.na(ygrid) & !is.na(dem))
+  if (argv$cv_mode) {
+    xgrid<-VecX_cv
+    ygrid<-VecY_cv
+  } else {
+    xgrid_orig<-xgrid
+    ygrid_orig<-ygrid
+    dem_orig<-dem
+    # define grid-space
+    # note: xb is defined only over "aix" points
+    xgrid<-xgrid[aix]
+    ygrid<-ygrid[aix]
+    dem<-dem[aix]
+  }
+  # define obs-space, background
+  r<-rmaster
+  yb0<-array(data=NA,dim=c(n0,nens))
+  argv$letkf.obsop<-"obsop_LapseRateConst"
+  argv$letkf.obsop.mMinElevDiff<-30
+  argv$letkf.obsop.mMinGradient<-(-0.01)
+  argv$letkf.obsop.mMaxGradient<-0.01
+  argv$letkf.obsop.mSearchRadius<-10
+  for (e in 1:nens) {
+    if (argv$letkf.obsop=="obsop_LapseRateConst") {
+      yb0[,e]<-obsop_LapseRateConst(s=n0,
+                                    m=length(aix),
+                                    xm=xgrid_orig[aix],
+                                    ym=ygrid_orig[aix],
+                                    zm=dem_orig[aix],
+                                    xs=VecX,
+                                    ys=VecY,
+                                    zs=VecZ,
+                                    ifield=xb[,e],
+                                    oval=rep(0,n0),
+                                    mMinElevDiff=argv$letkf.obsop.mMinElevDiff,
+                                    mMinGradient=argv$letkf.obsop.mMinGradient,
+                                    mMaxGradient=argv$letkf.obsop.mMaxGradient,
+                                    mSearchRadius=argv$letkf.obsop.mSearchRadius)$oval
+    }
+  }
+  ix<-which(apply(yb0,MAR=1,
+                  FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
+            ==nens)
+  n1<-length(ix)
+  yb<-array(data=NA,dim=c(n1,nens))
+  for (e in 1:nens) yb[,e]<-yb0[ix,e]
+  rm(yb0)
+  # define obs-space, observations
+  ix_orig<-ix
+  yo<-yo[ix]
+  VecX<-VecX[ix]
+  VecY<-VecY[ix]
+  VecZ<-VecZ[ix]
+  prId<-prId[ix] 
+  rm(ix)
+  # define the inverse of the diagonal observation error matrix
+  argv$letkf.eps2_default<-0.5
+  argv$letkf.eps2_prId<-NA
+  diagRinv<-rep(argv$letkf.eps2_default,n1)
+  for (i in 1:length(argv$letkf.eps2_prId)) {
+    ix<-which(prId==argv$letkf.eps2_prId[i])
+    if (length(ix)>0) diagRinv[ix]<-argv$letkf.eps2[i]
+    rm(ix)
+  }
+  if (any(diagRinv==0 | is.na(diagRinv) | is.nan(diagRinv))) 
+    boom("ERROR in the definition of Rinv")
+  diagRinv<-1./diagRinv
+  # if CVmode, then adjust the background
+  if (argv$cv_mode) {
+    xb<-array(data=NA,dim=c(ncv,nens))
+    for (e in 1:nens) {
+      if (argv$letkf.obsop=="obsop_LapseRateConst") {
+        xb[,e]<-obsop_LapseRateConst(s=n0,
+                                      m=length(aix),
+                                      xm=xgrid_orig[aix],
+                                      ym=ygrid_orig[aix],
+                                      zm=dem_orig[aix],
+                                      xs=VecX_cv,
+                                      ys=VecY_cv,
+                                      zs=VecZ_cv,
+                                      ifield=xb_orig[,e],
+                                      oval=rep(0,n0),
+                                      mMinElevDiff=argv$letkf.obsop.mMinElevDiff,
+                                      mMinGradient=argv$letkf.obsop.mMinGradient,
+                                      mMaxGradient=argv$letkf.obsop.mMaxGradient,
+                                      mSearchRadius=argv$letkf.obsop.mSearchRadius)$oval
+      }
+    }
+  }
+  # ensemble mean
+  xbm<-apply(xb,MAR=1,FUN=mean)
+  ybm<-apply(yb,MAR=1,FUN=mean)
+  # ensemble perturbations
+  Xb<-xb-xbm
+  Yb<-yb-ybm
+  # ensemble variances
+  ybvar<-apply(Yb,MAR=1,FUN=mean)**2
+  # intialize analysis vector
+  xa<-xb
+  xa[]<-NA
+  # letkf: loop over gridpoints
+  argv$letkf.Dh<-10
+  argv$letkf.rloc_min<-0.0013
+  argv$letkf.pmax<-200
+  argv$letkf.sigma2_min<-0.1
+  if (argv$verbose) t00<-Sys.time()
+  for (i in 1:length(xgrid)) {
+    dist<-(((xgrid[i]-VecX)**2+(ygrid[i]-VecY)**2 )**0.5)/1000.
+    rloc<-exp(-0.5*(dist**2./argv$letkf.Dh**2))
+    sel<-which(rloc>argv$letkf.rloc_min)
+    # i-th gridpoint analysis 
+    if (length(sel)>0) {
+      if (length(sel)>argv$letkf.pmax) sel<-order(dist)[1:argv$letkf.pmax]
+      sigma2<-max(c(mean(ybvar[sel]),argv$letkf.sigma2_min))
+      Yb.i<-Yb[sel,,drop=F]
+      d.i<-yo[sel]-ybm[sel]
+      C.i<-t(1./sigma2*diagRinv[sel]*rloc[sel]*Yb.i)
+      C1.i<-crossprod(t(C.i),Yb.i)
+      Cd.i<-crossprod(t(C.i),d.i)
+      rm(C.i)
+      diag(C1.i)<-diag(C1.i) + (nens-1)
+      Pa.i<-chol2inv(chol(C1.i))
+      rm(C1.i)
+      # Pa*(k-1) is the matrix for which we want to square root:
+      a.eig <- eigen(Pa.i*(nens-1),symmetric=T)
+      Wa <- tcrossprod(
+             tcrossprod( a.eig$vectors, diag(sqrt(a.eig$values))),
+             t(solve(a.eig$vectors)) )
+      waa<-crossprod(Pa.i, Cd.i )
+      rm(Cd.i)
+      W<-Wa+as.vector(waa)
+      xa[i,]<-xbm[i]+Xb[i,] %*% W
+      rm(W,Wa,waa,a.eig)
+    # i-th gridpoint is isolated
+    } else {
+      xa[i,]<-xb[i,]
+    }
+  } # end: letkf loop over gridpoints
+  if (argv$verbose) {
+    t11<-Sys.time()
+    print(paste("letkf time=",round(t11-t00,1),attr(t11-t00,"unit")))
+  }
+  if (!argv$cv_mode & 
+      ("idi" %in% argv$off_grd.variables | 
+       argv$idiv_instead_of_elev)) {
+    if (argv$verbose) t00<-Sys.time()
+    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                 /argv$hyletkf.Dh_oi)**2.)
+    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+    InvD<-chol2inv(chol(D))
+    rm(D)
+    xidi<-OI_RR_fast(yo=rep(1,length(VecX)),
+                     yb=rep(0,length(VecX)),
+                     xb=rep(0,length(xgrid)),
+                     xgrid=xgrid,
+                     ygrid=ygrid,
+                     VecX=VecX,
+                     VecY=VecY,
+                     Dh=argv$hyletkf.Dh_oi)
+    if (argv$idiv_instead_of_elev) {
+      G<-exp(-0.5*((outer(VecY_orig,VecY,FUN="-")**2.+
+                    outer(VecX_orig,VecX,FUN="-")**2.)**0.5/1000.
+                    /argv$hyletkf.Dh_oi)**2.)
+      W<-tcrossprod(G,InvD)
+      rm(G,InvD)
+      # this is the cross-validation integral data influence ("yidiv")
+      elev_for_verif<-rep(1,n0) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,n0))
+      rm(W)
+    }
+    # InvD could be used in the following
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("idi time=",round(t11-t00,1),
+                              attr(t11-t00,"unit")))
+    }
+  }
+  if (!argv$idiv_instead_of_elev) elev_for_verif<-VecZ
+  # back to the original vectors
+  yo<-yo_orig
+  prId<-prId_orig
+  VecX<-VecX_orig
+  VecY<-VecY_orig
+  rm(yo_orig,prId_orig,VecX_orig,VecY_orig)
+  # prepare point / gridded output
+  if (!argv$cv_mode) {
+    ya<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
+    yb<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
+    for (j in 1:length(argv$off_grd.variables)) {
+      if (!exists("r.list")) r.list<-list()
+      if (argv$off_grd.variables[j]=="analysis") {
+        r<-rmaster
+        r[]<-NA
+        grid<-array(data=NA,dim=c(length(x),length(y),length(argv$iff_fg.e),1))
+        for (e in 1:length(argv$iff_fg.e)) {
+          if (argv$iff_fg.e[e] %in% valens) {
+            i<-which(valens==argv$iff_fg.e[e])
+            r[aix]<-xa[,i]
+            grid[,,e,1]<-matrix(data=getValues(r),
+                                ncol=length(y),
+                                nrow=length(x))
+            ya[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+            auxx<-which(ya[,e]<0 | is.na(ya[,e]) | is.nan(ya[,e]))
+            if (length(auxx)>0) 
+              ya[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+            rm(auxx)
+          }
+        }
+        rm(r)
+        r.list[[j]]<-grid
+        rm(grid)
+      } else if (argv$off_grd.variables[j]=="background") {
+        r<-rmaster
+        r[]<-NA
+        grid<-array(data=NA,dim=c(length(x),length(y),length(argv$iff_fg.e),1))
+        for (e in 1:length(argv$iff_fg.e)) {
+          if (argv$iff_fg.e[e] %in% valens) {
+            i<-which(valens==argv$iff_fg.e[e])
+            r[aix]<-xb[,i]
+            grid[,,e,1]<-matrix(data=getValues(r),
+                                ncol=length(y),
+                                nrow=length(x))
+            yb[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+            auxx<-which(yb[,e]<0 | is.na(yb[,e]) | is.nan(yb[,e]))
+            if (length(auxx)>0) 
+              yb[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+            rm(auxx)
+          }
+        }
+        rm(r)
+        r.list[[j]]<-grid
+        rm(grid)
+      } else if (argv$off_grd.variables[j]=="idi") {
+        r<-rmaster
+        r[]<-NA
+        r[aix]<-xidi
+        r.list[[j]]<-matrix(data=getValues(r),
+                            ncol=length(y),
+                            nrow=length(x))
+        rm(r)
+      }
+    }
+  } # end prepare for gridded output
+# END of Local Ensemble Transform Kalman Filter
 } # end if for the selection among OIs
 #
 #------------------------------------------------------------------------------
@@ -2582,135 +3341,549 @@ if (!jump) {
 # 
 #CVmode
 if (argv$cv_mode) {
-  ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
+  if (argv$verbose) t00<-Sys.time() 
+  #CVmode for deterministic analysis
+  if (is.null(argv$iff_fg.epos)) {
+    ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
+    Dh<-argv$Dh
+  #CVmode for ensemble analysis
+  } else {
+    ya_cv<-array(data=NA,dim=c(ncv,length(argv$iff_fg.e)))
+    yb_cv<-array(data=NA,dim=c(ncv,length(argv$iff_fg.e)))
+    for (e in 1:length(argv$iff_fg.e)) {
+      if (argv$iff_fg.e[e] %in% valens) {
+        i<-which(valens==argv$iff_fg.e[e])
+        ya_cv[,e]<-xa[,i]
+        yb_cv[,e]<-xb[,i]
+      }
+    }
+    if (argv$mode=="hyletkf") Dh<-argv$hyletkf.Dh_oi
+  }
   if (argv$idiv_instead_of_elev) {
-    Disth<-matrix(ncol=ncv,nrow=ncv,data=0.)
-    Disth<-(outer(VecY_cv,VecY_cv,FUN="-")**2.+
-            outer(VecX_cv,VecX_cv,FUN="-")**2.)**0.5/1000.
-    D<-exp(-0.5*(Disth/argv$Dh)**2.)
+    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                 /Dh)**2.)
     diag(D)<-diag(D)+argv$eps2
     InvD<-chol2inv(chol(D))
-    W<-tcrossprod((D-argv$eps2*diag(ncv)),InvD)
+    rm(D)
+    G<-exp(-0.5*((outer(VecY_cv,VecY,FUN="-")**2.+
+                  outer(VecX_cv,VecX,FUN="-")**2.)**0.5/1000.
+                 /Dh)**2.)
+    W<-tcrossprod(G,InvD)
+    rm(G,InvD)
     # this is the cross-validation integral data influence ("yidiv")
     elev_for_verif_cv<-rep(1,ncv) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,ncv))
+    rm(W)
   } else {
     elev_for_verif_cv<-VecZ_cv
+  }
+  if (argv$verbose) {
+    t11<-Sys.time()
+    print(paste("cv-mode prepare output time=",round(t11-t00,1),
+                                               attr(t11-t00,"unit")))
   }
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 if (argv$verbose) print("++ Output")
-# Station Points
-# CVmode
+#------------------------------------------------------------------------------
+# Station Points - CVmode
 if (argv$cv_mode) {
-  cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_cvver,append=F)
-  cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_cvver,append=T)
-  cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-      file=argv$off_cvver,append=T)
-  ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(yav))
-  cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-             rep(0,length(VecS_cv))," ",
-             VecS_cv," ",
-             VecLat_cv," ",
-             VecLon_cv," ",
-             elev_for_verif_cv," ",
-             round(yo_cv,2)," ",
-             round(ya_cv,2),"\n",
-             sep=""),
-      file=argv$off_cvver,append=T)
-  print(paste("data saved on file",argv$off_cvver))
-  cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
-      file=argv$off_cvstn,append=F)
-  cat(paste(argv$date_out,
-            formatC(VecS_cv,format="f",digits=0),
-            formatC(VecX_cv,format="f",digits=0),
-            formatC(VecY_cv,format="f",digits=0),
-            formatC(VecZ_cv,format="f",digits=0),
-            formatC(yo_cv,format="f",digits=1),
-            formatC(yb_cv,format="f",digits=1),
-            formatC(ya_cv,format="f",digits=1),
-            formatC(ya_cv,format="f",digits=1),
-            rep(0,length(VecS_cv)),
-            "\n",sep=";"),
-      file=argv$off_cvstn,append=T)
-  print(paste("data saved on file",argv$off_cvstn))
+  # Station Points - CVmode - case of deterministic analysis
+  if (is.null(argv$iff_fg.epos)) { 
+    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_cvver,append=F)
+    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_cvver,append=T)
+    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+        file=argv$off_cvver,append=T)
+    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(yav))
+    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+               rep(0,length(VecS_cv))," ",
+               VecS_cv," ",
+               VecLat_cv," ",
+               VecLon_cv," ",
+               elev_for_verif_cv," ",
+               round(yo_cv,2)," ",
+               round(ya_cv,2),"\n",
+               sep=""),
+        file=argv$off_cvver,append=T)
+    print(paste("data saved on file",argv$off_cvver))
+    cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
+        file=argv$off_cvstn,append=F)
+    cat(paste(argv$date_out,
+              formatC(VecS_cv,format="f",digits=0),
+              formatC(VecX_cv,format="f",digits=0),
+              formatC(VecY_cv,format="f",digits=0),
+              formatC(VecZ_cv,format="f",digits=0),
+              formatC(yo_cv,format="f",digits=1),
+              formatC(yb_cv,format="f",digits=1),
+              formatC(ya_cv,format="f",digits=1),
+              formatC(ya_cv,format="f",digits=1),
+              rep(0,length(VecS_cv)),
+              "\n",sep=";"),
+        file=argv$off_cvstn,append=T)
+    print(paste("data saved on file",argv$off_cvstn))
+  # Station Points - CVmode - case of case of ensemble analysis
+  } else {
+    # off_cvvernc_a / off_cvvernc_b
+    # write off_cvvernc_a (cv-analysis)
+    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                      format="%Y%m%d%H%M",tz="GMT")
+    dim_t<-list(name="time",
+                units="H",
+                vals=tstamp_nc,
+                is_time=T,
+                unlim=T,
+                times.unit="S",
+                times.format="%Y%m%d%H%M",
+                timeref="197001010000",
+                timeref.format="%Y%m%d%H%M")
+    dim_lt<-list(name="leadtime",units="",vals=0)
+    dim_loc<-list(name="location",units="",vals=VecS_cv)
+    dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
+    dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
+    nr<-length(argv$off_vernc.thresholds)
+    nq<-length(argv$off_vernc.quantile)
+    nlt<-1
+    nt<-1
+    nloc<-ncv
+    dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
+    dim_list[[(length(dim_list)+1)]]<-dim_r
+    dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
+    dim_list[[(length(dim_list)+1)]]<-dim_q
+    # variables
+    var_lat<-list(name="lat",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(VecLat_cv,dim=c(nloc)))
+    var_lon<-list(name="lon",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(VecLon_cv,dim=c(nloc)))
+    var_ele<-list(name="altitude",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(elev_for_verif_cv,dim=c(nloc)))
+    obs<-array(data=NA,dim=c(nloc,nlt,nt))
+    obs[,nlt,nt]<-yo_cv
+    var_obs<-list(name="obs",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=obs)
+    rm(obs)
+    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+    fcst[,nlt,nt]<-rowMeans(ya_cv,na.rm=T)
+    var_fcst<-list(name="fcst",
+                   units="",
+                   dim_names=c("location","leadtime","time"),
+                   vals=fcst)
+    rm(fcst)
+    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+    xval[,,nlt,nt]<-ya_cv
+    var_ens<-list(name="ensemble",
+                  units="",
+                  dim_names=c("ensemble_member","location","leadtime","time"),
+                  vals=xval)
+    rm(xval)
+    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+    pit<-array(data=NA,dim=c(nloc,nlt,nt))
+    pit[,nlt,nt]<-apply(cbind(ya_cv,yo_cv),
+                     MARGIN=1,
+                     FUN=function(x){
+                       if (is.na(x[length(x)])) return(NA)
+                       ix<-which(!is.na(x[1:(length(x)-1)]))
+                       if (length(ix)==0) return(NA)
+                       ecdf(x[ix])(x[length(x)])})
+    var_pit<-list(name="pit",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=pit)
+    rm(pit)
+    var_list[[(length(var_list)+1)]]<-var_pit
+    rm(var_pit)
+    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    cdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        ecdf(x[ix])(argv$off_vernc.thresholds)})
+    pdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+    var_cdf<-list(name="cdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=cdf)
+    rm(cdf)
+    var_list[[(length(var_list)+1)]]<-var_cdf
+    var_pdf<-list(name="pdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=pdf)
+    rm(pdf)
+    var_list[[(length(var_list)+1)]]<-var_pdf
+    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+    qx[1:nq,1:nloc,nlt,nt]<-apply(ya_cv,MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+    var_qx<-list(name="x",
+                 units="",
+                 dim_names=c("quantile","location","leadtime","time"),
+                 vals=qx)
+    rm(qx)
+    var_list[[(length(var_list)+1)]]<-var_qx
+    gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
+    gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
+    gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
+    res<-write_generic_dotnc(nc.file=argv$off_cvvernc_a,
+                             dims=dim_list,
+                             vars=var_list,
+                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+    if (is.null(res)) {
+      print(paste("ERROR while writing ",argv$off_cvvernc_a))
+    }
+    print(paste("written file",argv$off_cvvernc_a))
+    # write off_cvvernc_b (background)
+    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+    fcst[,nlt,nt]<-rowMeans(yb_cv,na.rm=T)
+    var_fcst<-list(name="fcst",
+                   units="",
+                   dim_names=c("location","leadtime","time"),
+                   vals=fcst)
+    rm(fcst)
+    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+    xval[,,nlt,nt]<-yb_cv
+    var_ens<-list(name="ensemble",
+                  units="",
+                  dim_names=c("ensemble_member","location","leadtime","time"),
+                  vals=xval)
+    rm(xval)
+    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+    pit<-array(data=NA,dim=c(nloc,nlt,nt))
+    pit[,nlt,nt]<-apply(cbind(yb_cv,yo_cv),
+                     MARGIN=1,
+                     FUN=function(x){
+                       if (is.na(x[length(x)])) return(NA)
+                       ix<-which(!is.na(x[1:(length(x)-1)]))
+                       if (length(ix)==0) return(NA)
+                       ecdf(x[ix])(x[length(x)])})
+    var_pit<-list(name="pit",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=pit)
+    rm(pit)
+    var_list[[(length(var_list)+1)]]<-var_pit
+    rm(var_pit)
+    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    cdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        ecdf(x[ix])(argv$off_vernc.thresholds)})
+    pdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+    var_cdf<-list(name="cdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=cdf)
+    rm(cdf)
+    var_list[[(length(var_list)+1)]]<-var_cdf
+    var_pdf<-list(name="pdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=pdf)
+    rm(pdf)
+    var_list[[(length(var_list)+1)]]<-var_pdf
+    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+    qx[1:nq,1:nloc,nlt,nt]<-apply(yb_cv,MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+    var_qx<-list(name="x",
+                 units="",
+                 dim_names=c("quantile","location","leadtime","time"),
+                 vals=qx)
+    rm(qx)
+    var_list[[(length(var_list)+1)]]<-var_qx
+    res<-write_generic_dotnc(nc.file=argv$off_cvvernc_b,
+                             dims=dim_list,
+                             vars=var_list,
+                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+    if (is.null(res)) {
+      print(paste("ERROR while writing ",argv$off_cvvernc_b))
+    }
+    print(paste("written file",argv$off_cvvernc_b))
+  }
+#------------------------------------------------------------------------------
 # non-CVmode
 } else {
-  cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver,append=F)
-  cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver,append=T)
-  cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-      file=argv$off_ver,append=T)
-  if (argv$off_ver_fg!="none" & argv$off_ver_cv!="none") {
-    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb) & !is.na(yav))
-  } else if (argv$off_ver_fg!="none") {
-    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb))
-  } else if (argv$off_ver_cv!="none") {
-    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yav))
+  # Station Points - non-CVmode - case of deterministic analysis
+  if (is.null(argv$iff_fg.epos)) { 
+    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver,append=F)
+    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver,append=T)
+    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+        file=argv$off_ver,append=T)
+    if (argv$off_ver_fg!="none" & argv$off_ver_cv!="none") {
+      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb) & !is.na(yav))
+    } else if (argv$off_ver_fg!="none") {
+      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb))
+    } else if (argv$off_ver_cv!="none") {
+      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yav))
+    } else {
+      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya))
+    }
+    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+               rep(0,length(ix))," ",
+               VecS[ix]," ",
+               VecLat[ix]," ",
+               VecLon[ix]," ",
+               elev_for_verif[ix]," ",
+               round(yo[ix],1)," ",
+               round(ya[ix],1),"\n",
+               sep=""),
+        file=argv$off_ver,append=T)
+    print(paste("data saved on file",argv$off_ver))
+    if (argv$off_ver_fg!="none") {
+      cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_fg,append=F)
+      cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_fg,append=T)
+      cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+          file=argv$off_ver_fg,append=T)
+      cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+                 rep(0,length(ix))," ",
+                 VecS[ix]," ",
+                 VecLat[ix]," ",
+                 VecLon[ix]," ",
+                 elev_for_verif[ix]," ",
+                 round(yo[ix],1)," ",
+                 round(yb[ix],1),"\n",
+                 sep=""),
+          file=argv$off_ver_fg,append=T)
+      print(paste("data saved on file",argv$off_ver_fg))
+    }
+    if (argv$off_ver_cv!="none") {
+      cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_cv,append=F)
+      cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_cv,append=T)
+      cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+          file=argv$off_ver_cv,append=T)
+      cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+                 rep(0,length(ix))," ",
+                 VecS[ix]," ",
+                 VecLat[ix]," ",
+                 VecLon[ix]," ",
+                 elev_for_verif[ix]," ",
+                 round(yo[ix],1)," ",
+                 round(yav[ix],1),"\n",
+                 sep=""),
+          file=argv$off_ver_cv,append=T)
+      print(paste("data saved on file",argv$off_ver_cv))
+    }
+    cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
+        file=argv$off_stn,append=F)
+    digxy<-0
+    if (argv$grid_master.proj4==proj4.llwgs84) digxy<-6
+    cat(paste(argv$date_out,
+              formatC(VecS,format="f",digits=0),
+              formatC(VecX,format="f",digits=digxy),
+              formatC(VecY,format="f",digits=digxy),
+              formatC(VecZ,format="f",digits=0),
+              formatC(yo,format="f",digits=1),
+              formatC(yb,format="f",digits=1),
+              formatC(ya,format="f",digits=1),
+              formatC(yav,format="f",digits=1),
+              formatC(ydqc.flag,format="f",digits=0),
+              "\n",sep=";"),
+        file=argv$off_stn,append=T)
+    print(paste("data saved on file",argv$off_stn))
+  # Station Points - non-CVmode - case of ensemble analysis
   } else {
-    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya))
+    # off_vernc_a / off_vernc_b
+    # write off_vernc_a (analysis)
+    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                      format="%Y%m%d%H%M",tz="GMT")
+    dim_t<-list(name="time",
+                units="H",
+                vals=tstamp_nc,
+                is_time=T,
+                unlim=T,
+                times.unit="S",
+                times.format="%Y%m%d%H%M",
+                timeref="197001010000",
+                timeref.format="%Y%m%d%H%M")
+    dim_lt<-list(name="leadtime",units="",vals=0)
+    dim_loc<-list(name="location",units="",vals=VecS)
+    dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
+    dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
+    nr<-length(argv$off_vernc.thresholds)
+    nq<-length(argv$off_vernc.quantile)
+    nlt<-1
+    nt<-1
+    nloc<-n0
+    dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
+    dim_list[[(length(dim_list)+1)]]<-dim_r
+    dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
+    dim_list[[(length(dim_list)+1)]]<-dim_q
+    # variables
+    var_lat<-list(name="lat",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(VecLat,dim=c(nloc)))
+    var_lon<-list(name="lon",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(VecLon,dim=c(nloc)))
+    var_ele<-list(name="altitude",
+                  units="",
+                  dim_names=c("location"),
+                  vals=array(elev_for_verif,dim=c(nloc)))
+    obs<-array(data=NA,dim=c(nloc,nlt,nt))
+    obs[,nlt,nt]<-yo
+    var_obs<-list(name="obs",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=obs)
+    rm(obs)
+    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+    fcst[,nlt,nt]<-rowMeans(ya,na.rm=T)
+    var_fcst<-list(name="fcst",
+                   units="",
+                   dim_names=c("location","leadtime","time"),
+                   vals=fcst)
+    rm(fcst)
+    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+    xval[,,nlt,nt]<-ya
+    var_ens<-list(name="ensemble",
+                  units="",
+                  dim_names=c("ensemble_member","location","leadtime","time"),
+                  vals=xval)
+    rm(xval)
+    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+    pit<-array(data=NA,dim=c(nloc,nlt,nt))
+    pit[,nlt,nt]<-apply(cbind(ya,yo),
+                     MARGIN=1,
+                     FUN=function(x){
+                       if (is.na(x[length(x)])) return(NA)
+                       ix<-which(!is.na(x[1:(length(x)-1)]))
+                       if (length(ix)==0) return(NA)
+                       ecdf(x[ix])(x[length(x)])})
+    var_pit<-list(name="pit",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=pit)
+    rm(pit)
+    var_list[[(length(var_list)+1)]]<-var_pit
+    rm(var_pit)
+    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    cdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        ecdf(x[ix])(argv$off_vernc.thresholds)})
+    pdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+    var_cdf<-list(name="cdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=cdf)
+    rm(cdf)
+    var_list[[(length(var_list)+1)]]<-var_cdf
+    var_pdf<-list(name="pdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=pdf)
+    rm(pdf)
+    var_list[[(length(var_list)+1)]]<-var_pdf
+    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+    qx[1:nq,1:nloc,nlt,nt]<-apply(ya,MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+    var_qx<-list(name="x",
+                 units="",
+                 dim_names=c("quantile","location","leadtime","time"),
+                 vals=qx)
+    rm(qx)
+    var_list[[(length(var_list)+1)]]<-var_qx
+    gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
+    gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
+    gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
+    res<-write_generic_dotnc(nc.file=argv$off_vernc_a,
+                             dims=dim_list,
+                             vars=var_list,
+                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+    if (is.null(res)) {
+      print(paste("ERROR while writing ",argv$off_vernc_a))
+    }
+    print(paste("written file",argv$off_vernc_a))
+    # write off_vernc_b (background)
+    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+    fcst[,nlt,nt]<-rowMeans(yb,na.rm=T)
+    var_fcst<-list(name="fcst",
+                   units="",
+                   dim_names=c("location","leadtime","time"),
+                   vals=fcst)
+    rm(fcst)
+    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+    xval[,,nlt,nt]<-yb
+    var_ens<-list(name="ensemble",
+                  units="",
+                  dim_names=c("ensemble_member","location","leadtime","time"),
+                  vals=xval)
+    rm(xval)
+    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+    pit<-array(data=NA,dim=c(nloc,nlt,nt))
+    pit[,nlt,nt]<-apply(cbind(yb,yo),
+                     MARGIN=1,
+                     FUN=function(x){
+                       if (is.na(x[length(x)])) return(NA)
+                       ix<-which(!is.na(x[1:(length(x)-1)]))
+                       if (length(ix)==0) return(NA)
+                       ecdf(x[ix])(x[length(x)])})
+    var_pit<-list(name="pit",
+                  units="",
+                  dim_names=c("location","leadtime","time"),
+                  vals=pit)
+    rm(pit)
+    var_list[[(length(var_list)+1)]]<-var_pit
+    rm(var_pit)
+    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+    cdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        ecdf(x[ix])(argv$off_vernc.thresholds)})
+    pdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+    var_cdf<-list(name="cdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=cdf)
+    rm(cdf)
+    var_list[[(length(var_list)+1)]]<-var_cdf
+    var_pdf<-list(name="pdf",
+                  units="",
+                  dim_names=c("threshold","location","leadtime","time"),
+                  vals=pdf)
+    rm(pdf)
+    var_list[[(length(var_list)+1)]]<-var_pdf
+    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+    qx[1:nq,1:nloc,nlt,nt]<-apply(yb,MARGIN=1,
+      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+    var_qx<-list(name="x",
+                 units="",
+                 dim_names=c("quantile","location","leadtime","time"),
+                 vals=qx)
+    rm(qx)
+    var_list[[(length(var_list)+1)]]<-var_qx
+    res<-write_generic_dotnc(nc.file=argv$off_vernc_b,
+                             dims=dim_list,
+                             vars=var_list,
+                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+    if (is.null(res)) {
+      print(paste("ERROR while writing ",argv$off_vernc_b))
+    }
+    print(paste("written file",argv$off_vernc_b))
   }
-  cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-             rep(0,length(ix))," ",
-             VecS[ix]," ",
-             VecLat[ix]," ",
-             VecLon[ix]," ",
-             elev_for_verif[ix]," ",
-             round(yo[ix],1)," ",
-             round(ya[ix],1),"\n",
-             sep=""),
-      file=argv$off_ver,append=T)
-  print(paste("data saved on file",argv$off_ver))
-  if (argv$off_ver_fg!="none") {
-    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_fg,append=F)
-    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_fg,append=T)
-    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-        file=argv$off_ver_fg,append=T)
-    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-               rep(0,length(ix))," ",
-               VecS[ix]," ",
-               VecLat[ix]," ",
-               VecLon[ix]," ",
-               elev_for_verif[ix]," ",
-               round(yo[ix],1)," ",
-               round(yb[ix],1),"\n",
-               sep=""),
-        file=argv$off_ver_fg,append=T)
-    print(paste("data saved on file",argv$off_ver_fg))
-  }
-  if (argv$off_ver_cv!="none") {
-    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_cv,append=F)
-    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_cv,append=T)
-    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-        file=argv$off_ver_cv,append=T)
-    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-               rep(0,length(ix))," ",
-               VecS[ix]," ",
-               VecLat[ix]," ",
-               VecLon[ix]," ",
-               elev_for_verif[ix]," ",
-               round(yo[ix],1)," ",
-               round(yav[ix],1),"\n",
-               sep=""),
-        file=argv$off_ver_cv,append=T)
-    print(paste("data saved on file",argv$off_ver_cv))
-  }
-  cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
-      file=argv$off_stn,append=F)
-  digxy<-0
-  if (argv$grid_master.proj4==proj4.llwgs84) digxy<-6
-  cat(paste(argv$date_out,
-            formatC(VecS,format="f",digits=0),
-            formatC(VecX,format="f",digits=digxy),
-            formatC(VecY,format="f",digits=digxy),
-            formatC(VecZ,format="f",digits=0),
-            formatC(yo,format="f",digits=1),
-            formatC(yb,format="f",digits=1),
-            formatC(ya,format="f",digits=1),
-            formatC(yav,format="f",digits=1),
-            formatC(ydqc.flag,format="f",digits=0),
-            "\n",sep=";"),
-      file=argv$off_stn,append=T)
-  print(paste("data saved on file",argv$off_stn))
-  # grid
+#------------------------------------------------------------------------------
+  # Gridpoints - non-CVmode(only)
+  # NOTE: deterministic and ensemble analysis share the same output session
+  # to customize the output, use the config argument "off_grd.variables"
+  # default output: just the analysis
   if (!exists("r.list")) {
     r.list<-list()
     r.list[[1]]<-matrix(data=getValues(ra),

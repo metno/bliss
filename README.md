@@ -1,10 +1,15 @@
-# bliss
+# bliss - Bayesian statisticaL Interpolation for Spatial analySis
 
-Multiple statistical interpolation schemes have been implemented, such as:
+bliss. _noun_ Perfect happiness; great joy. _she gave a sigh of bliss_
+
+BLISS is an R-program for spatial interpolation of near-surface meteorological variables through statistical methods.
+It includes several statistical interpolation schemes:
 
 * OI\_multiscale. Multiscale Optimal Interpolation based on observations only.
 * OI\_firstguess. Optimal Interpolation based on the combination of observations with a background field. It is possible to specify a data transformation as a pre-processing step (i.e., Gaussian anamorphosis).
 * OI\_twosteptemperature. Modified Optimal Interpolation based on observations only.
+* letkf. Local Ensemble Transform Kalman Filter.
+* hyletkf. Hybrid Local Ensemble Transform Kalman Filter.
 
 Installation instructions
 -------------------------
