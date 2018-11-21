@@ -1,4 +1,4 @@
-# bliss - Bayesian statisticaL Interpolation for Spatial analySis
+# bliss
 
 bliss. _noun_ Perfect happiness; great joy. _she gave a sigh of bliss_
 
