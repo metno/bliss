@@ -1543,6 +1543,8 @@ argv$iff_dem.adjfact<-as.numeric(gsub("_","-",argv$iff_dem.adjfact))
 argv$iff_dem.adjval<-as.numeric(gsub("_","-",argv$iff_dem.adjval))
 argv$iff_fg.adjfact<-as.numeric(gsub("_","-",argv$iff_fg.adjfact))
 argv$iff_fg.adjval<-as.numeric(gsub("_","-",argv$iff_fg.adjval))
+# parameter used in output session, select between deterministic/ensemble
+argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
 # load external C functions
 dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
