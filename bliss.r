@@ -253,12 +253,14 @@ tboxcox4pdf_apply<-function(par,
 }
 
 #+
-tboxcox<-function(x,lambda) {
+tboxcox<-function(x,lambda,brrinf=-100) {
   if (lambda==0) {
-    return(exp(x))
+    res<-exp(x)
   } else {
-    return((1+lambda*x)**(1./lambda))
+    res<-(1+lambda*x)**(1./lambda)
   }
+  if (any(x<brrinf)) res[which(x<brrinf)]<-0
+  res
 }
 
 #------------------------------------------------------------------------------
@@ -608,20 +610,20 @@ findRow <- function (x,n) {
   array(y[order(col(y), y)], dim(y))[nrow(y) - (n-1), ]
 }
 
-#+ mean radial distance between an observation and its k-th closest obs
-dobs_fun<-function(ixynp,k) {
-# NOTE: k=1 will return 0 everywhere (1st closest obs is the obs itself)
-  # jj, index for the stations in the box
-  jj<-which(iobs==ixynp[1])
-  njj<-length(jj)
-  if (njj<k) return(NA)
-  # distance matrices
-  disth<-(outer(VecX[jj],VecX[jj],FUN="-")**2.+
-          outer(VecY[jj],VecY[jj],FUN="-")**2.)**0.5
-#  distz<-abs(outer(data$z[jj],data$z[jj],FUN="-"))
-  dobsRow<-findRow(x=disth,n=(njj-k+1))
-  mean(dobsRow)
-}
+##+ mean radial distance between an observation and its k-th closest obs
+#dobs_fun<-function(ixynp,k) {
+## NOTE: k=1 will return 0 everywhere (1st closest obs is the obs itself)
+#  # jj, index for the stations in the box
+#  jj<-which(iobs==ixynp[1])
+#  njj<-length(jj)
+#  if (njj<k) return(NA)
+#  # distance matrices
+#  disth<-(outer(VecX[jj],VecX[jj],FUN="-")**2.+
+#          outer(VecY[jj],VecY[jj],FUN="-")**2.)**0.5
+##  distz<-abs(outer(data$z[jj],data$z[jj],FUN="-"))
+#  dobsRow<-findRow(x=disth,n=(njj-k+1))
+#  mean(dobsRow)
+#}
 
 # superobbing for the ith box (divide it in a n1 x n2 boxes) 
 superobs<-function(ixy,         #i-index,x,y
@@ -820,6 +822,14 @@ p <- add_argument(p, "--eps2",
                   default=1)
 p <- add_argument(p, "--Dh",
                   help="horizontal de-corellation length scale (km)",
+                  type="numeric",
+                  default=NULL)
+p <- add_argument(p, "--oimult.eps2_idi",
+                  help="OI multiscale, optional, eps2 for the IDI",
+                  type="numeric",
+                  default=NULL)
+p <- add_argument(p, "--oimult.Dh_idi",
+                  help="OI multiscale, optional, horizontal de-corellation length scale for IDI (km)",
                   type="numeric",
                   default=NULL)
 p <- add_argument(p, "--ovarc",
@@ -1188,7 +1198,15 @@ p <- add_argument(p, "--iff_rf.ndim",
                   help="number of dimensions for the variable",
                   type="numeric",
                   default=NULL)
+p <- add_argument(p, "--iff_rf.ndim_ll",
+                  help="number of dimensions for the lat-lon variables",
+                  type="numeric",
+                  default=NULL)
 p <- add_argument(p, "--iff_rf.tpos",
+                  help="position of the time variable among the dimensions",
+                  type="numeric",
+                  default=NULL)
+p <- add_argument(p, "--iff_rf.tpos_ll",
                   help="position of the time variable among the dimensions",
                   type="numeric",
                   default=NULL)
@@ -1198,6 +1216,11 @@ p <- add_argument(p, "--iff_rf.epos",
                   default=NULL)
 p <- add_argument(p, "--iff_rf.names",
                   help="dimension names for the variable",
+                  type="character",
+                  nargs=Inf,
+                  default=NULL)
+p <- add_argument(p, "--iff_rf.names_ll",
+                  help="dimension names for the lat-lon variables",
                   type="character",
                   nargs=Inf,
                   default=NULL)
@@ -1568,7 +1591,8 @@ if (file.exists(argv$iff_mask)) {
   argv$iff_mask.epos<-set_NAs_to_NULL(argv$iff_mask.epos)
   argv$iff_mask.tpos<-set_NAs_to_NULL(argv$iff_mask.tpos)
   argv$iff_mask.e<-set_NAs_to_NULL(argv$iff_mask.e)
-  if (argv$iff_mask.t=="none") argv$iff_mask.t<-nc4.getTime(argv$iff_mask)[1]
+  if (!is.null(argv$iff_mask.tpos) & argv$iff_mask.t=="none") 
+    argv$iff_mask.t<-nc4.getTime(argv$iff_mask)[1]
   raux<-try(read_dotnc(nc.file=argv$iff_mask,
                        nc.varname=argv$iff_mask.varname,
                        topdown=argv$iff_mask.topdown,
@@ -1636,6 +1660,7 @@ if (file.exists(argv$iff_rf)) {
   }
   argv$iff_rf.epos<-set_NAs_to_NULL(argv$iff_rf.epos)
   argv$iff_rf.tpos<-set_NAs_to_NULL(argv$iff_rf.tpos)
+  argv$iff_rf.tpos_ll<-set_NAs_to_NULL(argv$iff_rf.tpos_ll)
   argv$iff_rf.e<-set_NAs_to_NULL(argv$iff_rf.e)
   if (any(argv$iff_rf.names=="time")) {
     if (argv$iff_rf.t=="none") argv$iff_rf.t<-nc4.getTime(argv$iff_rf)[1]
@@ -1668,37 +1693,37 @@ if (file.exists(argv$iff_rf)) {
       raux<-try(read_dotnc(nc.file=argv$iff_rf,
                        nc.varname=argv$iff_rf.varname_lat,
                        topdown=argv$iff_rf.topdown,
-                       out.dim=list(ndim=argv$iff_rf.ndim,
-                                    tpos=argv$iff_rf.tpos,
-                                    epos=argv$iff_rf.epos,
-                                    names=argv$iff_rf.names),
-                       proj4=argv$iff_rf.proj4,
+                       out.dim=list(ndim=argv$iff_rf.ndim_ll,
+                                    tpos=argv$iff_rf.tpos_ll,
+                                    epos=NULL,
+                                    names=argv$iff_rf.names_ll),
+                       proj4=proj4.llwgs84,
                        nc.proj4=list(var=NULL,
                                      att=NULL),
                        selection=list(t=argv$iff_rf.t,
                                       format=argv$iff_rf.tfmt,
-                                      e=argv$iff_rf.e)))
+                                      e=NULL)))
       if (is.null(raux)) 
         boom("error reading the rescaling file (lat)")
       lat<-raux$data; rm(raux)
       raux<-try(read_dotnc(nc.file=argv$iff_rf,
                            nc.varname=argv$iff_rf.varname_lon,
                            topdown=argv$iff_rf.topdown,
-                           out.dim=list(ndim=argv$iff_rf.ndim,
-                                        tpos=argv$iff_rf.tpos,
-                                        epos=argv$iff_rf.epos,
-                                        names=argv$iff_rf.names),
-                           proj4=argv$iff_rf.proj4,
+                           out.dim=list(ndim=argv$iff_rf.ndim_ll,
+                                        tpos=argv$iff_rf.tpos_ll,
+                                        epos=NULL,
+                                        names=argv$iff_rf.names_ll),
+                           proj4=proj4.llwgs84,
                            nc.proj4=list(var=NULL,
                                          att=NULL),
                            selection=list(t=argv$iff_rf.t,
                                           format=argv$iff_rf.tfmt,
-                                          e=argv$iff_rf.e)))
+                                          e=NULL)))
       if (is.null(raux)) 
         boom("error reading the rescaling file (lon)")
       lon<-raux$data; rm(raux)
       coord.new<-spTransform(SpatialPoints(cbind(lon,lat),
-                                           proj4string=argv$iff_rf.proj4),
+                                           proj4string=CRS(proj4.llwgs84)),
                              CRS(argv$grid_master.proj4))
       #
       rf<-getValues(rrf)
@@ -2202,39 +2227,51 @@ if (argv$verbose) {
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
 if (argv$mode=="OI_multiscale") {
-  if (n0<100) {
-    kseq<-c(2,3,4,seq(5,n0,by=5),n0)
-  } else {
-    kseq<-c(2,3,4,seq(5,100,by=5),seq(100,n0,by=200),n0)
-  }
-  kseq<-rev(unique(kseq))
-  vecd_tmp<-vector()
-  vecf<-vector()
-  for (i in 1:length(kseq)) 
-    vecd_tmp[i]<-round(dobs_fun(obs=data.frame(x=VecX,y=VecY),k=kseq[i])/1000,0)
-  if (vecd_tmp[length(kseq)]>=15) {
-    vecd_tmp[c(i+1,i+2,i+3)]<-c(12,8,5)
-  } else if (vecd_tmp[length(kseq)]>=10) {
-    vecd_tmp[c(i+1,i+3)]<-c(10,5)
-  }
-  vecf_tmp<-pmin(min(c(nx,ny))/5,pmax(1,round(vecd_tmp/5,0)))
-  vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))]
-  kseq<-kseq[which(!duplicated(vecf_tmp,fromLast=T))]
-  vecf<-round(vecd/5,0)
-  vece<-rep(argv$eps2,length(vecf))
-  nl<-length(vecd)
-  if (length(which(vecf<=2))>0) {
-    vece[which(vecf<=2)]<-rep(0.1,length(which(vecf<=2)))
-  } else {
-    vece[length(vece)]<-0.1
-  }
-  rm(vecf_tmp,vecd_tmp)
-  if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    print("kseq vecd vecf vece")
-    print(" #    km    -    -")
-    print(cbind(kseq,vecd,vecf,vece))
-    print("+---------------------------------------------------------------+")
+  if (nwet>0) {
+    # define sequence of nearest station values
+    if (n0<100) {
+      kseq<-rev(unique(c(2,3,4,seq(5,n0,by=5),n0)))
+    } else {
+      kseq<-rev(unique(c(2,3,4,seq(5,100,by=5),seq(100,n0,by=200),n0)))
+    }
+    # average distance between a station and its nearest kseq[1], kseq[2],...
+    # NOTE: dobs_fun with k=1 returns 0 km, so k=2 is the distance to closest station
+    vecd_tmp<-vector()
+    vecf<-vector()
+    for (i in 1:length(kseq)) 
+      vecd_tmp[i]<-round(dobs_fun(obs=data.frame(x=VecX,y=VecY),k=kseq[i])/1000,0)
+    vecd_tmp<-unique(sort(c(vecd_tmp,2:50),decreasing=T))
+#    if (vecd_tmp[length(kseq)]>=15) {
+#      vecd_tmp[(i+1):(i+5)]<-c(12,8,5,3,2)
+#    } else if (vecd_tmp[length(kseq)]>=10) {
+#      vecd_tmp[(i+1):(i+4)]<-c(10,5,3,2)
+#    }
+    vecf_tmp<-pmin(min(c(nx,ny))/3,pmax(1,round(vecd_tmp/2,0)))
+    vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))]
+    vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]
+    vecd<-unique(sort(c(vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))],
+                        vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]),
+                      decreasing=T))
+    vecf<-round(vecd/2,0)
+    vece<-rep(argv$eps2,length(vecf))
+    nl<-length(vecd)
+    if (length(which(vecf<=2))>0) {
+      vece[which(vecf<=2)]<-rep(0.1,length(which(vecf<=2)))
+    } else {
+      vece[length(vece)]<-0.1
+    }
+    vece[]<-1
+    rm(vecf_tmp,vecd_tmp)
+    if (argv$verbose) {
+      print("+---------------------------------------------------------------+")
+#      print("kseq vecd vecf vece")
+#      print(" #    km    -    -")
+#      print(cbind(kseq,vecd,vecf,vece))
+      print("vecd vecf vece")
+      print(" km   -    -")
+      print(cbind(vecd,vecf,vece))
+      print("+---------------------------------------------------------------+")
+    }
   }
 }
 #
@@ -2349,103 +2386,201 @@ if (argv$mode=="OI_firstguess") {
 #..............................................................................
 # ===>  OI multiscale (without background)   <===
 } else if (argv$mode=="OI_multiscale") {
-  # multi-scale OI operates on relative anomalies (if rescaling factor is available)
-  if (exists("yrf")) {
-    if (any(yrf==0)) yrf[which(yrf==0)]<-1
-    yo_relan<-yo/yrf
-  #  arrinf<-mean(argv$rrinf/rf[mask])
-  } else {
-    yo_relan<-yo
-  #  arrinf<-mean(argv$rrinf/rf[mask])
-  }
-  # multi-scale OI
-  for (l in 1:nl) {
-    if (argv$verbose) 
-      print(paste("scale # ",formatC(l,width=2,flag="0"),
-                  " of ",nl,
-                  " (",formatC(vecd[l],width=4,flag="0"),"km ",
-                  "fact=",formatC(vecf[l],width=3,flag="0"),")",sep=""))
-    D<-exp(-0.5*(Disth/vecd[l])**2.)
-    diag(D)<-diag(D)+vece[l]*ovarc
-    InvD<-chol2inv(chol(D))
-    if (l==nl | vecf[l]==1) {
-      r<-rmaster
+  if (nwet>0) {
+    # multi-scale OI operates on relative anomalies (if rescaling factor is available)
+    if (exists("yrf")) {
+      if (any(yrf==0)) yrf[which(yrf==0)]<-1
+      yo_relan<-yo/yrf
+    #  arrinf<-mean(argv$rrinf/rf[mask])
     } else {
-      r<-aggregate(rmaster, fact=vecf[l], expand=T, na.rm=T)
+      yo_relan<-yo
+    #  arrinf<-mean(argv$rrinf/rf[mask])
     }
-    zvalues.l<-getValues(r)
-    storage.mode(zvalues.l)<-"numeric"
-    xy.l<-xyFromCell(r,1:ncell(r))
-    x.l<-sort(unique(xy.l[,1]))
-    y.l<-sort(unique(xy.l[,2]),decreasing=T)
-    mask.l<-which(!is.na(zvalues.l))
-    zgrid.l<-zvalues.l[mask.l]
-    xgrid.l<-xy.l[mask.l,1]
-    ygrid.l<-xy.l[mask.l,2]
-    rm(xy.l,zvalues.l)
-    if (l==1) {
-      yb<-rep(mean(yo_relan),length=n0)
-      xb<-rep(mean(yo_relan),length=length(xgrid.l))
-    } else {
-      rb<-resample(ra,r,method="bilinear")
-      xb<-getValues(rb)[mask.l]
-      count<-0
-      while (any(is.na(xb))) {
-        count<-count+1
-        buffer_length<-round(vecd[l]/(10-(count-1)),0)*1000
-        if (!is.finite(buffer_length)) break 
-        ib<-which(is.na(xb))
-        aux<-extract(rb,cbind(xgrid.l[ib],ygrid.l[ib]),
-                     na.rm=T,
-                     buffer=buffer_length)
-        for (ll in 1:length(aux)) xb[ib[ll]]<-mean(aux[[ll]],na.rm=T)
-        rb[mask.l]<-xb
-        rm(aux,ib)
+    yo_relan<-boxcox(yo_relan,0.5)
+    # multi-scale OI
+    for (l in 1:nl) {
+      if (argv$verbose) 
+        print(paste("scale # ",formatC(l,width=2,flag="0"),
+                    " of ",nl,
+                    " (",formatC(vecd[l],width=4,flag="0"),"km ",
+                    "fact=",formatC(vecf[l],width=3,flag="0"),")",sep=""))
+      D<-exp(-0.5*(Disth/vecd[l])**2.)
+      diag(D)<-diag(D)+vece[l]*ovarc
+      InvD<-chol2inv(chol(D))
+      if (l==nl | vecf[l]==1) {
+        r<-rmaster
+      } else {
+        r<-aggregate(rmaster, fact=vecf[l], expand=T, na.rm=T)
       }
-      yb<-extract(rb,cbind(VecX,VecY),method="bilinear")
-#      debug_plots()
-      rm(rb)
-    }
-    if (any(is.na(xb))) print("xb is NA")
-    if (any(is.na(yb))) print("yb is NA")
-    xa.l<-OI_RR_fast(yo=yo_relan,
-                     yb=yb,
-                     xb=xb,
-                     xgrid=xgrid.l,
-                     ygrid=ygrid.l,
-                     VecX=VecX,
-                     VecY=VecY,
-                     Dh=vecd[l]) 
-    xidiw.l<-OI_RR_fast(yo=yo[ixwet],
-                        yb=rep(0,nwet),
-                        xb=rep(0,length(xgrid.l)),
-                        xgrid=xgrid.l,
-                        ygrid=ygrid.l,
-                        VecX=VecX[ixwet],
-                        VecY=VecY[ixwet],
-                        Dh=vecd[l]) 
-    xidid.l<-OI_RR_fast(yo=yo[ixdry],
-                        yb=rep(0,ndry),
-                        xb=rep(0,length(xgrid.l)),
-                        xgrid=xgrid.l,
-                        ygrid=ygrid.l,
-                        VecX=VecX[ixdry],
-                        VecY=VecY[ixdry],
-                        Dh=vecd[l]) 
-    if (any(xidid.l>xidiw.l)) xa.l[which(xidid.l>xidiw.l)]<-0
-  #  if (any(xidid.l<xidiw.l & xa.l<arrinf)) 
-  #    xa.l[which(xidid.l<xidiw.l & xa.l<arrinf)]<-arrinf
-    ra<-r
+      zvalues.l<-getValues(r)
+      storage.mode(zvalues.l)<-"numeric"
+      xy.l<-xyFromCell(r,1:ncell(r))
+      x.l<-sort(unique(xy.l[,1]))
+      y.l<-sort(unique(xy.l[,2]),decreasing=T)
+      mask.l<-which(!is.na(zvalues.l))
+      zgrid.l<-zvalues.l[mask.l]
+      xgrid.l<-xy.l[mask.l,1]
+      ygrid.l<-xy.l[mask.l,2]
+      rm(xy.l,zvalues.l)
+      if (l==1) {
+        yb<-rep(mean(yo_relan),length=n0)
+        xb<-rep(mean(yo_relan),length=length(xgrid.l))
+      } else {
+        if ("scale" %in% argv$off_grd.variables) 
+          xl_tmp<-getValues(resample(rl,r,method="ngb"))[mask.l]
+        rb<-resample(ra,r,method="bilinear")
+        xb<-getValues(rb)[mask.l]
+        count<-0
+        while (any(is.na(xb))) {
+          count<-count+1
+          buffer_length<-round(vecd[l]/(10-(count-1)),0)*1000
+          if (!is.finite(buffer_length)) break 
+          ib<-which(is.na(xb))
+          aux<-extract(rb,cbind(xgrid.l[ib],ygrid.l[ib]),
+                       na.rm=T,
+                       buffer=buffer_length)
+          for (ll in 1:length(aux)) xb[ib[ll]]<-mean(aux[[ll]],na.rm=T)
+          rb[mask.l]<-xb
+          rm(aux,ib)
+        }
+        yb<-extract(rb,cbind(VecX,VecY),method="bilinear")
+#        debug_plots()
+        rm(rb)
+      }
+      if (any(is.na(xb))) print("xb is NA")
+      if (any(is.na(yb))) print("yb is NA")
+      xa.l<-OI_RR_fast(yo=yo_relan,
+                       yb=yb,
+                       xb=xb,
+                       xgrid=xgrid.l,
+                       ygrid=ygrid.l,
+                       VecX=VecX,
+                       VecY=VecY,
+                       Dh=vecd[l]) 
+      xidiw.l<-OI_RR_fast(yo=yo[ixwet],
+                          yb=rep(0,nwet),
+                          xb=rep(0,length(xgrid.l)),
+                          xgrid=xgrid.l,
+                          ygrid=ygrid.l,
+                          VecX=VecX[ixwet],
+                          VecY=VecY[ixwet],
+                          Dh=vecd[l]) 
+      xidid.l<-OI_RR_fast(yo=yo[ixdry],
+                          yb=rep(0,ndry),
+                          xb=rep(0,length(xgrid.l)),
+                          xgrid=xgrid.l,
+                          ygrid=ygrid.l,
+                          VecX=VecX[ixdry],
+                          VecY=VecY[ixdry],
+                          Dh=vecd[l]) 
+      if (any(xidid.l>xidiw.l)) xa.l[which(xidid.l>xidiw.l)]<-boxcox(0,0.5)
+    #  if (any(xidid.l<xidiw.l & xa.l<arrinf)) 
+    #    xa.l[which(xidid.l<xidiw.l & xa.l<arrinf)]<-arrinf
+      ra<-r
+      ra[]<-NA
+      ra[mask.l]<-xa.l
+      if ("scale" %in% argv$off_grd.variables) {
+        rl<-ra
+        rl[mask.l]<-vecd[l]
+        if (l>1) {
+          ixl<-which(abs(xa.l-xb)<0.005)
+          if (length(ixl)>0) rl[mask.l[ixl]]<-xl_tmp[ixl]
+          png(file=paste0("foo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
+          image(rl,breaks=c(seq(0,50,length=10),5000),col=c(rev(rainbow(9)),"gray"))
+          points(VecX,VecY)
+          dev.off()
+          raux<-ra
+          raux[mask.l]<-tboxcox(getValues(ra)[mask.l],0.5,brrinf=boxcox(argv$rrinf,0.5))
+          png(file=paste0("goo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
+          image(raux,breaks=c(-1,0.000001,1000),col=c("gray","blue"))
+          points(VecX,VecY)
+          dev.off()
+        }
+      }
+    } # end of multi-scale OI
+    # back to precipitation values (from relative anomalies)
+    xa.l<-tboxcox(xa.l,0.5,brrinf=boxcox(argv$rrinf/rf[mask.l],0.5))
+    if (exists("rf")) xa<-round(xa.l*rf[mask.l],2)
+    ra[mask.l]<-xa
+    rm(mask.l,xa)
+    ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
+    yb<-rep(-9999,length(ya))
+    yav<-rep(-9999,length(ya))
+  } else {
+    ra<-rmaster
     ra[]<-NA
-    ra[mask.l]<-xa.l
-  } # end of multi-scale OI
-  # back to precipitation values (from relative anomalies)
-  if (exists("rf")) xa<-round(xa.l*rf[mask.l],2)
-  ra[mask.l]<-xa
-  rm(mask.l,xa)
-  ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
-  yb<-rep(-9999,length(ya))
-  yav<-rep(-9999,length(ya))
+    ra[mask]<-0
+    rl<-ra
+    ya<-rep(0,n0)
+    yb<-rep(-9999,n0)
+    yav<-rep(-9999,n0)
+  }
+  # compute IDI if needed
+  if (!argv$cv_mode & 
+      ("idi" %in% argv$off_grd.variables | 
+       argv$idiv_instead_of_elev)) {
+    xgrid.l<-xgrid[mask]
+    ygrid.l<-ygrid[mask]
+    if (argv$verbose) t00<-Sys.time()
+    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                 /argv$oimult.Dh_idi)**2.)
+    diag(D)<-diag(D)+argv$oimult.eps2_idi
+    InvD<-chol2inv(chol(D))
+    if (!argv$idiv_instead_of_elev) rm(D)
+    if ("idi" %in% argv$off_grd.variables) 
+      xidi<-OI_RR_fast(yo=rep(1,length(VecX)),
+                       yb=rep(0,length(VecX)),
+                       xb=rep(0,length(xgrid.l)),
+                       xgrid=xgrid.l,
+                       ygrid=ygrid.l,
+                       VecX=VecX,
+                       VecY=VecY,
+                       Dh=argv$oimult.Dh_idi)
+    if (argv$idiv_instead_of_elev) {
+      diag(D)<-diag(D)-argv$oimult.eps2_idi
+      W<-tcrossprod(D,InvD)
+      rm(D,InvD)
+      # this is the cross-validation integral data influence ("yidiv")
+      elev_for_verif<-rep(1,n0) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,n0))
+      rm(W)
+    }
+    # InvD could be used in the following
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("idi time=",round(t11-t00,1),
+                              attr(t11-t00,"unit")))
+    }
+  } else {
+    elev_for_verif<-VecZ
+  }
+  # prepare gridded output
+  if (!argv$cv_mode) {
+    for (i in 1:length(argv$off_grd.variables)) {
+      if (!exists("r.list")) r.list<-list()
+      if (argv$off_grd.variables[i]=="analysis") {
+        r.list[[i]]<-matrix(data=getValues(ra),
+                            ncol=length(y),
+                            nrow=length(x))
+      } else if (argv$off_grd.variables[i]=="background") {
+        print("Warning: no background for OI_multiscale")
+      } else if (argv$off_grd.variables[i]=="idi") {
+        r<-rmaster
+        r[]<-NA
+        r[mask]<-xidi
+        r.list[[i]]<-matrix(data=getValues(r),
+                            ncol=length(y),
+                            nrow=length(x))
+        rm(r)
+      } else if (argv$off_grd.variables[i]=="scale") {
+        r.list[[i]]<-matrix(data=getValues(rl),
+                            ncol=length(y),
+                            nrow=length(x))
+        rm(rl)
+      }
+    }
+  }
+# END of OI multiscale (without background)
 #..............................................................................
 # ===>  OI two-step spatial interpolation (without background)   <===
 } else if (argv$mode=="OI_twosteptemperature") {
