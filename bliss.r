@@ -148,10 +148,11 @@ dobs_fun<-function(obs,k) {
                        VecY,
                        VecZ=NULL,
                        Dh,
-                       Dz=NULL) {
+                       Dz=NULL,
+                       zero=0) {
 #------------------------------------------------------------------------------
   if (is.null(Dz)) {
-    Dz<-100000
+    Dz<-10000000
     VecZ<-rep(0,length(VecX))
     zgrid<-rep(0,length(xgrid))
   }
@@ -178,7 +179,8 @@ dobs_fun<-function(obs,k) {
                        Dz=as.double(Dz),
                        xb=as.double(xb),
                        vec=as.double(vec),
-                       xa=as.double(xa) )
+                       xa=as.double(xa),
+                       zero=as.double(zero) )
   out$xa[1:ng]
 }
 
@@ -260,6 +262,7 @@ tboxcox<-function(x,lambda,brrinf=-100) {
     res<-(1+lambda*x)**(1./lambda)
   }
   if (any(x<brrinf)) res[which(x<brrinf)]<-0
+print(paste("tboxcox",length(which(x<brrinf)),length(which(x<=brrinf))))
   res
 }
 
@@ -1424,7 +1427,7 @@ p <- add_argument(p, "--off_grd.grid",
                   type="character",
                   default="none")
 p <- add_argument(p, "--off_grd.variables",
-                  help="type of variable (analysis,background,idi)",
+                  help="type of variable (analysis,background,idi,...)",
                   type="character",
                   nargs=Inf,
                   default=NA)
@@ -2240,7 +2243,7 @@ if (argv$mode=="OI_multiscale") {
     vecf<-vector()
     for (i in 1:length(kseq)) 
       vecd_tmp[i]<-round(dobs_fun(obs=data.frame(x=VecX,y=VecY),k=kseq[i])/1000,0)
-    vecd_tmp<-unique(sort(c(vecd_tmp,2:50),decreasing=T))
+    vecd_tmp<-unique(sort(c(vecd_tmp,2:100),decreasing=T))
 #    if (vecd_tmp[length(kseq)]>=15) {
 #      vecd_tmp[(i+1):(i+5)]<-c(12,8,5,3,2)
 #    } else if (vecd_tmp[length(kseq)]>=10) {
@@ -2387,16 +2390,25 @@ if (argv$mode=="OI_firstguess") {
 # ===>  OI multiscale (without background)   <===
 } else if (argv$mode=="OI_multiscale") {
   if (nwet>0) {
-    # multi-scale OI operates on relative anomalies (if rescaling factor is available)
+    # if rescaling factor exists, multi-scale OI operates on relative anomalies 
     if (exists("yrf")) {
       if (any(yrf==0)) yrf[which(yrf==0)]<-1
       yo_relan<-yo/yrf
+      yref_relan<-rep(argv$rrinf,n0)/yrf
     #  arrinf<-mean(argv$rrinf/rf[mask])
     } else {
       yo_relan<-yo
+      yref_relan<-rep(argv$rrinf,n0)
     #  arrinf<-mean(argv$rrinf/rf[mask])
     }
-    yo_relan<-boxcox(yo_relan,0.5)
+    zero<-0
+    if (argv$transf=="Box-Cox") {
+      yo_relan<-boxcox(yo_relan,argv$transf.boxcox_lambda)
+      yref_relan<-boxcox(yref_relan,argv$transf.boxcox_lambda)
+      zero<-boxcox(0,argv$transf.boxcox_lambda)
+    } else if (argv$transf!="none") {
+      boom("transformation not defined")
+    }
     # multi-scale OI
     for (l in 1:nl) {
       if (argv$verbose) 
@@ -2425,6 +2437,8 @@ if (argv$mode=="OI_firstguess") {
       if (l==1) {
         yb<-rep(mean(yo_relan),length=n0)
         xb<-rep(mean(yo_relan),length=length(xgrid.l))
+        yb_ref<-rep(mean(yref_relan),length=n0)
+        xb_ref<-rep(mean(yref_relan),length=length(xgrid.l))
       } else {
         if ("scale" %in% argv$off_grd.variables) 
           xl_tmp<-getValues(resample(rl,r,method="ngb"))[mask.l]
@@ -2446,9 +2460,29 @@ if (argv$mode=="OI_firstguess") {
         yb<-extract(rb,cbind(VecX,VecY),method="bilinear")
 #        debug_plots()
         rm(rb)
+        rb_ref<-resample(ra_ref,r,method="bilinear")
+        xb_ref<-getValues(rb_ref)[mask.l]
+        count<-0
+        while (any(is.na(xb_ref))) {
+          count<-count+1
+          buffer_length<-round(vecd[l]/(10-(count-1)),0)*1000
+          if (!is.finite(buffer_length)) break 
+          ib<-which(is.na(xb_ref))
+          aux<-extract(rb_ref,cbind(xgrid.l[ib],ygrid.l[ib]),
+                       na.rm=T,
+                       buffer=buffer_length)
+          for (ll in 1:length(aux)) xb_ref[ib[ll]]<-mean(aux[[ll]],na.rm=T)
+          rb_ref[mask.l]<-xb_ref
+          rm(aux,ib)
+        }
+        yb_ref<-extract(rb_ref,cbind(VecX,VecY),method="bilinear")
+#        debug_plots()
+        rm(rb_ref)
       }
       if (any(is.na(xb))) print("xb is NA")
       if (any(is.na(yb))) print("yb is NA")
+      if (any(is.na(xb_ref))) print("xb_ref is NA")
+      if (any(is.na(yb_ref))) print("yb_ref is NA")
       xa.l<-OI_RR_fast(yo=yo_relan,
                        yb=yb,
                        xb=xb,
@@ -2456,51 +2490,75 @@ if (argv$mode=="OI_firstguess") {
                        ygrid=ygrid.l,
                        VecX=VecX,
                        VecY=VecY,
-                       Dh=vecd[l]) 
-      xidiw.l<-OI_RR_fast(yo=yo[ixwet],
-                          yb=rep(0,nwet),
-                          xb=rep(0,length(xgrid.l)),
-                          xgrid=xgrid.l,
-                          ygrid=ygrid.l,
-                          VecX=VecX[ixwet],
-                          VecY=VecY[ixwet],
-                          Dh=vecd[l]) 
-      xidid.l<-OI_RR_fast(yo=yo[ixdry],
-                          yb=rep(0,ndry),
-                          xb=rep(0,length(xgrid.l)),
-                          xgrid=xgrid.l,
-                          ygrid=ygrid.l,
-                          VecX=VecX[ixdry],
-                          VecY=VecY[ixdry],
-                          Dh=vecd[l]) 
-      if (any(xidid.l>xidiw.l)) xa.l[which(xidid.l>xidiw.l)]<-boxcox(0,0.5)
-    #  if (any(xidid.l<xidiw.l & xa.l<arrinf)) 
-    #    xa.l[which(xidid.l<xidiw.l & xa.l<arrinf)]<-arrinf
+                       Dh=vecd[l],
+                       zero=zero) 
+      xa_ref.l<-OI_RR_fast(yo=yref_relan,
+                           yb=yb_ref,
+                           xb=xb_ref,
+                           xgrid=xgrid.l,
+                           ygrid=ygrid.l,
+                           VecX=VecX,
+                           VecY=VecY,
+                           Dh=vecd[l],
+                           zero=zero) 
+#      xidiw.l<-OI_RR_fast(yo=rep(1,nwet),
+#                          yb=rep(0,nwet),
+#                          xb=rep(0,length(xgrid.l)),
+#                          xgrid=xgrid.l,
+#                          ygrid=ygrid.l,
+#                          VecX=VecX[ixwet],
+#                          VecY=VecY[ixwet],
+#                          Dh=vecd[l]) 
+#      xidid.l<-OI_RR_fast(yo=rep(1,ndry),
+#                          yb=rep(0,ndry),
+#                          xb=rep(0,length(xgrid.l)),
+#                          xgrid=xgrid.l,
+#                          ygrid=ygrid.l,
+#                          VecX=VecX[ixdry],
+#                          VecY=VecY[ixdry],
+#                          Dh=vecd[l]) 
+#      if (any(xidid.l>xidiw.l)) xa.l[which(xidid.l>xidiw.l)]<-boxcox(0,0.5)
+#    #  if (any(xidid.l<xidiw.l & xa.l<arrinf)) 
+#    #    xa.l[which(xidid.l<xidiw.l & xa.l<arrinf)]<-arrinf
       ra<-r
       ra[]<-NA
       ra[mask.l]<-xa.l
+      ra_ref<-ra
+      ra_ref[mask.l]<-xa_ref.l
       if ("scale" %in% argv$off_grd.variables) {
         rl<-ra
         rl[mask.l]<-vecd[l]
         if (l>1) {
           ixl<-which(abs(xa.l-xb)<0.005)
           if (length(ixl)>0) rl[mask.l[ixl]]<-xl_tmp[ixl]
-          png(file=paste0("foo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
-          image(rl,breaks=c(seq(0,50,length=10),5000),col=c(rev(rainbow(9)),"gray"))
-          points(VecX,VecY)
-          dev.off()
-          raux<-ra
-          raux[mask.l]<-tboxcox(getValues(ra)[mask.l],0.5,brrinf=boxcox(argv$rrinf,0.5))
-          png(file=paste0("goo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
-          image(raux,breaks=c(-1,0.000001,1000),col=c("gray","blue"))
-          points(VecX,VecY)
-          dev.off()
+#          png(file=paste0("foo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
+#          image(rl,breaks=c(seq(0,50,length=10),5000),col=c(rev(rainbow(9)),"gray"))
+#          points(VecX,VecY)
+#          dev.off()
+#          raux<-ra
+#          raux[mask.l]<-tboxcox(getValues(ra)[mask.l],0.5,brrinf=boxcox(argv$rrinf,0.5))
+#          png(file=paste0("goo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
+#          image(raux,breaks=c(-1,0.000001,1000),col=c("gray","blue"))
+#          points(VecX,VecY)
+#          dev.off()
         }
       }
     } # end of multi-scale OI
     # back to precipitation values (from relative anomalies)
-    xa.l<-tboxcox(xa.l,0.5,brrinf=boxcox(argv$rrinf/rf[mask.l],0.5))
-    if (exists("rf")) xa<-round(xa.l*rf[mask.l],2)
+    if (argv$transf=="Box-Cox") {
+#      xa.l<-tboxcox(xa.l,argv$transf.boxcox_lambda,brrinf=xa_ref.l)
+      xa.l<-tboxcox(xa.l,argv$transf.boxcox_lambda)
+    } else if (argv$transf!="none") {
+      if (any(xa.l<xa_ref.l)) xa.l[which(xa.l<xa_ref.l)]<-0
+    }
+    if (exists("rf")) xa<-xa.l*rf[mask.l]
+#    if ("rrinf" %in% argv$off_grd.variables) { 
+      xrrinf<-tboxcox(xa_ref.l,argv$transf.boxcox_lambda)
+      if (exists("rf")) xrrinf<-xrrinf*rf[mask.l]
+#    }
+    xa<-xa*argv$rrinf/xrrinf
+    xrrinf<-argv$rrinf/xrrinf
+    rm(xa_ref.l)
     ra[mask.l]<-xa
     rm(mask.l,xa)
     ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
@@ -2577,6 +2635,14 @@ if (argv$mode=="OI_firstguess") {
                             ncol=length(y),
                             nrow=length(x))
         rm(rl)
+      } else if (argv$off_grd.variables[i]=="rrinf") {
+        r<-rmaster
+        r[]<-NA
+        r[mask]<-xrrinf
+        r.list[[i]]<-matrix(data=getValues(r),
+                            ncol=length(y),
+                            nrow=length(x))
+        rm(r,xrrinf)
       }
     }
   }

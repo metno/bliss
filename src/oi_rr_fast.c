@@ -24,7 +24,8 @@ void oi_rr_fast(int *ng,
                 double *Dz,
                 double *xb, 
                 double *vec,
-                double *xa) {
+                double *xa,
+                double *zero) {
   int i,j;
   double g,Dh2,Dz2,hd2,vd2;
 
@@ -40,7 +41,7 @@ void oi_rr_fast(int *ng,
         xa[i]=xa[i]+g*vec[j];
       }
     }
-    if (xa[i]<0) xa[i]=0.;
+    if (xa[i]<zero[0]) xa[i]=zero[0]; 
   }
 
   return;
