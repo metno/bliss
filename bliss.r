@@ -784,8 +784,20 @@ p <- add_argument(p, "--rrinf",
 #------------------------------------------------------------------------------
 # cross-validation mode
 p <- add_argument(p, "--cv_mode",
-                  help="standard cross-validation mode",
+                  help="standard cross-validation mode (exclude one observation provider from the analysis and use it for cv, see also ''prId.cv'')",
                   flag=T)
+p <- add_argument(p, "--prId.cv",
+                  help="observation provider identifiers to reserve for cross-validation",
+                  type="numeric",
+                  default=NULL,
+                  nargs=Inf)
+p <- add_argument(p, "--cv_mode_random",
+                  help="standard cross-validation mode (random selection of stations, pre-set minimum distance between them is ''d_cv'')",
+                  flag=T)
+p <- add_argument(p, "--d.cv",
+                  help="distance used for ''cv_mode_random'' (km)",
+                  type="numeric",
+                  default=50)
 p <- add_argument(p, "--loocv_mode",
                   help="leave-one-out cross-validation mode",
                   type="logical",
@@ -847,11 +859,6 @@ p <- add_argument(p, "--ovarc.prId",
                   nargs=Inf)
 p <- add_argument(p, "--prId.exclude",
                   help="observation provider identifiers to exclude",
-                  type="numeric",
-                  default=NULL,
-                  nargs=Inf)
-p <- add_argument(p, "--prId.cv",
-                  help="observation provider identifiers to reserve for cross-validation",
                   type="numeric",
                   default=NULL,
                   nargs=Inf)
@@ -2161,6 +2168,49 @@ if (argv$cv_mode) {
     nwet_cv<-length(ixwet_cv)
     ndry_cv<-length(ixdry_cv)
   }
+} else if (argv$cv_mode_random) {
+  stmp<-vector()
+  xtmp<-vector()
+  ytmp<-vector()
+  ncv<-0
+  for (i in 1:length(data$x)) {
+    if ( is.na(data$value[i]) | data$dqc[i]!=0 | !flag_in_master[i] | !flag_in_fg[i] ) next
+    if (ncv==0) {
+      ncv<-ncv+1
+      stmp[ncv]<-data$sourceId[i]
+      xtmp[ncv]<-data$x[i]
+      ytmp[ncv]<-data$y[i]
+    } else {
+      dtmp<-sqrt( (data$x[i]-xtmp[1:ncv])**2 + (data$y[i]-ytmp[1:ncv])**2 )/1000
+      if (!any(dtmp<argv$d.cv)) {
+        ncv<-ncv+1
+        stmp[ncv]<-data$sourceId[i]
+        xtmp[ncv]<-data$x[i]
+        ytmp[ncv]<-data$y[i]
+      }
+    }
+  }
+  ixcv<-which( data$sourceId %in% stmp[1:ncv] )
+  if (length(ixcv)==0) boom("ERROR \"cv_mode\" running without CV-observations ")
+  VecX_cv<-data$x[ixcv]
+  VecY_cv<-data$y[ixcv]
+  VecXorig_cv<-data$x_orig[ixcv]
+  VecYorig_cv<-data$y_orig[ixcv]
+  VecLat_cv<-data$lat[ixcv]
+  VecLon_cv<-data$lon[ixcv]
+  VecZ_cv<-data$z[ixcv]
+  VecS_cv<-data$sourceId[ixcv]
+  yo_cv<-data$value[ixcv]
+  if (exists("rrf")) yrf_cv<-extract(rrf,cbind(VecX_cv,VecY_cv),na.rm=T)
+  data$value[ixcv]<-NA
+  data$dqc[ixcv]<-999
+  ncv<-length(ixcv)
+  if (!is.na(argv$rrinf)) {
+    ixwet_cv<-which(yo_cv>=argv$rrinf)
+    ixdry_cv<-which(yo_cv< argv$rrinf)
+    nwet_cv<-length(ixwet_cv)
+    ndry_cv<-length(ixdry_cv)
+  }
 }
 if (any(!is.na(argv$prId.exclude))) {
   ix0<-which(data$dqc==0 & 
@@ -2218,7 +2268,7 @@ if (argv$verbose) {
   print("+---------------------------------------------------------------+")
   if (!is.na(argv$rrinf)) {
     print(paste("#observations (wet/dry) =",n0,"(",nwet,"/",ndry,")"))
-    if (argv$cv_mode) {
+    if (argv$cv_mode | argv$cv_mode_random) {
       print(paste("#cv-observations (wet/dry) =",ncv,"(",nwet_cv,"/",ndry_cv,")"))
     }
   } else {
@@ -2244,32 +2294,21 @@ if (argv$mode=="OI_multiscale") {
     for (i in 1:length(kseq)) 
       vecd_tmp[i]<-round(dobs_fun(obs=data.frame(x=VecX,y=VecY),k=kseq[i])/1000,0)
     vecd_tmp<-unique(sort(c(vecd_tmp,2:100),decreasing=T))
-#    if (vecd_tmp[length(kseq)]>=15) {
-#      vecd_tmp[(i+1):(i+5)]<-c(12,8,5,3,2)
-#    } else if (vecd_tmp[length(kseq)]>=10) {
-#      vecd_tmp[(i+1):(i+4)]<-c(10,5,3,2)
-#    }
     vecf_tmp<-pmin(min(c(nx,ny))/3,pmax(1,round(vecd_tmp/2,0)))
     vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))]
     vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]
     vecd<-unique(sort(c(vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))],
                         vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]),
                       decreasing=T))
+    # aggregation factor is half the horizontal decorrelation length
     vecf<-round(vecd/2,0)
+    # same weight to the obs and the background from previous iteration
     vece<-rep(argv$eps2,length(vecf))
     nl<-length(vecd)
-    if (length(which(vecf<=2))>0) {
-      vece[which(vecf<=2)]<-rep(0.1,length(which(vecf<=2)))
-    } else {
-      vece[length(vece)]<-0.1
-    }
     vece[]<-1
     rm(vecf_tmp,vecd_tmp)
     if (argv$verbose) {
       print("+---------------------------------------------------------------+")
-#      print("kseq vecd vecf vece")
-#      print(" #    km    -    -")
-#      print(cbind(kseq,vecd,vecf,vece))
       print("vecd vecf vece")
       print(" km   -    -")
       print(cbind(vecd,vecf,vece))
@@ -2394,17 +2433,12 @@ if (argv$mode=="OI_firstguess") {
     if (exists("yrf")) {
       if (any(yrf==0)) yrf[which(yrf==0)]<-1
       yo_relan<-yo/yrf
-      yref_relan<-rep(argv$rrinf,n0)/yrf
-    #  arrinf<-mean(argv$rrinf/rf[mask])
     } else {
       yo_relan<-yo
-      yref_relan<-rep(argv$rrinf,n0)
-    #  arrinf<-mean(argv$rrinf/rf[mask])
     }
     zero<-0
     if (argv$transf=="Box-Cox") {
       yo_relan<-boxcox(yo_relan,argv$transf.boxcox_lambda)
-      yref_relan<-boxcox(yref_relan,argv$transf.boxcox_lambda)
       zero<-boxcox(0,argv$transf.boxcox_lambda)
     } else if (argv$transf!="none") {
       boom("transformation not defined")
@@ -2437,8 +2471,6 @@ if (argv$mode=="OI_firstguess") {
       if (l==1) {
         yb<-rep(mean(yo_relan),length=n0)
         xb<-rep(mean(yo_relan),length=length(xgrid.l))
-        yb_ref<-rep(mean(yref_relan),length=n0)
-        xb_ref<-rep(mean(yref_relan),length=length(xgrid.l))
       } else {
         if ("scale" %in% argv$off_grd.variables) 
           xl_tmp<-getValues(resample(rl,r,method="ngb"))[mask.l]
@@ -2458,31 +2490,10 @@ if (argv$mode=="OI_firstguess") {
           rm(aux,ib)
         }
         yb<-extract(rb,cbind(VecX,VecY),method="bilinear")
-#        debug_plots()
         rm(rb)
-        rb_ref<-resample(ra_ref,r,method="bilinear")
-        xb_ref<-getValues(rb_ref)[mask.l]
-        count<-0
-        while (any(is.na(xb_ref))) {
-          count<-count+1
-          buffer_length<-round(vecd[l]/(10-(count-1)),0)*1000
-          if (!is.finite(buffer_length)) break 
-          ib<-which(is.na(xb_ref))
-          aux<-extract(rb_ref,cbind(xgrid.l[ib],ygrid.l[ib]),
-                       na.rm=T,
-                       buffer=buffer_length)
-          for (ll in 1:length(aux)) xb_ref[ib[ll]]<-mean(aux[[ll]],na.rm=T)
-          rb_ref[mask.l]<-xb_ref
-          rm(aux,ib)
-        }
-        yb_ref<-extract(rb_ref,cbind(VecX,VecY),method="bilinear")
-#        debug_plots()
-        rm(rb_ref)
       }
       if (any(is.na(xb))) print("xb is NA")
       if (any(is.na(yb))) print("yb is NA")
-      if (any(is.na(xb_ref))) print("xb_ref is NA")
-      if (any(is.na(yb_ref))) print("yb_ref is NA")
       xa.l<-OI_RR_fast(yo=yo_relan,
                        yb=yb,
                        xb=xb,
@@ -2492,75 +2503,27 @@ if (argv$mode=="OI_firstguess") {
                        VecY=VecY,
                        Dh=vecd[l],
                        zero=zero) 
-      xa_ref.l<-OI_RR_fast(yo=yref_relan,
-                           yb=yb_ref,
-                           xb=xb_ref,
-                           xgrid=xgrid.l,
-                           ygrid=ygrid.l,
-                           VecX=VecX,
-                           VecY=VecY,
-                           Dh=vecd[l],
-                           zero=zero) 
-#      xidiw.l<-OI_RR_fast(yo=rep(1,nwet),
-#                          yb=rep(0,nwet),
-#                          xb=rep(0,length(xgrid.l)),
-#                          xgrid=xgrid.l,
-#                          ygrid=ygrid.l,
-#                          VecX=VecX[ixwet],
-#                          VecY=VecY[ixwet],
-#                          Dh=vecd[l]) 
-#      xidid.l<-OI_RR_fast(yo=rep(1,ndry),
-#                          yb=rep(0,ndry),
-#                          xb=rep(0,length(xgrid.l)),
-#                          xgrid=xgrid.l,
-#                          ygrid=ygrid.l,
-#                          VecX=VecX[ixdry],
-#                          VecY=VecY[ixdry],
-#                          Dh=vecd[l]) 
-#      if (any(xidid.l>xidiw.l)) xa.l[which(xidid.l>xidiw.l)]<-boxcox(0,0.5)
-#    #  if (any(xidid.l<xidiw.l & xa.l<arrinf)) 
-#    #    xa.l[which(xidid.l<xidiw.l & xa.l<arrinf)]<-arrinf
       ra<-r
       ra[]<-NA
       ra[mask.l]<-xa.l
-      ra_ref<-ra
-      ra_ref[mask.l]<-xa_ref.l
       if ("scale" %in% argv$off_grd.variables) {
         rl<-ra
         rl[mask.l]<-vecd[l]
         if (l>1) {
           ixl<-which(abs(xa.l-xb)<0.005)
           if (length(ixl)>0) rl[mask.l[ixl]]<-xl_tmp[ixl]
-#          png(file=paste0("foo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
-#          image(rl,breaks=c(seq(0,50,length=10),5000),col=c(rev(rainbow(9)),"gray"))
-#          points(VecX,VecY)
-#          dev.off()
-#          raux<-ra
-#          raux[mask.l]<-tboxcox(getValues(ra)[mask.l],0.5,brrinf=boxcox(argv$rrinf,0.5))
-#          png(file=paste0("goo_",formatC(l,width=2,flag="0"),".png"),width=800,height=800)
-#          image(raux,breaks=c(-1,0.000001,1000),col=c("gray","blue"))
-#          points(VecX,VecY)
-#          dev.off()
         }
       }
     } # end of multi-scale OI
     # back to precipitation values (from relative anomalies)
     if (argv$transf=="Box-Cox") {
-#      xa.l<-tboxcox(xa.l,argv$transf.boxcox_lambda,brrinf=xa_ref.l)
-      xa.l<-tboxcox(xa.l,argv$transf.boxcox_lambda)
+      xa<-tboxcox(xa.l,argv$transf.boxcox_lambda)
     } else if (argv$transf!="none") {
-      if (any(xa.l<xa_ref.l)) xa.l[which(xa.l<xa_ref.l)]<-0
+      xa<-xa.l
     }
-    if (exists("rf")) xa<-xa.l*rf[mask.l]
-#    if ("rrinf" %in% argv$off_grd.variables) { 
-      xrrinf<-tboxcox(xa_ref.l,argv$transf.boxcox_lambda)
-      if (exists("rf")) xrrinf<-xrrinf*rf[mask.l]
-#    }
-    xa<-xa*argv$rrinf/xrrinf
-    xrrinf<-argv$rrinf/xrrinf
-    rm(xa_ref.l)
+    if (exists("rf")) xa<-xa*rf[mask.l]
     ra[mask.l]<-xa
-    rm(mask.l,xa)
+    rm(mask.l,xa,xa.l)
     ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
     yb<-rep(-9999,length(ya))
     yav<-rep(-9999,length(ya))
@@ -2574,7 +2537,7 @@ if (argv$mode=="OI_firstguess") {
     yav<-rep(-9999,n0)
   }
   # compute IDI if needed
-  if (!argv$cv_mode & 
+  if (!(argv$cv_mode | argv$cv_mode_random) & 
       ("idi" %in% argv$off_grd.variables | 
        argv$idiv_instead_of_elev)) {
     xgrid.l<-xgrid[mask]
@@ -2613,7 +2576,7 @@ if (argv$mode=="OI_firstguess") {
     elev_for_verif<-VecZ
   }
   # prepare gridded output
-  if (!argv$cv_mode) {
+  if (!(argv$cv_mode|argv$cv_mode_random)) {
     for (i in 1:length(argv$off_grd.variables)) {
       if (!exists("r.list")) r.list<-list()
       if (argv$off_grd.variables[i]=="analysis") {
@@ -2635,14 +2598,10 @@ if (argv$mode=="OI_firstguess") {
                             ncol=length(y),
                             nrow=length(x))
         rm(rl)
-      } else if (argv$off_grd.variables[i]=="rrinf") {
-        r<-rmaster
-        r[]<-NA
-        r[mask]<-xrrinf
-        r.list[[i]]<-matrix(data=getValues(r),
+      } else if (argv$off_grd.variables[i]=="rel_an") {
+        r.list[[i]]<-matrix(data=getValues(ra)/rf,
                             ncol=length(y),
                             nrow=length(x))
-        rm(r,xrrinf)
       }
     }
   }
@@ -2778,7 +2737,7 @@ if (argv$mode=="OI_firstguess") {
   b_ok<-F
   na<--999.
   for (i in 1:10) {
-    if (!argv$cv_mode) {
+    if (!(argv$cv_mode|argv$cv_mode_random)) {
       xb<-xgrid
       xw<-xgrid
       xdh_oi<-xgrid
@@ -2809,7 +2768,7 @@ if (argv$mode=="OI_firstguess") {
                dzmin=argv$dz.bg,
                eps2=0.1,
                closeNth=argv$nclose.bg)
-    if (!(any(yb==na) | ((!argv$cv_mode) & (any(xb==na))))) {
+    if (!(any(yb==na) | ((!(argv$cv_mode|argv$cv_mode_random)) & (any(xb==na))))) {
       b_ok<-T
       print(paste("maxboxl=",(i*argv$maxboxl),"m"))
       break
@@ -2818,7 +2777,7 @@ if (argv$mode=="OI_firstguess") {
   if (!b_ok) {
     if (any(yb==na)) 
       boom("ERROR: found NAs in background values at station locations (try to increase \"maxboxl\"")
-    if (!argv$cv_mode) {
+    if (!(argv$cv_mode|argv$cv_mode_random)) {
       if (any(xb==na)) boom("ERROR: found NAs in background values at grid points")
     } 
   }
@@ -2834,7 +2793,7 @@ if (argv$mode=="OI_firstguess") {
   #ydh_oi[which(!is.na(ydh_oi_tmp))]<-ydh_oi_tmp[which(!is.na(ydh_oi_tmp))]
   #rm(ydh_oi_tmp,rf,r)
   if (argv$verbose) {
-    if (!argv$cv_mode) {
+    if (!(argv$cv_mode|argv$cv_mode_random)) {
       print(paste("RMS(yo-yb)=", round(sqrt(mean((yo-yb)**2)),2), "degC" ))
     } else {
       print(paste("RMS(yo-yb)=", round(sqrt(mean((yo_cv-xb)**2)),2), "degC" ))
@@ -2849,7 +2808,7 @@ if (argv$mode=="OI_firstguess") {
   }
   innov<-yo-yb
   # standar mode (no cv)
-  if (!argv$cv_mode) {
+  if (!(argv$cv_mode|argv$cv_mode_random)) {
 #  return(c(xa,xidi,xav,xidiv))
     ngrid<-length(xgrid)
     length_tot<-ngrid
@@ -2959,7 +2918,7 @@ if (argv$mode=="OI_firstguess") {
   prId_orig<-prId
   yo_orig<-yo
   xb_orig<-xb
-  if (argv$cv_mode) {
+  if ((argv$cv_mode|argv$cv_mode_random)) {
     xgrid<-VecX_cv
     ygrid<-VecY_cv
   } else {
@@ -3014,7 +2973,7 @@ if (argv$mode=="OI_firstguess") {
     boom("ERROR in the definition of Rinv")
   diagRinv<-1./diagRinv
   # if CVmode, then adjust the background
-  if (argv$cv_mode) {
+  if ((argv$cv_mode|argv$cv_mode_random)) {
     xb<-array(data=NA,dim=c(ncv,nens))
     r<-rmaster
     for (e in 1:nens) {
@@ -3120,7 +3079,7 @@ if (argv$mode=="OI_firstguess") {
     xa<-tboxcox(xa,argv$transf.boxcox_lambda)
     xb<-tboxcox(xb,argv$transf.boxcox_lambda)
   }
-  if (!argv$cv_mode & 
+  if (!(argv$cv_mode|argv$cv_mode_random) & 
       ("idi" %in% argv$off_grd.variables | 
        argv$idiv_instead_of_elev)) {
     if (argv$verbose) t00<-Sys.time()
@@ -3163,7 +3122,7 @@ if (argv$mode=="OI_firstguess") {
   VecY<-VecY_orig
   rm(yo_orig,prId_orig,VecX_orig,VecY_orig)
   # prepare point / gridded output
-  if (!argv$cv_mode) {
+  if (!(argv$cv_mode|argv$cv_mode_random)) {
     ya<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
     yb<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
     for (j in 1:length(argv$off_grd.variables)) {
@@ -3234,7 +3193,7 @@ if (argv$mode=="OI_firstguess") {
   yo_orig<-yo
   xb_orig<-xb
   aix<-which(!is.na(xgrid) & !is.na(ygrid) & !is.na(dem))
-  if (argv$cv_mode) {
+  if ((argv$cv_mode|argv$cv_mode_random)) {
     xgrid<-VecX_cv
     ygrid<-VecY_cv
   } else {
@@ -3301,7 +3260,7 @@ if (argv$mode=="OI_firstguess") {
     boom("ERROR in the definition of Rinv")
   diagRinv<-1./diagRinv
   # if CVmode, then adjust the background
-  if (argv$cv_mode) {
+  if ((argv$cv_mode|argv$cv_mode_random)) {
     xb<-array(data=NA,dim=c(ncv,nens))
     for (e in 1:nens) {
       if (argv$letkf.obsop=="obsop_LapseRateConst") {
@@ -3375,7 +3334,7 @@ if (argv$mode=="OI_firstguess") {
     t11<-Sys.time()
     print(paste("letkf time=",round(t11-t00,1),attr(t11-t00,"unit")))
   }
-  if (!argv$cv_mode & 
+  if (!(argv$cv_mode|argv$cv_mode_random) & 
       ("idi" %in% argv$off_grd.variables | 
        argv$idiv_instead_of_elev)) {
     if (argv$verbose) t00<-Sys.time()
@@ -3418,7 +3377,7 @@ if (argv$mode=="OI_firstguess") {
   VecY<-VecY_orig
   rm(yo_orig,prId_orig,VecX_orig,VecY_orig)
   # prepare point / gridded output
-  if (!argv$cv_mode) {
+  if (!(argv$cv_mode|argv$cv_mode_random)) {
     ya<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
     yb<-array(data=NA,dim=c(n0,length(argv$iff_fg.e)))
     for (j in 1:length(argv$off_grd.variables)) {
@@ -3478,76 +3437,15 @@ if (argv$mode=="OI_firstguess") {
   } # end prepare for gridded output
 # END of Local Ensemble Transform Kalman Filter
 } # end if for the selection among OIs
-#
-#------------------------------------------------------------------------------
-# set dry regions to no-rain
-jump<-T
-if (!jump) {
-  print("+---------------------------------------------------------------+")
-  print("adjust for unlikely wet regions left by multi OI")
-  Dh<-vecd[which(kseq==10 & !is.na(kseq))]
-  D<-exp(-0.5*(Disth[ixwet,ixwet]/Dh)**2.)
-  diag(D)<-diag(D)+ovarc[ixwet]
-  InvD<-chol2inv(chol(D))
-  xidiw.l<-OI_RR_fast(yo=rep(1,nwet),
-                      yb=rep(0,nwet),
-                      xb=rep(0,length(xgrid.l)),
-                      xgrid=xgrid.l,
-                      ygrid=ygrid.l,
-                      VecX=VecX[ixwet],
-                      VecY=VecY[ixwet],
-                      Dh=Dh) 
-  D<-exp(-0.5*(Disth[ixdry,ixdry]/Dh)**2.)
-  diag(D)<-diag(D)+ovarc[ixdry]
-  InvD<-chol2inv(chol(D))
-  xidid.l<-OI_RR_fast(yo=rep(1,ndry),
-                      yb=rep(0,ndry),
-                      xb=rep(0,length(xgrid.l)),
-                      xgrid=xgrid.l,
-                      ygrid=ygrid.l,
-                      VecX=VecX[ixdry],
-                      VecY=VecY[ixdry],
-                      Dh=Dh)
-  ixd<-which(((0.6*xidid.l)>xidiw.l) & xa<1)
-  if (length(ixd)>0) xa[ixd]<-0
-  #debug_01_plots()
-  ra[mask.l]<-xa
-  rm(r,xb,yb,xa.l)
-  #
-  print("remove wet regions with no obs in them")
-  xa_aux<-getValues(ra)
-  xa_aux[which(!is.na(xa_aux) & xa_aux<argv$rrinf)]<-NA
-  ra[]<-xa_aux
-  rclump<-clump(ra)
-  oclump<-extract(rclump,cbind(VecX[ixwet],VecY[ixwet]))
-  fr<-freq(rclump)
-  # remove clumps of YESprec cells less than (4x4)km^2 or not including wet obs
-  ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=16) | !(fr[,1] %in% oclump)) )
-  xa[which(getValues(rclump)[mask.l] %in% fr[ix,1])]<-0
-  rm(xa_aux,rclump,oclump,fr,ix)
-  #
-  print("substitute dry regions with no obs in them with wet regions")
-  ra[mask.l]<-xa
-  xa_aux<-getValues(ra)
-  xa_aux[which(!is.na(xa_aux) & xa_aux>=argv$rrinf)]<-NA
-  xa_aux[which(!is.na(xa_aux))]<-1
-  ra[]<-xa_aux
-  rclump<-clump(ra)
-  oclump<-extract(rclump,cbind(VecX[ixdry],VecY[ixdry]))
-  fr<-freq(rclump)
-  # remove clumps of YESprec cells less than (4x4)km^2 or not including wet obs
-  ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=16) | !(fr[,1] %in% oclump)) )
-  xa[which((getValues(rclump)[mask.l] %in% fr[ix,1]) & (xidiw.l>xidid.l))]<-argv$rrinf
-  rm(xa_aux,rclump,oclump,fr,ix,xidiw.l,xidid.l)
-  ## final field
-}
 # 
 #CVmode
-if (argv$cv_mode) {
+if ((argv$cv_mode|argv$cv_mode_random)) {
   if (argv$verbose) t00<-Sys.time() 
   #CVmode for deterministic analysis
   if (is.null(argv$iff_fg.epos)) {
     ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
+    yb_cv<-vector(mode="numeric",length=ncv)
+    yb_cv[]<-NA
     Dh<-argv$Dh
   #CVmode for ensemble analysis
   } else {
@@ -3563,15 +3461,22 @@ if (argv$cv_mode) {
     if (argv$mode=="hyletkf") Dh<-argv$hyletkf.Dh_oi
   }
   if (argv$idiv_instead_of_elev) {
+    if (argv$mode=="OI_multiscale") {
+      eps2_idiv<-argv$oimult.eps2_idi
+      Dh_idiv<-argv$oimult.Dh_idi
+    } else {
+      eps2_idiv<-argv$eps2
+      Dh_idiv<-Dh
+    }
     D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
                   outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
-                 /Dh)**2.)
-    diag(D)<-diag(D)+argv$eps2
+                 /Dh_idiv)**2.)
+    diag(D)<-diag(D)+eps2_idiv
     InvD<-chol2inv(chol(D))
     rm(D)
     G<-exp(-0.5*((outer(VecY_cv,VecY,FUN="-")**2.+
                   outer(VecX_cv,VecX,FUN="-")**2.)**0.5/1000.
-                 /Dh)**2.)
+                 /Dh_idiv)**2.)
     W<-tcrossprod(G,InvD)
     rm(G,InvD)
     # this is the cross-validation integral data influence ("yidiv")
@@ -3590,7 +3495,7 @@ if (argv$cv_mode) {
 if (argv$verbose) print("++ Output")
 #------------------------------------------------------------------------------
 # Station Points - CVmode
-if (argv$cv_mode) {
+if (argv$cv_mode|argv$cv_mode_random) {
   # Station Points - CVmode - case of deterministic analysis
   if (is.null(argv$iff_fg.epos)) { 
     cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_cvver,append=F)
