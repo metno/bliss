@@ -1,7 +1,5 @@
 # bliss
 
-bliss. _noun_ Perfect happiness; great joy. _she gave a sigh of bliss_
-
 BLISS is an R-program for spatial interpolation of near-surface meteorological variables through statistical methods.
 It includes several statistical interpolation schemes:
 
