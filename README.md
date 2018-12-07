@@ -1,4 +1,5 @@
-# bliss
+# bliss [![DOI](https://zenodo.org/badge/154810577.svg)](https://zenodo.org/badge/latestdoi/154810577)
+
 
 BLISS is an R-program for spatial interpolation of near-surface meteorological variables through statistical methods.
 It includes several statistical interpolation schemes:
