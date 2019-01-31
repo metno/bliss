@@ -460,29 +460,31 @@ background_incAv<-function(ixynp, # sub-region centroids
   rm(disth)
   if (!argv$cv_mode) {
     # grid
-    ixg<-which(((min(x_aux)-xgrid)<=(7*refdist)) & 
-               ((xgrid-max(x_aux))<=(7*refdist)) &
-               ((min(y_aux)-ygrid)<=(7*refdist)) & 
-               ((ygrid-max(y_aux))<=(7*refdist)) )
-    out<-OI_T_xb_upd( xg=xgrid[ixg],
-                      yg=ygrid[ixg],
-                      zg=dem[ixg],
-                      bg=xb[ixg],
-                      wg=xw[ixg],
-                      dg=xdh_oi[ixg],
-                      dg_new=dh_oi,
-                      xo=x_aux,
-                      yo=y_aux,
-                      vec1=vec1,
-                      tpar=tpar,
-                      na=na,
-                      Dh=refdist)
-    xb[ixg]<-out$bg_up
-    xw[ixg]<-out$wg_up
-    xdh_oi[ixg]<-out$dg_up
-    assign("xb",xb,envir=.GlobalEnv)
-    assign("xw",xw,envir=.GlobalEnv)
-    assign("xdh_oi",xdh_oi,envir=.GlobalEnv)
+    if (!argv$twostep_nogrid) {
+      ixg<-which(((min(x_aux)-xgrid)<=(7*refdist)) & 
+                 ((xgrid-max(x_aux))<=(7*refdist)) &
+                 ((min(y_aux)-ygrid)<=(7*refdist)) & 
+                 ((ygrid-max(y_aux))<=(7*refdist)) )
+      out<-OI_T_xb_upd( xg=xgrid[ixg],
+                        yg=ygrid[ixg],
+                        zg=dem[ixg],
+                        bg=xb[ixg],
+                        wg=xw[ixg],
+                        dg=xdh_oi[ixg],
+                        dg_new=dh_oi,
+                        xo=x_aux,
+                        yo=y_aux,
+                        vec1=vec1,
+                        tpar=tpar,
+                        na=na,
+                        Dh=refdist)
+      xb[ixg]<-out$bg_up
+      xw[ixg]<-out$wg_up
+      xdh_oi[ixg]<-out$dg_up
+      assign("xb",xb,envir=.GlobalEnv)
+      assign("xw",xw,envir=.GlobalEnv)
+      assign("xdh_oi",xdh_oi,envir=.GlobalEnv)
+    }
   # CVmode
   } else {
     ixg<-which(((min(x_aux)-VecX_cv)<=(7*refdist)) & 
@@ -808,6 +810,9 @@ p <- add_argument(p, "--idiv_instead_of_elev",
                   default=F)
 p <- add_argument(p, "--twostep_superobbing",
                   help="superobbing (used only if \"OI_twosteptemperature\")",
+                  flag=T)
+p <- add_argument(p, "--twostep_nogrid",
+                  help="calculation only for station points",
                   flag=T)
 #------------------------------------------------------------------------------
 # statistical interpolation mode
@@ -2297,8 +2302,8 @@ if (argv$mode=="OI_multiscale") {
     vecf_tmp<-pmin(min(c(nx,ny))/3,pmax(1,round(vecd_tmp/2,0)))
     vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))]
     vecd<-vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]
-    vecd<-unique(sort(c(vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T))],
-                        vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F))]),
+    vecd<-unique(sort(c(vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T) & vecd_tmp>=2)],
+                        vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F) & vecd_tmp>=2)]),
                       decreasing=T))
     # aggregation factor is half the horizontal decorrelation length
     vecf<-round(vecd/2,0)
@@ -2768,10 +2773,18 @@ if (argv$mode=="OI_firstguess") {
                dzmin=argv$dz.bg,
                eps2=0.1,
                closeNth=argv$nclose.bg)
-    if (!(any(yb==na) | ((!(argv$cv_mode|argv$cv_mode_random)) & (any(xb==na))))) {
-      b_ok<-T
-      print(paste("maxboxl=",(i*argv$maxboxl),"m"))
-      break
+    if (argv$twostep_nogrid) {
+      if (!any(yb==na)) {
+        b_ok<-T
+        print(paste("maxboxl=",(i*argv$maxboxl),"m"))
+        break
+      }
+    } else {
+      if (!(any(yb==na) | ((!(argv$cv_mode|argv$cv_mode_random)) & (any(xb==na))))) {
+        b_ok<-T
+        print(paste("maxboxl=",(i*argv$maxboxl),"m"))
+        break
+      }
     }
   }
   if (!b_ok) {
@@ -2809,64 +2822,65 @@ if (argv$mode=="OI_firstguess") {
   innov<-yo-yb
   # standar mode (no cv)
   if (!(argv$cv_mode|argv$cv_mode_random)) {
-#  return(c(xa,xidi,xav,xidiv))
-    ngrid<-length(xgrid)
-    length_tot<-ngrid
-    xout<-apply(cbind(xgrid,ygrid,dem,laf,xdh_oi,xb,1:ngrid),
-                FUN=oiIT,
-                MARGIN=1,
-                eps2=argv$eps2,
-                dz=argv$dz,
-                lafmn=argv$lafmin,
-                nmaxo=argv$nmaxo,
-                cv=FALSE)
-    if (argv$debug) {
-      save.image("img.RData")
-      file<-file.path(argv$debug.dir,"deb_xa.png")
-      rdeb<-rmaster
-      rdeb[mask]<-xout[1,]
-      writeRaster(rdeb, file, format="CDF",overwrite=T)
-    }
-    if (argv$verbose) print(paste("grid points, time",(Sys.time()-t00)))
-    if (argv$verbose) t000<-Sys.time()
-    for (i in 1:length(argv$off_grd.variables)) {
-      if (!exists("r.list")) r.list<-list()
-      if (argv$off_grd.variables[i]=="analysis") {
-        ra<-rmaster
-        ra[]<-NA
-        ra[mask]<-xout[1,]
-        r.list[[i]]<-matrix(data=getValues(ra),
-                            ncol=length(y),
-                            nrow=length(x))
-      } else if (argv$off_grd.variables[i]=="background") {
-        r<-rmaster
-        r[]<-NA
-        r[mask]<-xb
-        r.list[[i]]<-matrix(data=getValues(r),
-                            ncol=length(y),
-                            nrow=length(x))
-        rm(r)
-      } else if (argv$off_grd.variables[i]=="idi") {
-        r<-rmaster
-        r[]<-NA
-        r[mask]<-xout[2,]
-        r.list[[i]]<-matrix(data=getValues(r),
-                            ncol=length(y),
-                            nrow=length(x))
-        rm(r)
-      } else if (argv$off_grd.variables[i]=="dh") {
-        r<-rmaster
-        r[]<-NA
-        r[mask]<-xdh_oi
-        r.list[[i]]<-matrix(data=getValues(r),
-                            ncol=length(y),
-                            nrow=length(x))
-        rm(r)
+    if (!argv$twostep_nogrid) {
+      ngrid<-length(xgrid)
+      length_tot<-ngrid
+      xout<-apply(cbind(xgrid,ygrid,dem,laf,xdh_oi,xb,1:ngrid),
+                  FUN=oiIT,
+                  MARGIN=1,
+                  eps2=argv$eps2,
+                  dz=argv$dz,
+                  lafmn=argv$lafmin,
+                  nmaxo=argv$nmaxo,
+                  cv=FALSE)
+      if (argv$debug) {
+        save.image("img.RData")
+        file<-file.path(argv$debug.dir,"deb_xa.png")
+        rdeb<-rmaster
+        rdeb[mask]<-xout[1,]
+        writeRaster(rdeb, file, format="CDF",overwrite=T)
       }
+      if (argv$verbose) print(paste("grid points, time",(Sys.time()-t00)))
+      if (argv$verbose) t000<-Sys.time()
+      for (i in 1:length(argv$off_grd.variables)) {
+        if (!exists("r.list")) r.list<-list()
+        if (argv$off_grd.variables[i]=="analysis") {
+          ra<-rmaster
+          ra[]<-NA
+          ra[mask]<-xout[1,]
+          r.list[[i]]<-matrix(data=getValues(ra),
+                              ncol=length(y),
+                              nrow=length(x))
+        } else if (argv$off_grd.variables[i]=="background") {
+          r<-rmaster
+          r[]<-NA
+          r[mask]<-xb
+          r.list[[i]]<-matrix(data=getValues(r),
+                              ncol=length(y),
+                              nrow=length(x))
+          rm(r)
+        } else if (argv$off_grd.variables[i]=="idi") {
+          r<-rmaster
+          r[]<-NA
+          r[mask]<-xout[2,]
+          r.list[[i]]<-matrix(data=getValues(r),
+                              ncol=length(y),
+                              nrow=length(x))
+          rm(r)
+        } else if (argv$off_grd.variables[i]=="dh") {
+          r<-rmaster
+          r[]<-NA
+          r[mask]<-xdh_oi
+          r.list[[i]]<-matrix(data=getValues(r),
+                              ncol=length(y),
+                              nrow=length(x))
+          rm(r)
+        }
+      }
+      rm(xout)
     }
-    rm(xout)
+    if (!exists("t000")) t000<-Sys.time()
     # station points
-#  return(c(xa,xidi,xav,xidiv))
     yout<-apply(cbind(VecX,VecY,VecZ,VecLaf,ydh_oi,yb,1:n0),
                 FUN=oiIT,
                 MARGIN=1,
@@ -3992,43 +4006,45 @@ if (argv$cv_mode|argv$cv_mode_random) {
   # NOTE: deterministic and ensemble analysis share the same output session
   # to customize the output, use the config argument "off_grd.variables"
   # default output: just the analysis
-  if (!exists("r.list")) {
-    r.list<-list()
-    r.list[[1]]<-matrix(data=getValues(ra),
-                        ncol=length(y),
-                        nrow=length(x))
+  if (!argv$twostep_nogrid) {
+    if (!exists("r.list")) {
+      r.list<-list()
+      r.list[[1]]<-matrix(data=getValues(ra),
+                          ncol=length(y),
+                          nrow=length(x))
+    }
+    # define time for output
+    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                      format="%Y%m%d%H%M",tz="GMT")
+    time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
+                                             length=2,by=argv$time_bnds_string)),
+                     format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
+    out<-write_dotnc(grid.list=r.list,
+                     file.name=argv$off_grd,
+                     grid.type=argv$off_grd.grid,
+                     x=x,
+                     y=y,
+                     var.name=argv$off_grd.varname,
+                     var.longname=argv$off_grd.varlongname,
+                     var.standardname=argv$off_grd.varstandardname,
+                     var.version=argv$off_grd.varversion,
+                     var.unit=argv$off_grd.varunit,
+                     times=tstamp_nc,
+                     times.unit=argv$off_grd.timesunit,
+                     reference=argv$off_grd.reference,
+                     proj4.string=argv$grid_master.proj4,
+                     lonlat.out=argv$off_grd.write_lonlat,
+                     round.dig=argv$off_grd.diground,
+                     summary=argv$off_grd.summary,
+                     source.string=argv$off_grd.sourcestring,
+                     title=argv$off_grd.title,
+                     comment=argv$off_grd.comment,
+                     atts.var.add=NULL,
+                     var.cell_methods=argv$off_grd.cell_methods,
+                     time_bnds=time_bnds,
+                     cf_1.7=T)
+    print(paste("data saved on file",argv$off_grd))
   }
-  # define time for output
-  tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
-                    format="%Y%m%d%H%M",tz="GMT")
-  time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
-                                           length=2,by=argv$time_bnds_string)),
-                   format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
-  out<-write_dotnc(grid.list=r.list,
-                   file.name=argv$off_grd,
-                   grid.type=argv$off_grd.grid,
-                   x=x,
-                   y=y,
-                   var.name=argv$off_grd.varname,
-                   var.longname=argv$off_grd.varlongname,
-                   var.standardname=argv$off_grd.varstandardname,
-                   var.version=argv$off_grd.varversion,
-                   var.unit=argv$off_grd.varunit,
-                   times=tstamp_nc,
-                   times.unit=argv$off_grd.timesunit,
-                   reference=argv$off_grd.reference,
-                   proj4.string=argv$grid_master.proj4,
-                   lonlat.out=argv$off_grd.write_lonlat,
-                   round.dig=argv$off_grd.diground,
-                   summary=argv$off_grd.summary,
-                   source.string=argv$off_grd.sourcestring,
-                   title=argv$off_grd.title,
-                   comment=argv$off_grd.comment,
-                   atts.var.add=NULL,
-                   var.cell_methods=argv$off_grd.cell_methods,
-                   time_bnds=time_bnds,
-                   cf_1.7=T)
-  print(paste("data saved on file",argv$off_grd))
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # normal exit
