@@ -262,7 +262,7 @@ tboxcox<-function(x,lambda,brrinf=-100) {
     res<-(1+lambda*x)**(1./lambda)
   }
   if (any(x<brrinf)) res[which(x<brrinf)]<-0
-print(paste("tboxcox",length(which(x<brrinf)),length(which(x<=brrinf))))
+#print(paste("tboxcox",length(which(x<brrinf)),length(which(x<=brrinf))))
   res
 }
 
@@ -2325,9 +2325,11 @@ if (argv$mode=="OI_multiscale") {
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-Disth<-matrix(ncol=n0,nrow=n0,data=0.)
-Disth<-(outer(VecY,VecY,FUN="-")**2.+
-        outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+if (argv$mode!="hyletkf") {
+  Disth<-matrix(ncol=n0,nrow=n0,data=0.)
+  Disth<-(outer(VecY,VecY,FUN="-")**2.+
+          outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+}
 #
 #------------------------------------------------------------------------------
 # ANALYSIS
@@ -2924,6 +2926,13 @@ if (argv$mode=="OI_firstguess") {
 #..............................................................................
 # ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
 } else if (argv$mode=="hyletkf") {
+  library(parallel)
+  # initializations
+  cores <- detectCores()
+  argv$hyletkf.Dh<-1000*argv$hyletkf.Dh # km to m
+  argv$hyletkf.Dh_oi<-1000*argv$hyletkf.Dh_oi # km to m
+  Dh2<-argv$hyletkf.Dh*argv$hyletkf.Dh
+  Dh_oi2<-argv$hyletkf.Dh_oi*argv$hyletkf.Dh_oi
 # xb, aix,nens
 # yo, VecX,VecY, prId
   # save original vectors for future use
@@ -2932,6 +2941,7 @@ if (argv$mode=="OI_firstguess") {
   prId_orig<-prId
   yo_orig<-yo
   xb_orig<-xb
+  xb[which(xb<0)]<-0
   if ((argv$cv_mode|argv$cv_mode_random)) {
     xgrid<-VecX_cv
     ygrid<-VecY_cv
@@ -2943,7 +2953,7 @@ if (argv$mode=="OI_firstguess") {
     xgrid<-xgrid[aix]
     ygrid<-ygrid[aix]
   }
-  # define obs-space, background
+  # background at observation locations
   r<-rmaster
   yb0<-array(data=NA,dim=c(n0,nens))
   for (e in 1:nens) {
@@ -2955,6 +2965,7 @@ if (argv$mode=="OI_firstguess") {
     rm(auxx)
   }
   rm(r)
+  # index over yb with all the ensemble members finite and not NAs
   ix<-which(apply(yb0,MAR=1,
                   FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
             ==nens)
@@ -2964,7 +2975,7 @@ if (argv$mode=="OI_firstguess") {
   rm(yb0)
   # background, probability of rain
   yb_pwet<-apply(yb,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
-  # define obs-space, observations
+  # consider only observations where all yb members are finite and not NAs
   ix_orig<-ix
   yo<-yo[ix]
   VecX<-VecX[ix]
@@ -2976,6 +2987,7 @@ if (argv$mode=="OI_firstguess") {
   yo_wet[]<-0
   yo_wet[which(yo>argv$rrinf)]<-1
   # define the inverse of the diagonal observation error matrix
+  # var(obs err) = eps2 * var(backg err)
   diagRinv<-rep(argv$hyletkf.eps2_prec_default,n1)
   for (i in 1:length(argv$hyletkf.eps2_prId)) {
     ix<-which(prId==argv$hyletkf.eps2_prId[i])
@@ -3008,34 +3020,59 @@ if (argv$mode=="OI_firstguess") {
     xb<-boxcox(xb,argv$transf.boxcox_lambda)
   }
   # ensemble mean
-  xbm<-apply(xb,MAR=1,FUN=mean)
-  ybm<-apply(yb,MAR=1,FUN=mean)
+  xbm<-mcmapply(function(x) mean(xb[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
+  ybm<-mcmapply(function(x) mean(yb[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
   # ensemble perturbations
   Xb<-xb-xbm
   Yb<-yb-ybm
   # ensemble variances
-  ybvar<-apply(Yb,MAR=1,FUN=mean)**2
-  # intialize analysis vector
-  xa<-xb
-  xa[]<-NA
-  # letkf: loop over gridpoints
-  if (argv$verbose) t00<-Sys.time()
-  for (i in 1:length(xgrid)) {
-    dist<-(((xgrid[i]-VecX)**2+(ygrid[i]-VecY)**2 )**0.5)/1000.
-    rloc<-exp(-0.5*(dist**2./argv$hyletkf.Dh**2))
-    sel<-which(rloc>argv$hyletkf.rloc_min)
+  # var(backg err) is derived from the background ensemble
+  # a minimum value of var(backg err) is set (over the original values)
+  ybvar<-mcmapply(function(x) mean(Yb[x,]**2),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (argv$transf=="Box-Cox") {
+    tybm<-tboxcox(ybm,argv$transf.boxcox_lambda)
+    ybvar_ref<-ybvar
+    sdmin<-sqrt(argv$hyletkf.sigma2_min)
+    ix_tmp<-which(tybm>sdmin)
+    if (length(ix_tmp)>0) 
+      ybvar_ref[ix_tmp]<-0.5*(boxcox((tybm[ix_tmp]+sdmin),argv$transf.boxcox_lambda)-
+                              boxcox((tybm[ix_tmp]-sdmin),argv$transf.boxcox_lambda))
+    ix_tmp<-which(tybm<=sdmin)
+    if (length(ix_tmp)>0) 
+      ybvar_ref[ix_tmp]<-boxcox(sdmin,argv$transf.boxcox_lambda)
+    ybvar<-pmax(ybvar,ybvar_ref**2)
+    rm(tybm,ybvar_ref,ix_tmp)
+  } else  {
+    ybvar[ybvar<argv$hyletkf.sigma2_min]<-argv$hyletkf.sigma2_min
+  }
+  #
+  #............................................................................
+  # first step of hyletkf
+  hyletkf_1<-function(i){
+  # typeA vector VecX, VecY,... dimension 1:n0
+  # typeB vector rloc, ... dimension 1:n.i
+    deltax<-abs(xgrid[i]-VecX)
+    deltay<-abs(ygrid[i]-VecY)
+    if (!any(deltax<(7*argv$hyletkf.Dh))) return(rep(NA,nens))
+    if (!any(deltay<(7*argv$hyletkf.Dh))) return(rep(NA,nens))
+    ixa<-which( deltax<(7*argv$hyletkf.Dh) & 
+                deltay<(7*argv$hyletkf.Dh) )
     # i-th gridpoint analysis 
-    if (length(sel)>0) {
-      if (length(sel)>argv$hyletkf.pmax) sel<-order(dist)[1:argv$hyletkf.pmax]
-      sel_wet<-sel[which(yb_pwet[sel]>=0.5)]
-      if (length(sel_wet)>0) {
-        sigma2<-max(c(mean(ybvar[sel]),argv$hyletkf.sigma2_min))
-      } else {
-        sigma2<-argv$hyletkf.sigma2_min
+    if (length(ixa)>0) {
+      # exp (-1/2 * dist**2 / dh**2)
+      rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh2)
+#      dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
+#      rloc<-(1+dist/argv$hyletkf.Dh)*exp(-dist/argv$hyletkf.Dh)
+      if (length(ixa)>argv$hyletkf.pmax) {
+        ixb<-order(rloc, decreasing=T)[1:argv$hyletkf.pmax]
+        rloc<-rloc[ixb]
+        ixa<-ixa[ixb]
+        rm(ixb)
       }
-      Yb.i<-Yb[sel,,drop=F]
-      d.i<-yo[sel]-ybm[sel]
-      C.i<-t(1./sigma2*diagRinv[sel]*rloc[sel]*Yb.i)
+      sigma2<-mean(ybvar[ixa])
+      Yb.i<-Yb[ixa,,drop=F]
+      d.i<-yo[ixa]-ybm[ixa]
+      C.i<-t(1./sigma2*diagRinv[ixa]*rloc*Yb.i)
       C1.i<-crossprod(t(C.i),Yb.i)
       Cd.i<-crossprod(t(C.i),d.i)
       rm(C.i)
@@ -3050,44 +3087,160 @@ if (argv$mode=="OI_firstguess") {
       waa<-crossprod(Pa.i, Cd.i )
       rm(Cd.i)
       W<-Wa+as.vector(waa)
-      xa[i,]<-xbm[i]+Xb[i,] %*% W
+      xa<-xbm[i]+Xb[i,] %*% W
       rm(W,Wa,waa,a.eig)
     # i-th gridpoint is isolated
     } else {
-      xa[i,]<-xb[i,]
+      xa<-xb[i,]
     }
-  } # end: letkf loop over gridpoints
+    return(xa)
+  }
+  if (argv$verbose) t00<-Sys.time()
+  xa<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+#  xa<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
   if (argv$verbose) {
     t11<-Sys.time()
-    print(paste("letkf time=",round(t11-t00,1),attr(t11-t00,"unit")))
+    print(paste("hyletkf step1, time=",round(t11-t00,1),attr(t11-t00,"unit")))
+    #save.image("tmp.RData")
   }
-  # OI
-  sel_oi<-which(yb_pwet<0.5 & yo_wet==1)  
-  if (length(sel_oi)>0) {
-    if (argv$verbose) t00<-Sys.time()
-    noi<-length(sel_oi)
-    Disth<-matrix(ncol=noi,nrow=noi,data=0.)
-    Disth<-(outer(VecY[sel_oi],VecY[sel_oi],FUN="-")**2.+
-            outer(VecX[sel_oi],VecX[sel_oi],FUN="-")**2.)**0.5/1000.
-    D<-exp(-0.5*(Disth/argv$hyletkf.Dh_oi)**2.)
-    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
-    InvD<-chol2inv(chol(D))
-    xam<-OI_RR_fast(yo=yo[sel_oi],
-                    yb=ybm[sel_oi],
-                    xb=rowMeans(xa),
-                    xgrid=xgrid,
-                    ygrid=ygrid,
-                    VecX=VecX[sel_oi],
-                    VecY=VecY[sel_oi],
-                    Dh=argv$hyletkf.Dh_oi) 
-    xa<-xa-rowMeans(xa)+xam
-    rm(xam)
-    if (argv$verbose) {
-      t11<-Sys.time()
-      print(paste("oi time=",round(t11-t00,1),
-                             attr(t11-t00,"unit")))
+  # analysis at observation locations
+  r<-rmaster
+  ya<-array(data=NA,dim=c(length(ix_orig),nens))
+  for (e in 1:nens) {
+    r[]<-NA
+    r[aix]<-xa[,e]
+    ya[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+    auxx<-which(ya[,e]<0 | is.na(ya[,e]) | is.nan(ya[,e]))
+    if (length(auxx)>0) ya[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+    rm(auxx)
+  }
+  rm(r)
+  # analysis, probability of rain
+  ya_pwet<-apply(ya,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
+  #
+  # ensemble mean
+#  xam<-mcmapply(function(x) mean(xa[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
+  yam<-mcmapply(function(x) mean(ya[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  #
+  #............................................................................
+  # 2nd step of hyletkf
+  hyletkf_2<-function(i){
+  # typeA vector VecX, VecY,... dimension 1:n0
+  # typeB vector rloc, ... dimension 1:n.i
+    deltax<-abs(xgrid[i]-VecX)
+    deltay<-abs(ygrid[i]-VecY)
+    if (!any(deltax<(7*argv$hyletkf.Dh_oi))) return(rep(NA,nens))
+    if (!any(deltay<(7*argv$hyletkf.Dh_oi))) return(rep(NA,nens))
+    ixa<-which( deltax<(7*argv$hyletkf.Dh_oi) & 
+                deltay<(7*argv$hyletkf.Dh_oi) )
+    # i-th gridpoint analysis 
+    if (length(ixa)>0) {
+      # exp (-1/2 * dist**2 / dh**2)
+      rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_oi2)
+#      dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
+#      rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
+      if (length(ixa)>argv$hyletkf.pmax) {
+        ixb<-order(rloc, decreasing=T)[1:argv$hyletkf.pmax]
+        rloc<-rloc[ixb]
+        ixa<-ixa[ixb]
+        rm(ixb)
+      }
+      d.i<-yo[ixa]-yam[ixa]
+      Disth2<-outer(VecY[ixa],VecY[ixa],FUN="-")**2.+
+              outer(VecX[ixa],VecX[ixa],FUN="-")**2.
+      D<-exp(-0.5*Disth2/Dh_oi2)
+      rm(Disth2)
+      diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+      InvD<-chol2inv(chol(D))
+      xam<-mean(xa[i,])+as.numeric(crossprod(rloc,crossprod(t(InvD),d.i)))
+      xa2<-xa[i,]-mean(xa[i,])+xam
+    # i-th gridpoint is isolated
+    } else {
+      xa2<-xa[i,]
     }
+    return(xa2)
   }
+  xa<-t(mcmapply(hyletkf_2,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+#  xa<-t(mapply(hyletkf_2,1:length(xgrid),SIMPLIFY=T))
+  if (argv$verbose) {
+    t11<-Sys.time()
+    print(paste("hyletkf step2, time=",round(t11-t00,1),attr(t11-t00,"unit")))
+    save.image("tmp.RData")
+  }
+#  # intialize analysis vector
+#  xa<-xb
+#  xa[]<-NA
+#  # letkf: loop over gridpoints
+#  if (argv$verbose) t00<-Sys.time()
+#  for (i in 1:length(xgrid)) {
+#    dist<-(((xgrid[i]-VecX)**2+(ygrid[i]-VecY)**2 )**0.5)/1000.
+#    rloc<-exp(-0.5*(dist**2./argv$hyletkf.Dh**2))
+#    sel<-which(rloc>argv$hyletkf.rloc_min)
+#    if ((i%%10000)==0) print(paste(i,length(sel)))
+#    # i-th gridpoint analysis 
+#    if (length(sel)>0) {
+#      if (length(sel)>argv$hyletkf.pmax) sel<-order(dist)[1:argv$hyletkf.pmax]
+#      sel_wet<-sel[which(yb_pwet[sel]>=0.5)]
+#      if (length(sel_wet)>0) {
+#        sigma2<-max(c(mean(ybvar[sel]),argv$hyletkf.sigma2_min))
+#      } else {
+#        sigma2<-argv$hyletkf.sigma2_min
+#      }
+#      Yb.i<-Yb[sel,,drop=F]
+#      d.i<-yo[sel]-ybm[sel]
+#      C.i<-t(1./sigma2*diagRinv[sel]*rloc[sel]*Yb.i)
+#      C1.i<-crossprod(t(C.i),Yb.i)
+#      Cd.i<-crossprod(t(C.i),d.i)
+#      rm(C.i)
+#      diag(C1.i)<-diag(C1.i) + (nens-1)
+#      Pa.i<-chol2inv(chol(C1.i))
+#      rm(C1.i)
+#      # Pa*(k-1) is the matrix for which we want to square root:
+#      a.eig <- eigen(Pa.i*(nens-1),symmetric=T)
+#      Wa <- tcrossprod(
+#             tcrossprod( a.eig$vectors, diag(sqrt(a.eig$values))),
+#             t(solve(a.eig$vectors)) )
+#      waa<-crossprod(Pa.i, Cd.i )
+#      rm(Cd.i)
+#      W<-Wa+as.vector(waa)
+#      xa[i,]<-xbm[i]+Xb[i,] %*% W
+#      rm(W,Wa,waa,a.eig)
+#    # i-th gridpoint is isolated
+#    } else {
+#      xa[i,]<-xb[i,]
+#    }
+#  } # end: letkf loop over gridpoints
+#  if (argv$verbose) {
+#    t11<-Sys.time()
+#    print(paste("letkf time=",round(t11-t00,1),attr(t11-t00,"unit")))
+#  }
+#  # OI
+#  sel_oi<-which(yb_pwet<0.5 & yo_wet==1)  
+#  if (length(sel_oi)>0) {
+#    if (argv$verbose) t00<-Sys.time()
+#    noi<-length(sel_oi)
+#    Disth<-matrix(ncol=noi,nrow=noi,data=0.)
+#    Disth<-(outer(VecY[sel_oi],VecY[sel_oi],FUN="-")**2.+
+#            outer(VecX[sel_oi],VecX[sel_oi],FUN="-")**2.)**0.5/1000.
+#    D<-exp(-0.5*(Disth/argv$hyletkf.Dh_oi)**2.)
+#    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+#    InvD<-chol2inv(chol(D))
+#    xam<-OI_RR_fast(yo=yo[sel_oi],
+#                    yb=ybm[sel_oi],
+#                    xb=rowMeans(xa),
+#                    xgrid=xgrid,
+#                    ygrid=ygrid,
+#                    VecX=VecX[sel_oi],
+#                    VecY=VecY[sel_oi],
+#                    Dh=argv$hyletkf.Dh_oi) 
+#    xa<-xa-rowMeans(xa)+xam
+#    rm(xam)
+#    if (argv$verbose) {
+#      t11<-Sys.time()
+#      print(paste("oi time=",round(t11-t00,1),
+#                             attr(t11-t00,"unit")))
+#    }
+#  }
   # Back-transformation
   if (argv$transf=="Box-Cox") {
     xa<-tboxcox(xa,argv$transf.boxcox_lambda)
@@ -3099,7 +3252,7 @@ if (argv$mode=="OI_firstguess") {
     if (argv$verbose) t00<-Sys.time()
     D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
                   outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
-                 /argv$hyletkf.Dh_oi)**2.)
+                /argv$hyletkf.Dh_oi)**2.)
     diag(D)<-diag(D)+argv$hyletkf.eps2_oi
     InvD<-chol2inv(chol(D))
     rm(D)
