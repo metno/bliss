@@ -2929,6 +2929,7 @@ if (argv$mode=="OI_firstguess") {
   library(parallel)
   # initializations
   cores <- detectCores()
+#  cores <- 2
   argv$hyletkf.Dh<-1000*argv$hyletkf.Dh # km to m
   argv$hyletkf.Dh_oi<-1000*argv$hyletkf.Dh_oi # km to m
   Dh2<-argv$hyletkf.Dh*argv$hyletkf.Dh
@@ -3015,6 +3016,9 @@ if (argv$mode=="OI_firstguess") {
   }
   # Gaussian anamorphosis  
   if (argv$transf=="Box-Cox") {
+    xb[which(xb<0)]<-0
+    yb[which(yb<0)]<-0
+    yo[which(yo<0)]<-0
     yo<-boxcox(yo,argv$transf.boxcox_lambda)
     yb<-boxcox(yb,argv$transf.boxcox_lambda)
     xb<-boxcox(xb,argv$transf.boxcox_lambda)
@@ -3104,17 +3108,40 @@ if (argv$mode=="OI_firstguess") {
     #save.image("tmp.RData")
   }
   # analysis at observation locations
-  r<-rmaster
-  ya<-array(data=NA,dim=c(length(ix_orig),nens))
-  for (e in 1:nens) {
-    r[]<-NA
-    r[aix]<-xa[,e]
-    ya[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
-    auxx<-which(ya[,e]<0 | is.na(ya[,e]) | is.nan(ya[,e]))
-    if (length(auxx)>0) ya[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
-    rm(auxx)
+  if (!(argv$cv_mode|argv$cv_mode_random)) {
+    r<-rmaster
+    ya<-array(data=NA,dim=c(length(ix_orig),nens))
+    for (e in 1:nens) {
+      r[]<-NA
+      r[aix]<-xa[,e]
+      ya[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+      auxx<-which(ya[,e]<0 | is.na(ya[,e]) | is.nan(ya[,e]))
+      if (length(auxx)>0) ya[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+      rm(auxx)
+    }
+    rm(r)
+  } else {
+    xgrid_bak<-xgrid
+    ygrid_bak<-ygrid
+    Xb_bak<-Xb
+    xbm_bak<-xbm
+    xgrid<-VecX
+    ygrid<-VecY
+    Xb<-Yb
+    xbm<-ybm
+    if (argv$verbose) t00<-Sys.time()
+    ya<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("ya hyletkf step1, time=",round(t11-t00,1),attr(t11-t00,"unit")))
+      #save.image("tmp.RData")
+    }
+    xgrid<-xgrid_bak
+    ygrid<-ygrid_bak
+    Xb<-Xb_bak
+    xbm<-xbm_bak
+    rm(xgrid_bak,ygrid_bak,Xb_bak,xbm_bak)
   }
-  rm(r)
   # analysis, probability of rain
   ya_pwet<-apply(ya,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
   #
@@ -3165,7 +3192,7 @@ if (argv$mode=="OI_firstguess") {
   if (argv$verbose) {
     t11<-Sys.time()
     print(paste("hyletkf step2, time=",round(t11-t00,1),attr(t11-t00,"unit")))
-    save.image("tmp.RData")
+#    save.image("tmp.RData")
   }
 #  # intialize analysis vector
 #  xa<-xb
@@ -3604,6 +3631,8 @@ if (argv$mode=="OI_firstguess") {
   } # end prepare for gridded output
 # END of Local Ensemble Transform Kalman Filter
 } # end if for the selection among OIs
+#..............................................................................
+#..............................................................................
 # 
 #CVmode
 if ((argv$cv_mode|argv$cv_mode_random)) {
@@ -3626,7 +3655,7 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
       }
     }
     if (argv$mode=="hyletkf") Dh<-argv$hyletkf.Dh_oi
-  }
+  } 
   if (argv$idiv_instead_of_elev) {
     if (argv$mode=="OI_multiscale") {
       eps2_idiv<-argv$oimult.eps2_idi
@@ -3635,20 +3664,59 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
       eps2_idiv<-argv$eps2
       Dh_idiv<-Dh
     }
-    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
-                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
-                 /Dh_idiv)**2.)
-    diag(D)<-diag(D)+eps2_idiv
-    InvD<-chol2inv(chol(D))
-    rm(D)
-    G<-exp(-0.5*((outer(VecY_cv,VecY,FUN="-")**2.+
-                  outer(VecX_cv,VecX,FUN="-")**2.)**0.5/1000.
-                 /Dh_idiv)**2.)
-    W<-tcrossprod(G,InvD)
-    rm(G,InvD)
-    # this is the cross-validation integral data influence ("yidiv")
-    elev_for_verif_cv<-rep(1,ncv) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,ncv))
-    rm(W)
+    #
+    if (argv$mode=="hyletkf") {
+      Dh_idiv2<-1000*Dh_idiv*1000*Dh_idiv
+      idiv<-function(i){
+        # typeA vector VecX, VecY,... dimension 1:n0
+        # typeB vector rloc, ... dimension 1:n.i
+        deltax<-abs(VecX_cv[i]-VecX)
+        deltay<-abs(VecY_cv[i]-VecY)
+        if (!any(deltax<(7*Dh_idiv))) return(0)
+        if (!any(deltay<(7*Dh_idiv))) return(0)
+        ixa<-which( deltax<(7*Dh_idiv) & 
+                    deltay<(7*Dh_idiv) )
+        # i-th gridpoint analysis 
+        if (length(ixa)>0) {
+          # exp (-1/2 * dist**2 / dh**2)
+          rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
+#          dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
+#          rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
+          if (length(ixa)>argv$hyletkf.pmax) {
+            ixb<-order(rloc, decreasing=T)[1:argv$hyletkf.pmax]
+            rloc<-rloc[ixb]
+            ixa<-ixa[ixb]
+            rm(ixb)
+          }
+          idiv<-rloc %*% rowSums( chol2inv(chol( 
+           exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
+                      outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
+           eps2_idiv*diag(length(ixa))
+                          )) )
+        # i-th gridpoint is isolated
+        } else {
+          idiv<-0
+        }
+        return(idiv)
+      }
+      elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),mc.cores=cores,SIMPLIFY=T))
+#      elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+    } else {
+      D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                    outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                   /Dh_idiv)**2.)
+      diag(D)<-diag(D)+eps2_idiv
+      InvD<-chol2inv(chol(D))
+      rm(D)
+      G<-exp(-0.5*((outer(VecY_cv,VecY,FUN="-")**2.+
+                    outer(VecX_cv,VecX,FUN="-")**2.)**0.5/1000.
+                   /Dh_idiv)**2.)
+      W<-tcrossprod(G,InvD)
+      rm(G,InvD)
+      # this is the cross-validation integral data influence ("yidiv")
+      elev_for_verif_cv<-rep(1,ncv) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,ncv))
+      rm(W)
+    }
   } else {
     elev_for_verif_cv<-VecZ_cv
   }
