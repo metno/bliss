@@ -740,7 +740,7 @@ oiIT<-function(par,eps2=0.25,dz=250,lafmn=0.5,cv=FALSE,nmaxo=20) {
   return(c(xa,xidi,xav,xidiv))
 }
 
-#---------------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 #+ 
 obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
                                ifield,oval,mMinElevDiff,
@@ -762,6 +762,131 @@ obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
                             mSearchRadius=as.double(mSearchRadius))
 }
 
+#------------------------------------------------------------------------------
+# optimal interpolation - xa only - correlation function "gaussian"
+oi_Asolo_gridpoint_by_gridpoint_gaussian<-function(i, dh,dh2,eps2,pmax) {
+  deltax<-abs(xgrid[i]-VecX)
+  deltay<-abs(ygrid[i]-VecY)
+  if (!any(deltax<(7*dh))) return(NA)
+  if (!any(deltay<(7*dh))) return(NA)
+  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+  if (length(ixa)>0) {
+    rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
+    if (length(ixa)>pmax) {
+      ixb<-order(rloc, decreasing=T)[1:pmax]
+      rloc<-rloc[ixb]
+      ixa<-ixa[ixb]
+      rm(ixb)
+    }
+    xa<-xb[i] + 
+        as.numeric(crossprod(rloc,
+                   crossprod(t(chol2inv(chol(
+                     exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                               outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)+
+                     diag(x=eps2,length(ixa))))),
+                    (yo[ixa]-yb[ixa]))))
+  } else {
+    xa<-xb[i]
+  }
+  return(xa)
+}
+# optimal interpolation - xa only - correlation function "soar"
+oi_Asolo_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
+  deltax<-abs(xgrid[i]-VecX)
+  deltay<-abs(ygrid[i]-VecY)
+  if (!any(deltax<(7*dh))) return(NA)
+  if (!any(deltay<(7*dh))) return(NA)
+  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+  if (length(ixa)>0) {
+    distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
+    rloc<-(1+distnorm)*exp(-distnorm)
+    rm(distnorm)
+    if (length(ixa)>pmax) {
+      ixb<-order(rloc, decreasing=T)[1:pmax]
+      rloc<-rloc[ixb]
+      ixa<-ixa[ixb]
+      rm(ixb)
+    }
+    distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh
+    xa<-xb[i] + 
+        as.numeric(crossprod(rloc,
+                  crossprod(t(chol2inv(chol(
+                    (1+distnorm)*exp(-distnorm) +
+                    diag(x=eps2,length(ixa))))),
+                   (yo[ixa]-yb[ixa]))))
+  # i-th gridpoint is isolated
+  } else {
+    xa<-xb[i]
+  }
+  return(xa)
+}
+# optimal interpolation - correlation function "gaussian"
+oi_var_gridpoint_by_gridpoint_gaussian<-function(i, dh,dh2,eps2,pmax) {
+  deltax<-abs(xgrid[i]-VecX)
+  deltay<-abs(ygrid[i]-VecY)
+  if (!any(deltax<(7*dh))) return(c(xb[i],NA,NA))
+  if (!any(deltay<(7*dh))) return(c(xb[i],NA,NA))
+  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+  if (length(ixa)>0) {
+    rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
+    if (length(ixa)>pmax) {
+      ixb<-order(rloc, decreasing=T)[1:pmax]
+      rloc<-rloc[ixb]
+      ixa<-ixa[ixb]
+      rm(ixb)
+    }
+    di<-yo[ixa]-yb[ixa]
+    S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                 outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
+    SRinv<-chol2inv(chol( S+diag(x=eps2,length(ixa)) ))
+    SRinv_di<-crossprod(SRinv,di)       
+    o_errvar<-mean(as.numeric(crossprod(di,(di-crossprod(S,SRinv_di)))))
+    rm(S)
+    xa_errvar<-(o_errvar / eps2) * 
+               (1-as.numeric(crossprod(crossprod(rloc,SRinv),rloc)))
+    rm(SRinv)
+    xa<-xb[i]+as.numeric(crossprod(rloc,SRinv_di))
+  } else {
+    xa<-xb[i]
+  }
+  return(c(xa,xa_errvar,o_errvar))
+}
+# optimal interpolation - correlation function "soar"
+oi_var_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
+  deltax<-abs(xgrid[i]-VecX)
+  deltay<-abs(ygrid[i]-VecY)
+  if (!any(deltax<(7*dh))) return(c(xb[i],NA,NA))
+  if (!any(deltay<(7*dh))) return(c(xb[i],NA,NA))
+  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+  if (length(ixa)>0) {
+    distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
+    rloc<-(1+distnorm)*exp(-distnorm)
+    rm(distnorm)
+    if (length(ixa)>pmax) {
+      ixb<-order(rloc, decreasing=T)[1:pmax]
+      rloc<-rloc[ixb]
+      ixa<-ixa[ixb]
+      rm(ixb)
+    }
+    di<-yo[ixa]-yb[ixa]
+    distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh
+    S<-(1+distnorm)*exp(-distnorm)
+    rm(distnorm)
+    SRinv<-chol2inv(chol( S+diag(x=eps2,length(ixa)) ))
+    SRinv_di<-crossprod(SRinv,di)       
+    o_errvar<-mean(as.numeric(crossprod(di,(di-crossprod(S,SRinv_di)))))
+    rm(S)
+    xa_errvar<-(o_errvar / eps2) * 
+               (1-as.numeric(crossprod(crossprod(rloc,SRinv),rloc)))
+    rm(SRinv)
+    xa<-xb[i]+as.numeric(crossprod(rloc,SRinv_di))
+  } else {
+    xa<-xb[i]
+  }
+  return(c(xa,xa_errvar,o_errvar))
+}
 
 #
 #==============================================================================
@@ -835,6 +960,15 @@ p <- add_argument(p, "--time_bnds_string",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
+# OI shared
+p <- add_argument(p, "--corrfun",
+                  help="correlation functions (\"gaussian\",\"soar\")",
+                  type="character",
+                  default="gaussian")
+p <- add_argument(p, "--pmax",
+                  help="maximum number of observations in the neighbourhood of a gridpoint for OI",
+                  type="numeric",
+                  default=200)
 # OI_multiscale / OI_firstguess parameters
 p <- add_argument(p, "--eps2",
                   help="ratio of observation to background error covariance",
@@ -1512,7 +1646,20 @@ p <- add_argument(p, "--transf.boxcox_lambda",
                   help="Box-Cox power parameter",
                   type="numeric",
                   default=NA)
-
+#------------------------------------------------------------------------------
+# Miscellaneous
+p <- add_argument(p, "--maxobs_for_matrixInv",
+                  help="Box-Cox power parameter",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--cores",
+                  help="set the number of cores for parallel runs. Rpackage \"parallel\" required. 0 stands for \"use detectCores\". Default do not use it.",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--min_plaus_val",
+                  help="minimum plausible value (e.g., 0 for prec)",
+                  type="numeric",
+                  default=NA)
 #------------------------------------------------------------------------------
 #
 argv <- parse_args(p)
@@ -1589,6 +1736,11 @@ dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
 dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
 dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
 dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
+if (!is.na(argv$cores)) {
+  suppressPackageStartupMessages(library("parallel"))
+  if (argv$cores==0) argv$cores <- detectCores()
+  print(paste("--> multi-core run, cores=",argv$cores))
+}
 #
 #------------------------------------------------------------------------------
 # Create master grid
@@ -1963,6 +2115,8 @@ if (file.exists(argv$iff_fg)) {
     if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster)
     rfg<-mask(rfg,rmaster)
     xb0<-getValues(rfg)
+    if (!is.na(argv$min_plaus_val)) xb0[which(xb0<argv$min_plaus_val)]<-argv$min_plaus_val
+    rfg[]<-xb0
     aix<-which(!is.na(xb0))
     xb<-xb0[aix]
     rm(xb0)
@@ -2013,6 +2167,7 @@ if (file.exists(argv$iff_fg)) {
       }
     }
     rm(xb1)
+    if (!is.na(argv$min_plaus_val)) xb[which(xb<argv$min_plaus_val)]<-argv$min_plaus_val
   }
   if (argv$verbose) {
     print(paste("# grid points (not NAs)=",length(aix)))
@@ -2325,7 +2480,7 @@ if (argv$mode=="OI_multiscale") {
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if (argv$mode!="hyletkf") {
+if (argv$mode!="hyletkf" & n0<argv$maxobs_for_matrixInv) {
   Disth<-matrix(ncol=n0,nrow=n0,data=0.)
   Disth<-(outer(VecY,VecY,FUN="-")**2.+
           outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
@@ -2340,49 +2495,126 @@ if (argv$verbose) {
 #..............................................................................
 # ===> OI with background  <===
 if (argv$mode=="OI_firstguess") {
-  yb<-extract(rfg,
-              cbind(VecX,VecY),
-              method="bilinear")
-  D<-exp(-0.5*(Disth/argv$Dh)**2.)
-  diag(D)<-diag(D)+argv$eps2
-  InvD<-chol2inv(chol(D))
-  if (argv$transf=="none") {
-    xa<-OI_RR_fast(yo=yo,
+  # save original vectors for future use
+  VecX_orig<-VecX
+  VecY_orig<-VecY
+  prId_orig<-prId
+  yo_orig<-yo
+  if ((argv$cv_mode|argv$cv_mode_random)) {
+    xgrid<-VecX_cv
+    ygrid<-VecY_cv
+  } else {
+    # define grid-space
+    # note: xb is defined only over "aix" points
+    xgrid<-xgrid[aix]
+    ygrid<-ygrid[aix]
+  }
+  # background at station locations
+  yb<-extract(rfg, cbind(VecX,VecY), method="bilinear")
+  # if CVmode, then fix the background
+  if ((argv$cv_mode|argv$cv_mode_random)) 
+    xb<-extract(rfg, cbind(VecX_cv,VecY_cv), method="bilinear")
+  # Gaussian anamorphosis  
+  if (argv$transf=="Box-Cox") {
+    xb[which(xb<0)]<-0
+    yb[which(yb<0)]<-0
+    yo[which(yo<0)]<-0
+    yo<-boxcox(yo,argv$transf.boxcox_lambda)
+    yb<-boxcox(yb,argv$transf.boxcox_lambda)
+    xb<-boxcox(xb,argv$transf.boxcox_lambda)
+  }
+  # spatial interpolation - not that many observations
+  if (n0<argv$maxobs_for_matrixInv) {
+    t00<-Sys.time()
+    # correlation matrices
+    if (argv$corrfun=="gaussian") {
+      D<-exp(-0.5*(Disth/argv$Dh)**2.)
+    } else if (argv$corrfun=="soar") {
+      D<-(1+Disth/argv$Dh)*exp(-Disth/argv$Dh)
+    }
+    diag(D)<-diag(D)+argv$eps2
+    InvD<-chol2inv(chol(D))
+    res<-OI_RR_var(yo=yo,
                    yb=yb,
                    xb=xb,
-                   xgrid=xgrid[aix],
-                   ygrid=ygrid[aix],
-                   VecX=VecX,
-                   VecY=VecY,
-                   Dh=argv$Dh)
-  } else if (argv$transf=="Box-Cox") {
-    t00<-Sys.time()
-    res<-OI_RR_var(yo=boxcox(yo,argv$transf.boxcox_lambda),
-                   yb=boxcox(yb,argv$transf.boxcox_lambda),
-                   xb=boxcox(xb,argv$transf.boxcox_lambda),
-                   gx=xgrid[aix],
-                   gy=ygrid[aix],
+                   gx=xgrid,
+                   gy=ygrid,
                    ox=VecX,
                    oy=VecY,
                    Dh=argv$Dh,
                    eps2=argv$eps2)
+#   return( list(xa= out$xa[1:ng], ya= out$ya[1:no], 
+#                xa_errvar= out$xa_errvar[1:ng], ya_errvar= out$ya_errvar[1:no],
+#   o_errvar= out$o_errvar))
     t11<-Sys.time()
-    if (argv$verbose) print(paste("OI_RR, time=",round(t11-t00,1),attr(t11-t00,"unit")))
+    if (argv$verbose) 
+      print(paste("OI_RR, time=",round(t11-t00,1),attr(t11-t00,"unit")))
+  # spatial interpolation - a lot of observations
+  } else {
+    #
+    if (!is.na(cores)) {
+      #xa=arr[,1],xa_errvar=arr[,2],o_errvar=arr[,3]
+      if (argv$corrfun=="gaussian") {
+        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
+                        1:length(xgrid),mc.cores=cores,SIMPLIFY=T,
+                        dh=argv$Dh,dh2=(argv$Dh**2),
+                        eps2=argv$eps2,pmax=argv$pmax))
+      } else if (argv$corrfun=="soar") {
+        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
+                        1:length(xgrid),mc.cores=cores,SIMPLIFY=T,
+                        dh=argv$Dh,dh2=(argv$Dh**2),
+                        eps2=argv$eps2,pmax=argv$pmax))
+      }
+    } else {
+      if (argv$corrfun=="gaussian") {
+        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
+                      1:length(xgrid),SIMPLIFY=T,
+                      dh=argv$Dh,dh2=(argv$Dh**2),
+                      eps2=argv$eps2,pmax=argv$pmax))
+      } else if (argv$corrfun=="soar") {
+        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
+                      1:length(xgrid),SIMPLIFY=T,
+                      dh=argv$Dh,dh2=(argv$Dh**2),
+                      eps2=argv$eps2,pmax=argv$pmax))
+      }
+      res<-list(xa=arr[,1],ya=NA,xa_errvar=arr[,2],ya_errvar= NA,o_errvar=arr[,3])
+      rm(arr)
+    }
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("oi gridpoint by gridpoint, time=",
+                  round(t11-t00,1),attr(t11-t00,"unit")))
+#      save.image("tmp.RData")
+    }
+  }
+  if (argv$transf=="none") {
+    xa<-res$xa
+    # xb and yb exists
+  } else if (argv$transf=="Box-Cox") {
     t00<-Sys.time()
+    brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
     xa<-apply(cbind(res$xa,sqrt(abs(res$xa_errvar))),
               MARGIN=1,
               FUN=tboxcox4pdf_apply,
                   lambda=argv$transf.boxcox_lambda,
-                  brrinf=boxcox(argv$rrinf,argv$transf.boxcox_lambda))
+                  brrinf=brrinf)
+    yo<-tboxcox(x=yo,lambda=argv$transf.boxcox_lambda,brrinf=brrinf)
+    yb<-tboxcox(x=yb,lambda=argv$transf.boxcox_lambda,brrinf=brrinf)
+    xb<-tboxcox(x=xb,lambda=argv$transf.boxcox_lambda,brrinf=brrinf)
     t11<-Sys.time()
     if (argv$verbose) print(paste("backtransf, time=",round(t11-t00,1),attr(t11-t00,"unit")))
-  } else {
-    boom("transformation not defined")
+    rm(brrinf)
   }
   ra<-rmaster
   ra[]<-NA
   ra[aix]<-xa
-  rm(rfg,xb,xa,aix,xgrid,ygrid)
+  rm(rfg)
+  # back to the original vectors
+  yo<-yo_orig
+  prId<-prId_orig
+  VecX<-VecX_orig
+  VecY<-VecY_orig
+  rm(yo_orig, prId_orig, VecX_orig, VecY_orig)
   if (argv$loocv_mode) {
     W<-tcrossprod((D-argv$eps2*diag(n0)),InvD)
     if (argv$transf=="none") {
@@ -2412,8 +2644,8 @@ if (argv$mode=="OI_firstguess") {
                            lambda=argv$transf.boxcox_lambda,
                            brrinf=boxcox(argv$rrinf,argv$transf.boxcox_lambda))
     }
-  # loo-crossvalidation not required
-  } else {
+  # crossvalidation not required
+  } else if (!(argv$cv_mode|argv$cv_mode_random)) {
     if (argv$transf=="none") {
       ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
     } else if (argv$transf=="Box-Cox") {
@@ -2425,13 +2657,49 @@ if (argv$mode=="OI_firstguess") {
     }
     yav<-rep(-9999,length(ya))
   }
-  if (argv$idiv_instead_of_elev) {
-    if (!exists("W")) W<-tcrossprod((D-argv$eps2*diag(n0)),InvD)
-    # this is the cross-validation integral data influence ("yidiv")
-    elev_for_verif<-rep(1,n0) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,n0))
-  } else {
-    elev_for_verif<-VecZ
+  #
+  if (!(argv$cv_mode|argv$cv_mode_random) & 
+      ("idi" %in% argv$off_grd.variables | 
+       argv$idiv_instead_of_elev) &
+       n0<argv$maxobs_for_matrixInv) {
+    if (argv$verbose) t00<-Sys.time()
+    D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
+                  outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
+                /argv$hyletkf.Dh_oi)**2.)
+    diag(D)<-diag(D)+argv$hyletkf.eps2_oi
+    InvD<-chol2inv(chol(D))
+    rm(D)
+    xidi<-OI_RR_fast(yo=rep(1,length(VecX)),
+                     yb=rep(0,length(VecX)),
+                     xb=rep(0,length(xgrid)),
+                     xgrid=xgrid,
+                     ygrid=ygrid,
+                     VecX=VecX,
+                     VecY=VecY,
+                     Dh=argv$hyletkf.Dh_oi)
+    if (argv$idiv_instead_of_elev) {
+      G<-exp(-0.5*((outer(VecY_orig,VecY,FUN="-")**2.+
+                    outer(VecX_orig,VecX,FUN="-")**2.)**0.5/1000.
+                    /argv$hyletkf.Dh_oi)**2.)
+      W<-tcrossprod(G,InvD)
+      rm(G,InvD)
+      # this is the cross-validation integral data influence ("yidiv")
+      elev_for_verif<-rep(1,n0) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,n0))
+      rm(W)
+    }
+    # InvD could be used in the following
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("idi time=",round(t11-t00,1),
+                              attr(t11-t00,"unit")))
+    }
   }
+  if (n0>=argv$maxobs_for_matrixInv) {
+    xidi<-rep(NA,length(xgrid))
+    elev_for_verif<-rep(NA,length=length(VecX))
+  }
+  if (!argv$idiv_instead_of_elev) elev_for_verif<-VecZ
+  rm(xgrid,ygrid)
 #..............................................................................
 # ===>  OI multiscale (without background)   <===
 } else if (argv$mode=="OI_multiscale") {
@@ -2926,10 +3194,6 @@ if (argv$mode=="OI_firstguess") {
 #..............................................................................
 # ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
 } else if (argv$mode=="hyletkf") {
-  library(parallel)
-  # initializations
-  cores <- detectCores()
-#  cores <- 2
   argv$hyletkf.Dh<-1000*argv$hyletkf.Dh # km to m
   argv$hyletkf.Dh_oi<-1000*argv$hyletkf.Dh_oi # km to m
   Dh2<-argv$hyletkf.Dh*argv$hyletkf.Dh
@@ -2942,7 +3206,6 @@ if (argv$mode=="OI_firstguess") {
   prId_orig<-prId
   yo_orig<-yo
   xb_orig<-xb
-  xb[which(xb<0)]<-0
   if ((argv$cv_mode|argv$cv_mode_random)) {
     xgrid<-VecX_cv
     ygrid<-VecY_cv
@@ -3024,15 +3287,24 @@ if (argv$mode=="OI_firstguess") {
     xb<-boxcox(xb,argv$transf.boxcox_lambda)
   }
   # ensemble mean
-  xbm<-mcmapply(function(x) mean(xb[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
-  ybm<-mcmapply(function(x) mean(yb[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(cores)) {
+    xbm<-mcmapply(function(x) mean(xb[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
+    ybm<-mcmapply(function(x) mean(yb[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  } else {
+    xbm<-mapply(function(x) mean(xb[x,]),1:length(xgrid),SIMPLIFY=T)
+    ybm<-mapply(function(x) mean(yb[x,]),1:n0,SIMPLIFY=T)
+  }
   # ensemble perturbations
   Xb<-xb-xbm
   Yb<-yb-ybm
   # ensemble variances
   # var(backg err) is derived from the background ensemble
   # a minimum value of var(backg err) is set (over the original values)
-  ybvar<-mcmapply(function(x) mean(Yb[x,]**2),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(cores)) {
+    ybvar<-mcmapply(function(x) mean(Yb[x,]**2),1:n0,mc.cores=cores,SIMPLIFY=T)
+  } else {
+    ybvar<-mapply(function(x) mean(Yb[x,]**2),1:n0,SIMPLIFY=T)
+  }
   if (argv$transf=="Box-Cox") {
     tybm<-tboxcox(ybm,argv$transf.boxcox_lambda)
     ybvar_ref<-ybvar
@@ -3100,7 +3372,11 @@ if (argv$mode=="OI_firstguess") {
     return(xa)
   }
   if (argv$verbose) t00<-Sys.time()
-  xa<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+  if (!is.na(cores)) {
+    xa<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+  } else {
+    xa<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
+  }
 #  xa<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
   if (argv$verbose) {
     t11<-Sys.time()
@@ -3130,7 +3406,11 @@ if (argv$mode=="OI_firstguess") {
     Xb<-Yb
     xbm<-ybm
     if (argv$verbose) t00<-Sys.time()
-    ya<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+    if (!is.na(cores)) {
+      ya<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+    } else {
+      ya<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
+    }
     if (argv$verbose) {
       t11<-Sys.time()
       print(paste("ya hyletkf step1, time=",round(t11-t00,1),attr(t11-t00,"unit")))
@@ -3146,8 +3426,11 @@ if (argv$mode=="OI_firstguess") {
   ya_pwet<-apply(ya,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
   #
   # ensemble mean
-#  xam<-mcmapply(function(x) mean(xa[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
-  yam<-mcmapply(function(x) mean(ya[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(cores)) {
+    yam<-mcmapply(function(x) mean(ya[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  } else {
+    yam<-mapply(function(x) mean(ya[x,]),1:n0,SIMPLIFY=T)
+  }
   #
   #............................................................................
   # 2nd step of hyletkf
@@ -3187,8 +3470,11 @@ if (argv$mode=="OI_firstguess") {
     }
     return(xa2)
   }
-  xa<-t(mcmapply(hyletkf_2,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
-#  xa<-t(mapply(hyletkf_2,1:length(xgrid),SIMPLIFY=T))
+  if (!is.na(cores)) {
+    xa<-t(mcmapply(hyletkf_2,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+  } else {
+    xa<-t(mapply(hyletkf_2,1:length(xgrid),SIMPLIFY=T))
+  }
   if (argv$verbose) {
     t11<-Sys.time()
     print(paste("hyletkf step2, time=",round(t11-t00,1),attr(t11-t00,"unit")))
@@ -3639,9 +3925,11 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
   if (argv$verbose) t00<-Sys.time() 
   #CVmode for deterministic analysis
   if (is.null(argv$iff_fg.epos)) {
-    ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
-    yb_cv<-vector(mode="numeric",length=ncv)
-    yb_cv[]<-NA
+#    ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
+#    yb_cv<-vector(mode="numeric",length=ncv)
+#    yb_cv[]<-NA
+    ya_cv<-xa
+    yb_cv<-xb
     Dh<-argv$Dh
   #CVmode for ensemble analysis
   } else {
@@ -3655,7 +3943,8 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
       }
     }
     if (argv$mode=="hyletkf") Dh<-argv$hyletkf.Dh_oi
-  } 
+  }
+  #
   if (argv$idiv_instead_of_elev) {
     if (argv$mode=="OI_multiscale") {
       eps2_idiv<-argv$oimult.eps2_idi
@@ -3664,10 +3953,11 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
       eps2_idiv<-argv$eps2
       Dh_idiv<-Dh
     }
-    #
-    if (argv$mode=="hyletkf") {
+    if (n0>=argv$maxobs_for_matrixInv) {
       Dh_idiv2<-1000*Dh_idiv*1000*Dh_idiv
-      idiv<-function(i){
+      pmax<-argv$pmax
+      if (argv$mode=="hyletkf") pmax<-argv$hyletkf.pmax
+      idiv<-function(i) {
         # typeA vector VecX, VecY,... dimension 1:n0
         # typeB vector rloc, ... dimension 1:n.i
         deltax<-abs(VecX_cv[i]-VecX)
@@ -3683,14 +3973,14 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
 #          dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
 #          rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
           if (length(ixa)>argv$hyletkf.pmax) {
-            ixb<-order(rloc, decreasing=T)[1:argv$hyletkf.pmax]
+            ixb<-order(rloc, decreasing=T)[1:pmax]
             rloc<-rloc[ixb]
             ixa<-ixa[ixb]
             rm(ixb)
           }
           idiv<-rloc %*% rowSums( chol2inv(chol( 
            exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
-                      outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
+                     outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
            eps2_idiv*diag(length(ixa))
                           )) )
         # i-th gridpoint is isolated
@@ -3699,8 +3989,12 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
         }
         return(idiv)
       }
-      elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),mc.cores=cores,SIMPLIFY=T))
-#      elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+      if (!is.na(cores)) {
+        elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),mc.cores=cores,SIMPLIFY=T))
+      } else {
+        elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+      }
+    # if (n0<argv$maxobs_for_matrixInv) {
     } else {
       D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
                     outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
@@ -3716,7 +4010,9 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
       # this is the cross-validation integral data influence ("yidiv")
       elev_for_verif_cv<-rep(1,ncv) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,ncv))
       rm(W)
-    }
+    } 
+  #
+  # if (!argv$idiv_instead_of_elev)
   } else {
     elev_for_verif_cv<-VecZ_cv
   }
@@ -3748,7 +4044,8 @@ if (argv$cv_mode|argv$cv_mode_random) {
                round(ya_cv,2),"\n",
                sep=""),
         file=argv$off_cvver,append=T)
-    print(paste("data saved on file",argv$off_cvver))
+    print(paste("written file",argv$off_cvver))
+    #
     cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
         file=argv$off_cvstn,append=F)
     cat(paste(argv$date_out,
@@ -3763,7 +4060,81 @@ if (argv$cv_mode|argv$cv_mode_random) {
               rep(0,length(VecS_cv)),
               "\n",sep=";"),
         file=argv$off_cvstn,append=T)
-    print(paste("data saved on file",argv$off_cvstn))
+    print(paste("written file",argv$off_cvstn))
+    #
+    if (argv$off_cvvernc_a!="none" & argv$off_cvvernc_b!="none") {
+      tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                        format="%Y%m%d%H%M",tz="GMT")
+      dim_t<-list(name="time",
+                  units="H",
+                  vals=tstamp_nc,
+                  is_time=T,
+                  unlim=T,
+                  times.unit="S",
+                  times.format="%Y%m%d%H%M",
+                  timeref="197001010000",
+                  timeref.format="%Y%m%d%H%M")
+      dim_lt<-list(name="leadtime",units="",vals=0)
+      dim_loc<-list(name="location",units="",vals=VecS_cv)
+      dim_list<-list(dim_t,dim_lt,dim_loc)
+      nlt<-1
+      nt<-1
+      nloc<-ncv
+      # variables
+      var_lat<-list(name="lat",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLat_cv,dim=c(nloc)))
+      var_lon<-list(name="lon",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLon_cv,dim=c(nloc)))
+      var_ele<-list(name="altitude",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(elev_for_verif_cv,dim=c(nloc)))
+      obs<-array(data=NA,dim=c(nloc,nlt,nt))
+      obs[,nlt,nt]<-yo_cv
+      var_obs<-list(name="obs",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=obs)
+      rm(obs)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(ya_cv,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst)
+      gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
+      gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
+      gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
+      res<-write_generic_dotnc(nc.file=argv$off_cvvernc_a,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res))
+        print(paste("ERROR while writing ",argv$off_cvvernc_a))
+      print(paste("written file",argv$off_cvvernc_a))
+      # write off_cvvernc_b (background)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(yb_cv,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst)
+      res<-write_generic_dotnc(nc.file=argv$off_cvvernc_b,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res)) 
+        print(paste("ERROR while writing ",argv$off_cvvernc_b))
+      print(paste("written file",argv$off_cvvernc_b))
+    }
   # Station Points - CVmode - case of case of ensemble analysis
   } else {
     # off_cvvernc_a / off_cvvernc_b
@@ -3879,9 +4250,8 @@ if (argv$cv_mode|argv$cv_mode_random) {
                              dims=dim_list,
                              vars=var_list,
                              glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res)) {
+    if (is.null(res)) 
       print(paste("ERROR while writing ",argv$off_cvvernc_a))
-    }
     print(paste("written file",argv$off_cvvernc_a))
     # write off_cvvernc_b (background)
     fcst<-array(data=NA,dim=c(nloc,nlt,nt))
@@ -3948,9 +4318,8 @@ if (argv$cv_mode|argv$cv_mode_random) {
                              dims=dim_list,
                              vars=var_list,
                              glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res)) {
+    if (is.null(res))
       print(paste("ERROR while writing ",argv$off_cvvernc_b))
-    }
     print(paste("written file",argv$off_cvvernc_b))
   }
 #------------------------------------------------------------------------------
