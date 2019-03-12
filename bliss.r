@@ -822,7 +822,7 @@ oi_Asolo_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
   return(xa)
 }
 # optimal interpolation - correlation function "gaussian"
-oi_var_gridpoint_by_gridpoint_gaussian<-function(i, dh,dh2,eps2,pmax) {
+oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax) {
   deltax<-abs(xgrid[i]-VecX)
   deltay<-abs(ygrid[i]-VecY)
   if (!any(deltax<(7*dh))) return(c(xb[i],NA,NA))
@@ -839,25 +839,25 @@ oi_var_gridpoint_by_gridpoint_gaussian<-function(i, dh,dh2,eps2,pmax) {
     di<-yo[ixa]-yb[ixa]
     S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
                  outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
-    SRinv<-chol2inv(chol( S+diag(x=eps2,length(ixa)) ))
+    SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
     SRinv_di<-crossprod(SRinv,di)       
-    o_errvar<-mean(as.numeric(crossprod(di,(di-crossprod(S,SRinv_di)))))
+    o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
     rm(S)
-    xa_errvar<-(o_errvar / eps2) * 
-               (1-as.numeric(crossprod(crossprod(rloc,SRinv),rloc)))
+    xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa]))) * 
+               (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
     rm(SRinv)
-    xa<-xb[i]+as.numeric(crossprod(rloc,SRinv_di))
+    xa<-xb[i]+sum(rloc*as.vector(SRinv_di))
   } else {
     xa<-xb[i]
   }
   return(c(xa,xa_errvar,o_errvar))
 }
 # optimal interpolation - correlation function "soar"
-oi_var_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
+oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax) {
   deltax<-abs(xgrid[i]-VecX)
   deltay<-abs(ygrid[i]-VecY)
-  if (!any(deltax<(7*dh))) return(c(xb[i],NA,NA))
-  if (!any(deltay<(7*dh))) return(c(xb[i],NA,NA))
+  if (!any(deltax<(7*dh))) return(c(xb[i],0,NA))
+  if (!any(deltay<(7*dh))) return(c(xb[i],0,NA))
   ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
   if (length(ixa)>0) {
     distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
@@ -871,19 +871,21 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
     }
     di<-yo[ixa]-yb[ixa]
     distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh
+                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh 
     S<-(1+distnorm)*exp(-distnorm)
     rm(distnorm)
-    SRinv<-chol2inv(chol( S+diag(x=eps2,length(ixa)) ))
+    SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
     SRinv_di<-crossprod(SRinv,di)       
-    o_errvar<-mean(as.numeric(crossprod(di,(di-crossprod(S,SRinv_di)))))
+    o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
     rm(S)
-    xa_errvar<-(o_errvar / eps2) * 
-               (1-as.numeric(crossprod(crossprod(rloc,SRinv),rloc)))
+    xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa])),na.rm=T) * 
+               (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
     rm(SRinv)
-    xa<-xb[i]+as.numeric(crossprod(rloc,SRinv_di))
+    xa<-xb[i]+sum(rloc*as.vector(SRinv_di))
   } else {
     xa<-xb[i]
+    xa_errvar<-0
+    o_errvar<-NA
   }
   return(c(xa,xa_errvar,o_errvar))
 }
@@ -1142,19 +1144,19 @@ p <- add_argument(p, "--iff_black",
 p <- add_argument(p, "--off_stn",
                   help="full file name for output at station locations (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_ver",
                   help="full file name for output at station locations analysis vs obs - verif format (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_ver_fg",
                   help="full file name for output at station locations fist-guess vs obs - verif format (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_ver_cv",
                   help="full file name for output at station locations cv-analysis vs obs - verif format (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--verif_var",
                   help="name of the verif variable",
                   type="character",
@@ -1166,32 +1168,32 @@ p <- add_argument(p, "--verif_units",
 p <- add_argument(p, "--off_grd",
                   help="full file name for output at gridpoints (nc)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_vernc_a",
                   help="full file name for output at station locations, verif-type analyses versus observations (nc)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_vernc_b",
                   help="full file name for output at station locations, verif-type background versus observations (nc)",
                   type="character",
-                  default="none")
+                  default=NA)
 # output cv-mode
 p <- add_argument(p, "--off_cvstn",
                   help="full file name for output at station locations (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_cvver",
                   help="full file name for output at station location, verif-type (txt)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_cvvernc_a",
                   help="full file name for output at station locations, verif-type analyses versus observations (nc)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_cvvernc_b",
                   help="full file name for output at station locations, verif-type background versus observations (nc)",
                   type="character",
-                  default="none")
+                  default=NA)
 p <- add_argument(p, "--off_vernc.varname",
                   help="name of the verif variable for off_vernc files",
                   type="character",
@@ -2106,7 +2108,7 @@ if (file.exists(argv$iff_fg)) {
                                        att=NULL),
                          selection=list(t=argv$iff_fg.t,
                                         format=argv$iff_fg.tfmt,
-                                        e=argv$iff_fg.e[e])))
+                                        e=NULL)))
     if (is.null(raux)) 
       boom("error reading the first-guess file")
     if (argv$iff_fg.adjfact!=1 | argv$iff_fg.adjval!=0) 
@@ -2509,6 +2511,38 @@ if (argv$mode=="OI_firstguess") {
     xgrid<-xgrid[aix]
     ygrid<-ygrid[aix]
   }
+  # set eps2 and dh
+  eps2<-vector(mode="numeric",length=n0)
+  ixdef<-which(is.na(argv$oifg.eps2_prId))
+  for (r in 1:(length(argv$oifg.eps2_r)-1)) {
+    ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+               yo<argv$oifg.eps2_r[(r+1)])
+    eps2[ixr]<-argv$oifg.eps2[r,ixdef]
+    for (i in 1:length(argv$oifg.eps2_prId)) {
+      if (is.na(argv$oifg.eps2_prId[i])) next
+      ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+                 yo<argv$oifg.eps2_r[(r+1)] & 
+                 prId==argv$oifg.eps2_prId[i]) 
+      eps2[ixr]<-argv$oifg.eps2[r,i]
+    }
+  }
+# something like this will create problems in the S matrix inversion
+#  dh<-vector(mode="numeric",length=n0)
+#  ixdef<-which(is.na(argv$oifg.Dh_prId))
+#  for (r in 1:(length(argv$oifg.Dh_r)-1)) {
+#    ixr<-which(yo>=argv$oifg.Dh_r[r] & 
+#               yo<argv$oifg.Dh_r[(r+1)])
+#    dh[ixr]<-argv$oifg.Dh[r,ixdef]
+#    for (i in 1:length(argv$oifg.Dh_prId)) {
+#      if (is.na(argv$oifg.Dh_prId[i])) next
+#      ixr<-which(yo>=argv$oifg.Dh_r[r] & 
+#                 yo<argv$oifg.Dh_r[(r+1)] & 
+#                 prId==argv$oifg.Dh_prId[i]) 
+#      dh[ixr]<-argv$oifg.Dh[r,i]
+#    }
+#  }
+  dh<-argv$oifg.Dh*1000
+  dh2<-dh*dh
   # background at station locations
   yb<-extract(rfg, cbind(VecX,VecY), method="bilinear")
   # if CVmode, then fix the background
@@ -2523,9 +2557,9 @@ if (argv$mode=="OI_firstguess") {
     yb<-boxcox(yb,argv$transf.boxcox_lambda)
     xb<-boxcox(xb,argv$transf.boxcox_lambda)
   }
+  t00<-Sys.time()
   # spatial interpolation - not that many observations
   if (n0<argv$maxobs_for_matrixInv) {
-    t00<-Sys.time()
     # correlation matrices
     if (argv$corrfun=="gaussian") {
       D<-exp(-0.5*(Disth/argv$Dh)**2.)
@@ -2552,34 +2586,30 @@ if (argv$mode=="OI_firstguess") {
   # spatial interpolation - a lot of observations
   } else {
     #
-    if (!is.na(cores)) {
+    if (!is.na(argv$cores)) {
       #xa=arr[,1],xa_errvar=arr[,2],o_errvar=arr[,3]
       if (argv$corrfun=="gaussian") {
         arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                        1:length(xgrid),mc.cores=cores,SIMPLIFY=T,
-                        dh=argv$Dh,dh2=(argv$Dh**2),
-                        eps2=argv$eps2,pmax=argv$pmax))
+                        1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T,
+                        pmax=argv$pmax))
       } else if (argv$corrfun=="soar") {
         arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
-                        1:length(xgrid),mc.cores=cores,SIMPLIFY=T,
-                        dh=argv$Dh,dh2=(argv$Dh**2),
-                        eps2=argv$eps2,pmax=argv$pmax))
+                        1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T,
+                        pmax=argv$pmax))
       }
     } else {
       if (argv$corrfun=="gaussian") {
         arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
                       1:length(xgrid),SIMPLIFY=T,
-                      dh=argv$Dh,dh2=(argv$Dh**2),
-                      eps2=argv$eps2,pmax=argv$pmax))
+                      pmax=argv$pmax))
       } else if (argv$corrfun=="soar") {
         arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
                       1:length(xgrid),SIMPLIFY=T,
-                      dh=argv$Dh,dh2=(argv$Dh**2),
-                      eps2=argv$eps2,pmax=argv$pmax))
+                      pmax=argv$pmax))
       }
-      res<-list(xa=arr[,1],ya=NA,xa_errvar=arr[,2],ya_errvar= NA,o_errvar=arr[,3])
-      rm(arr)
     }
+    res<-list(xa=arr[,1],ya=NA,xa_errvar=arr[,2],ya_errvar= NA,o_errvar=arr[,3])
+    rm(arr)
     if (argv$verbose) {
       t11<-Sys.time()
       print(paste("oi gridpoint by gridpoint, time=",
@@ -2605,9 +2635,11 @@ if (argv$mode=="OI_firstguess") {
     if (argv$verbose) print(paste("backtransf, time=",round(t11-t00,1),attr(t11-t00,"unit")))
     rm(brrinf)
   }
-  ra<-rmaster
-  ra[]<-NA
-  ra[aix]<-xa
+  if (!(argv$cv_mode|argv$cv_mode_random)) { 
+    ra<-rmaster
+    ra[]<-NA
+    ra[aix]<-xa
+  }
   rm(rfg)
   # back to the original vectors
   yo<-yo_orig
@@ -2649,11 +2681,13 @@ if (argv$mode=="OI_firstguess") {
     if (argv$transf=="none") {
       ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
     } else if (argv$transf=="Box-Cox") {
-      ya<-apply(cbind(res$ya,sqrt(abs(res$ya_errvar))),
-                MARGIN=1,
-                FUN=tboxcox4pdf_apply,
-                    lambda=argv$transf.boxcox_lambda,
-                    brrinf=boxcox(argv$rrinf,argv$transf.boxcox_lambda))
+#      ya<-apply(cbind(res$ya,sqrt(abs(res$ya_errvar))),
+#                MARGIN=1,
+#                FUN=tboxcox4pdf_apply,
+#                    lambda=argv$transf.boxcox_lambda,
+#                    brrinf=boxcox(argv$rrinf,argv$transf.boxcox_lambda))
+      ya<-vector(mode="numeric",length=n0)
+      ya[]<-NA
     }
     yav<-rep(-9999,length(ya))
   }
@@ -3287,9 +3321,9 @@ if (argv$mode=="OI_firstguess") {
     xb<-boxcox(xb,argv$transf.boxcox_lambda)
   }
   # ensemble mean
-  if (!is.na(cores)) {
-    xbm<-mcmapply(function(x) mean(xb[x,]),1:length(xgrid),mc.cores=cores,SIMPLIFY=T)
-    ybm<-mcmapply(function(x) mean(yb[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(argv$cores)) {
+    xbm<-mcmapply(function(x) mean(xb[x,]),1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T)
+    ybm<-mcmapply(function(x) mean(yb[x,]),1:n0,mc.cores=argv$cores,SIMPLIFY=T)
   } else {
     xbm<-mapply(function(x) mean(xb[x,]),1:length(xgrid),SIMPLIFY=T)
     ybm<-mapply(function(x) mean(yb[x,]),1:n0,SIMPLIFY=T)
@@ -3300,8 +3334,8 @@ if (argv$mode=="OI_firstguess") {
   # ensemble variances
   # var(backg err) is derived from the background ensemble
   # a minimum value of var(backg err) is set (over the original values)
-  if (!is.na(cores)) {
-    ybvar<-mcmapply(function(x) mean(Yb[x,]**2),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(argv$cores)) {
+    ybvar<-mcmapply(function(x) mean(Yb[x,]**2),1:n0,mc.cores=argv$cores,SIMPLIFY=T)
   } else {
     ybvar<-mapply(function(x) mean(Yb[x,]**2),1:n0,SIMPLIFY=T)
   }
@@ -3372,8 +3406,8 @@ if (argv$mode=="OI_firstguess") {
     return(xa)
   }
   if (argv$verbose) t00<-Sys.time()
-  if (!is.na(cores)) {
-    xa<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+  if (!is.na(argv$cores)) {
+    xa<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T))
   } else {
     xa<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
   }
@@ -3406,8 +3440,8 @@ if (argv$mode=="OI_firstguess") {
     Xb<-Yb
     xbm<-ybm
     if (argv$verbose) t00<-Sys.time()
-    if (!is.na(cores)) {
-      ya<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+    if (!is.na(argv$cores)) {
+      ya<-t(mcmapply(hyletkf_1,1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T))
     } else {
       ya<-t(mapply(hyletkf_1,1:length(xgrid),SIMPLIFY=T))
     }
@@ -3426,8 +3460,8 @@ if (argv$mode=="OI_firstguess") {
   ya_pwet<-apply(ya,MAR=1,FUN=function(x){length(which(x>=argv$rrinf))/nens})
   #
   # ensemble mean
-  if (!is.na(cores)) {
-    yam<-mcmapply(function(x) mean(ya[x,]),1:n0,mc.cores=cores,SIMPLIFY=T)
+  if (!is.na(argv$cores)) {
+    yam<-mcmapply(function(x) mean(ya[x,]),1:n0,mc.cores=argv$cores,SIMPLIFY=T)
   } else {
     yam<-mapply(function(x) mean(ya[x,]),1:n0,SIMPLIFY=T)
   }
@@ -3470,8 +3504,8 @@ if (argv$mode=="OI_firstguess") {
     }
     return(xa2)
   }
-  if (!is.na(cores)) {
-    xa<-t(mcmapply(hyletkf_2,1:length(xgrid),mc.cores=cores,SIMPLIFY=T))
+  if (!is.na(argv$cores)) {
+    xa<-t(mcmapply(hyletkf_2,1:length(xgrid),mc.cores=argv$cores,SIMPLIFY=T))
   } else {
     xa<-t(mapply(hyletkf_2,1:length(xgrid),SIMPLIFY=T))
   }
@@ -3949,50 +3983,97 @@ if ((argv$cv_mode|argv$cv_mode_random)) {
     if (argv$mode=="OI_multiscale") {
       eps2_idiv<-argv$oimult.eps2_idi
       Dh_idiv<-argv$oimult.Dh_idi
+    } else if (argv$mode=="OI_firstguess") {
+      eps2_idiv<-eps2
+      Dh_idiv<-dh
     } else {
       eps2_idiv<-argv$eps2
       Dh_idiv<-Dh
     }
     if (n0>=argv$maxobs_for_matrixInv) {
-      Dh_idiv2<-1000*Dh_idiv*1000*Dh_idiv
-      pmax<-argv$pmax
-      if (argv$mode=="hyletkf") pmax<-argv$hyletkf.pmax
-      idiv<-function(i) {
-        # typeA vector VecX, VecY,... dimension 1:n0
-        # typeB vector rloc, ... dimension 1:n.i
-        deltax<-abs(VecX_cv[i]-VecX)
-        deltay<-abs(VecY_cv[i]-VecY)
-        if (!any(deltax<(7*Dh_idiv))) return(0)
-        if (!any(deltay<(7*Dh_idiv))) return(0)
-        ixa<-which( deltax<(7*Dh_idiv) & 
-                    deltay<(7*Dh_idiv) )
-        # i-th gridpoint analysis 
-        if (length(ixa)>0) {
-          # exp (-1/2 * dist**2 / dh**2)
-          rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
-#          dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
-#          rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
-          if (length(ixa)>argv$hyletkf.pmax) {
-            ixb<-order(rloc, decreasing=T)[1:pmax]
-            rloc<-rloc[ixb]
-            ixa<-ixa[ixb]
-            rm(ixb)
+      Dh_idiv2<-Dh_idiv*Dh_idiv
+      if (argv$mode=="OI_firstguess") {
+        pmax<-argv$pmax
+        idiv<-function(i) {
+          # typeA vector VecX, VecY,... dimension 1:n0
+          # typeB vector rloc, ... dimension 1:n.i
+          deltax<-abs(VecX_cv[i]-VecX)
+          deltay<-abs(VecY_cv[i]-VecY)
+          if (!any(deltax<(7*Dh_idiv))) return(0)
+          if (!any(deltay<(7*Dh_idiv))) return(0)
+          ixa<-which( deltax<(7*Dh_idiv) & 
+                      deltay<(7*Dh_idiv) )
+          # i-th gridpoint analysis 
+          if (length(ixa)>0) {
+            # exp (-1/2 * dist**2 / dh**2)
+            rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
+#            dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
+#            rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
+            if (length(ixa)>argv$hyletkf.pmax) {
+              ixb<-order(rloc, decreasing=T)[1:pmax]
+              rloc<-rloc[ixb]
+              ixa<-ixa[ixb]
+              rm(ixb)
+            }
+            idiv<-rloc %*% rowSums( chol2inv(chol( 
+             exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
+                       outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
+             eps2_idiv[ixa]*diag(length(ixa))
+                            )) )
+          # i-th gridpoint is isolated
+          } else {
+            idiv<-0
           }
-          idiv<-rloc %*% rowSums( chol2inv(chol( 
-           exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
-                     outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
-           eps2_idiv*diag(length(ixa))
-                          )) )
-        # i-th gridpoint is isolated
-        } else {
-          idiv<-0
+          return(idiv)
         }
-        return(idiv)
-      }
-      if (!is.na(cores)) {
-        elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),mc.cores=cores,SIMPLIFY=T))
+        if (!is.na(argv$cores)) {
+          elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),
+                               mc.cores=argv$cores,SIMPLIFY=T))
+        } else {
+          elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+        }
       } else {
-        elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+        Dh_idiv2<-1000*Dh_idiv*1000*Dh_idiv
+        pmax<-argv$pmax
+        if (argv$mode=="hyletkf") pmax<-argv$hyletkf.pmax
+        idiv<-function(i) {
+          # typeA vector VecX, VecY,... dimension 1:n0
+          # typeB vector rloc, ... dimension 1:n.i
+          deltax<-abs(VecX_cv[i]-VecX)
+          deltay<-abs(VecY_cv[i]-VecY)
+          if (!any(deltax<(7*Dh_idiv))) return(0)
+          if (!any(deltay<(7*Dh_idiv))) return(0)
+          ixa<-which( deltax<(7*Dh_idiv) & 
+                      deltay<(7*Dh_idiv) )
+          # i-th gridpoint analysis 
+          if (length(ixa)>0) {
+            # exp (-1/2 * dist**2 / dh**2)
+            rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
+#            dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
+#            rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
+            if (length(ixa)>argv$hyletkf.pmax) {
+              ixb<-order(rloc, decreasing=T)[1:pmax]
+              rloc<-rloc[ixb]
+              ixa<-ixa[ixb]
+              rm(ixb)
+            }
+            idiv<-rloc %*% rowSums( chol2inv(chol( 
+             exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
+                       outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
+             eps2_idiv*diag(length(ixa))
+                            )) )
+          # i-th gridpoint is isolated
+          } else {
+            idiv<-0
+          }
+          return(idiv)
+        }
+        if (!is.na(argv$cores)) {
+          elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),
+                               mc.cores=argv$cores,SIMPLIFY=T))
+        } else {
+          elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
+        }
       }
     # if (n0<argv$maxobs_for_matrixInv) {
     } else {
@@ -4028,41 +4109,45 @@ if (argv$verbose) print("++ Output")
 # Station Points - CVmode
 if (argv$cv_mode|argv$cv_mode_random) {
   # Station Points - CVmode - case of deterministic analysis
-  if (is.null(argv$iff_fg.epos)) { 
-    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_cvver,append=F)
-    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_cvver,append=T)
-    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-        file=argv$off_cvver,append=T)
-    ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(yav))
-    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-               rep(0,length(VecS_cv))," ",
-               VecS_cv," ",
-               VecLat_cv," ",
-               VecLon_cv," ",
-               elev_for_verif_cv," ",
-               round(yo_cv,2)," ",
-               round(ya_cv,2),"\n",
-               sep=""),
-        file=argv$off_cvver,append=T)
-    print(paste("written file",argv$off_cvver))
+  if (is.null(argv$iff_fg.epos)) {
+    if (!is.na(argv$off_cvver)) { 
+      cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_cvver,append=F)
+      cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_cvver,append=T)
+      cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+          file=argv$off_cvver,append=T)
+      ix<-which(!is.na(yo_cv) & !is.na(ya_cv))
+      cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+                 rep(0,length(VecS_cv))," ",
+                 VecS_cv," ",
+                 VecLat_cv," ",
+                 VecLon_cv," ",
+                 round(elev_for_verif_cv,5)," ",
+                 round(yo_cv,2)," ",
+                 round(ya_cv,2),"\n",
+                 sep=""),
+          file=argv$off_cvver,append=T)
+      print(paste("written file",argv$off_cvver))
+    }
     #
-    cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
-        file=argv$off_cvstn,append=F)
-    cat(paste(argv$date_out,
-              formatC(VecS_cv,format="f",digits=0),
-              formatC(VecX_cv,format="f",digits=0),
-              formatC(VecY_cv,format="f",digits=0),
-              formatC(VecZ_cv,format="f",digits=0),
-              formatC(yo_cv,format="f",digits=1),
-              formatC(yb_cv,format="f",digits=1),
-              formatC(ya_cv,format="f",digits=1),
-              formatC(ya_cv,format="f",digits=1),
-              rep(0,length(VecS_cv)),
-              "\n",sep=";"),
-        file=argv$off_cvstn,append=T)
-    print(paste("written file",argv$off_cvstn))
+    if (!is.na(argv$off_cvstn)) { 
+      cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
+          file=argv$off_cvstn,append=F)
+      cat(paste(argv$date_out,
+                formatC(VecS_cv,format="f",digits=0),
+                formatC(VecX_cv,format="f",digits=0),
+                formatC(VecY_cv,format="f",digits=0),
+                formatC(VecZ_cv,format="f",digits=0),
+                formatC(yo_cv,format="f",digits=1),
+                formatC(yb_cv,format="f",digits=1),
+                formatC(ya_cv,format="f",digits=1),
+                formatC(ya_cv,format="f",digits=1),
+                rep(0,length(VecS_cv)),
+                "\n",sep=";"),
+          file=argv$off_cvstn,append=T)
+      print(paste("written file",argv$off_cvstn))
+    }
     #
-    if (argv$off_cvvernc_a!="none" & argv$off_cvvernc_b!="none") {
+    if (!is.na(argv$off_cvvernc_a) & !is.na(argv$off_cvvernc_b)) { 
       tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
                         format="%Y%m%d%H%M",tz="GMT")
       dim_t<-list(name="time",
@@ -4101,7 +4186,7 @@ if (argv$cv_mode|argv$cv_mode_random) {
                     vals=obs)
       rm(obs)
       fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-      fcst[,nlt,nt]<-rowMeans(ya_cv,na.rm=T)
+      fcst[,nlt,nt]<-ya_cv
       var_fcst<-list(name="fcst",
                      units="",
                      dim_names=c("location","leadtime","time"),
@@ -4120,7 +4205,7 @@ if (argv$cv_mode|argv$cv_mode_random) {
       print(paste("written file",argv$off_cvvernc_a))
       # write off_cvvernc_b (background)
       fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-      fcst[,nlt,nt]<-rowMeans(yb_cv,na.rm=T)
+      fcst[,nlt,nt]<-yb_cv
       var_fcst<-list(name="fcst",
                      units="",
                      dim_names=c("location","leadtime","time"),
@@ -4137,221 +4222,227 @@ if (argv$cv_mode|argv$cv_mode_random) {
     }
   # Station Points - CVmode - case of case of ensemble analysis
   } else {
-    # off_cvvernc_a / off_cvvernc_b
-    # write off_cvvernc_a (cv-analysis)
-    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
-                      format="%Y%m%d%H%M",tz="GMT")
-    dim_t<-list(name="time",
-                units="H",
-                vals=tstamp_nc,
-                is_time=T,
-                unlim=T,
-                times.unit="S",
-                times.format="%Y%m%d%H%M",
-                timeref="197001010000",
-                timeref.format="%Y%m%d%H%M")
-    dim_lt<-list(name="leadtime",units="",vals=0)
-    dim_loc<-list(name="location",units="",vals=VecS_cv)
-    dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
-    dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
-    nr<-length(argv$off_vernc.thresholds)
-    nq<-length(argv$off_vernc.quantile)
-    nlt<-1
-    nt<-1
-    nloc<-ncv
-    dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
-    dim_list[[(length(dim_list)+1)]]<-dim_r
-    dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
-    dim_list[[(length(dim_list)+1)]]<-dim_q
-    # variables
-    var_lat<-list(name="lat",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(VecLat_cv,dim=c(nloc)))
-    var_lon<-list(name="lon",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(VecLon_cv,dim=c(nloc)))
-    var_ele<-list(name="altitude",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(elev_for_verif_cv,dim=c(nloc)))
-    obs<-array(data=NA,dim=c(nloc,nlt,nt))
-    obs[,nlt,nt]<-yo_cv
-    var_obs<-list(name="obs",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=obs)
-    rm(obs)
-    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-    fcst[,nlt,nt]<-rowMeans(ya_cv,na.rm=T)
-    var_fcst<-list(name="fcst",
+    if (!is.na(argv$off_cvvernc_a) & !is.na(argv$off_cvvernc_b)) { 
+      # off_cvvernc_a / off_cvvernc_b
+      # write off_cvvernc_a (cv-analysis)
+      tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                        format="%Y%m%d%H%M",tz="GMT")
+      dim_t<-list(name="time",
+                  units="H",
+                  vals=tstamp_nc,
+                  is_time=T,
+                  unlim=T,
+                  times.unit="S",
+                  times.format="%Y%m%d%H%M",
+                  timeref="197001010000",
+                  timeref.format="%Y%m%d%H%M")
+      dim_lt<-list(name="leadtime",units="",vals=0)
+      dim_loc<-list(name="location",units="",vals=VecS_cv)
+      dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
+      dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
+      nr<-length(argv$off_vernc.thresholds)
+      nq<-length(argv$off_vernc.quantile)
+      nlt<-1
+      nt<-1
+      nloc<-ncv
+      dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
+      dim_list[[(length(dim_list)+1)]]<-dim_r
+      dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
+      dim_list[[(length(dim_list)+1)]]<-dim_q
+      # variables
+      var_lat<-list(name="lat",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLat_cv,dim=c(nloc)))
+      var_lon<-list(name="lon",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLon_cv,dim=c(nloc)))
+      var_ele<-list(name="altitude",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(elev_for_verif_cv,dim=c(nloc)))
+      obs<-array(data=NA,dim=c(nloc,nlt,nt))
+      obs[,nlt,nt]<-yo_cv
+      var_obs<-list(name="obs",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=obs)
+      rm(obs)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(ya_cv,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+      xval[,,nlt,nt]<-ya_cv
+      var_ens<-list(name="ensemble",
+                    units="",
+                    dim_names=c("ensemble_member","location","leadtime","time"),
+                    vals=xval)
+      rm(xval)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+      pit<-array(data=NA,dim=c(nloc,nlt,nt))
+      pit[,nlt,nt]<-apply(cbind(ya_cv,yo_cv),
+                       MARGIN=1,
+                       FUN=function(x){
+                         if (is.na(x[length(x)])) return(NA)
+                         ix<-which(!is.na(x[1:(length(x)-1)]))
+                         if (length(ix)==0) return(NA)
+                         ecdf(x[ix])(x[length(x)])})
+      var_pit<-list(name="pit",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=pit)
+      rm(pit)
+      var_list[[(length(var_list)+1)]]<-var_pit
+      rm(var_pit)
+      cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      cdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          ecdf(x[ix])(argv$off_vernc.thresholds)})
+      pdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+      var_cdf<-list(name="cdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=cdf)
+      rm(cdf)
+      var_list[[(length(var_list)+1)]]<-var_cdf
+      var_pdf<-list(name="pdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=pdf)
+      rm(pdf)
+      var_list[[(length(var_list)+1)]]<-var_pdf
+      qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+      qx[1:nq,1:nloc,nlt,nt]<-apply(ya_cv,MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+      var_qx<-list(name="x",
                    units="",
-                   dim_names=c("location","leadtime","time"),
-                   vals=fcst)
-    rm(fcst)
-    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
-    xval[,,nlt,nt]<-ya_cv
-    var_ens<-list(name="ensemble",
-                  units="",
-                  dim_names=c("ensemble_member","location","leadtime","time"),
-                  vals=xval)
-    rm(xval)
-    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
-    pit<-array(data=NA,dim=c(nloc,nlt,nt))
-    pit[,nlt,nt]<-apply(cbind(ya_cv,yo_cv),
-                     MARGIN=1,
-                     FUN=function(x){
-                       if (is.na(x[length(x)])) return(NA)
-                       ix<-which(!is.na(x[1:(length(x)-1)]))
-                       if (length(ix)==0) return(NA)
-                       ecdf(x[ix])(x[length(x)])})
-    var_pit<-list(name="pit",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=pit)
-    rm(pit)
-    var_list[[(length(var_list)+1)]]<-var_pit
-    rm(var_pit)
-    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    cdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        ecdf(x[ix])(argv$off_vernc.thresholds)})
-    pdf[1:nr,1:nloc,nlt,nt]<-apply(ya_cv, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
-    var_cdf<-list(name="cdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=cdf)
-    rm(cdf)
-    var_list[[(length(var_list)+1)]]<-var_cdf
-    var_pdf<-list(name="pdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=pdf)
-    rm(pdf)
-    var_list[[(length(var_list)+1)]]<-var_pdf
-    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
-    qx[1:nq,1:nloc,nlt,nt]<-apply(ya_cv,MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
-    var_qx<-list(name="x",
-                 units="",
-                 dim_names=c("quantile","location","leadtime","time"),
-                 vals=qx)
-    rm(qx)
-    var_list[[(length(var_list)+1)]]<-var_qx
-    gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
-    gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
-    gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
-    res<-write_generic_dotnc(nc.file=argv$off_cvvernc_a,
-                             dims=dim_list,
-                             vars=var_list,
-                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res)) 
-      print(paste("ERROR while writing ",argv$off_cvvernc_a))
-    print(paste("written file",argv$off_cvvernc_a))
-    # write off_cvvernc_b (background)
-    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-    fcst[,nlt,nt]<-rowMeans(yb_cv,na.rm=T)
-    var_fcst<-list(name="fcst",
+                   dim_names=c("quantile","location","leadtime","time"),
+                   vals=qx)
+      rm(qx)
+      var_list[[(length(var_list)+1)]]<-var_qx
+      gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
+      gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
+      gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
+      res<-write_generic_dotnc(nc.file=argv$off_cvvernc_a,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res)) 
+        print(paste("ERROR while writing ",argv$off_cvvernc_a))
+      print(paste("written file",argv$off_cvvernc_a))
+      # write off_cvvernc_b (background)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(yb_cv,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+      xval[,,nlt,nt]<-yb_cv
+      var_ens<-list(name="ensemble",
+                    units="",
+                    dim_names=c("ensemble_member","location","leadtime","time"),
+                    vals=xval)
+      rm(xval)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+      pit<-array(data=NA,dim=c(nloc,nlt,nt))
+      pit[,nlt,nt]<-apply(cbind(yb_cv,yo_cv),
+                       MARGIN=1,
+                       FUN=function(x){
+                         if (is.na(x[length(x)])) return(NA)
+                         ix<-which(!is.na(x[1:(length(x)-1)]))
+                         if (length(ix)==0) return(NA)
+                         ecdf(x[ix])(x[length(x)])})
+      var_pit<-list(name="pit",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=pit)
+      rm(pit)
+      var_list[[(length(var_list)+1)]]<-var_pit
+      rm(var_pit)
+      cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      cdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          ecdf(x[ix])(argv$off_vernc.thresholds)})
+      pdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+      var_cdf<-list(name="cdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=cdf)
+      rm(cdf)
+      var_list[[(length(var_list)+1)]]<-var_cdf
+      var_pdf<-list(name="pdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=pdf)
+      rm(pdf)
+      var_list[[(length(var_list)+1)]]<-var_pdf
+      qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+      qx[1:nq,1:nloc,nlt,nt]<-apply(yb_cv,MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+      var_qx<-list(name="x",
                    units="",
-                   dim_names=c("location","leadtime","time"),
-                   vals=fcst)
-    rm(fcst)
-    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
-    xval[,,nlt,nt]<-yb_cv
-    var_ens<-list(name="ensemble",
-                  units="",
-                  dim_names=c("ensemble_member","location","leadtime","time"),
-                  vals=xval)
-    rm(xval)
-    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
-    pit<-array(data=NA,dim=c(nloc,nlt,nt))
-    pit[,nlt,nt]<-apply(cbind(yb_cv,yo_cv),
-                     MARGIN=1,
-                     FUN=function(x){
-                       if (is.na(x[length(x)])) return(NA)
-                       ix<-which(!is.na(x[1:(length(x)-1)]))
-                       if (length(ix)==0) return(NA)
-                       ecdf(x[ix])(x[length(x)])})
-    var_pit<-list(name="pit",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=pit)
-    rm(pit)
-    var_list[[(length(var_list)+1)]]<-var_pit
-    rm(var_pit)
-    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    cdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        ecdf(x[ix])(argv$off_vernc.thresholds)})
-    pdf[1:nr,1:nloc,nlt,nt]<-apply(yb_cv, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
-    var_cdf<-list(name="cdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=cdf)
-    rm(cdf)
-    var_list[[(length(var_list)+1)]]<-var_cdf
-    var_pdf<-list(name="pdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=pdf)
-    rm(pdf)
-    var_list[[(length(var_list)+1)]]<-var_pdf
-    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
-    qx[1:nq,1:nloc,nlt,nt]<-apply(yb_cv,MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
-    var_qx<-list(name="x",
-                 units="",
-                 dim_names=c("quantile","location","leadtime","time"),
-                 vals=qx)
-    rm(qx)
-    var_list[[(length(var_list)+1)]]<-var_qx
-    res<-write_generic_dotnc(nc.file=argv$off_cvvernc_b,
-                             dims=dim_list,
-                             vars=var_list,
-                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res))
-      print(paste("ERROR while writing ",argv$off_cvvernc_b))
-    print(paste("written file",argv$off_cvvernc_b))
+                   dim_names=c("quantile","location","leadtime","time"),
+                   vals=qx)
+      rm(qx)
+      var_list[[(length(var_list)+1)]]<-var_qx
+      res<-write_generic_dotnc(nc.file=argv$off_cvvernc_b,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res))
+        print(paste("ERROR while writing ",argv$off_cvvernc_b))
+      print(paste("written file",argv$off_cvvernc_b))
+    }
   }
 #------------------------------------------------------------------------------
 # non-CVmode
 } else {
   # Station Points - non-CVmode - case of deterministic analysis
   if (is.null(argv$iff_fg.epos)) { 
-    cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver,append=F)
-    cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver,append=T)
-    cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
-        file=argv$off_ver,append=T)
-    if (argv$off_ver_fg!="none" & argv$off_ver_cv!="none") {
-      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb) & !is.na(yav))
-    } else if (argv$off_ver_fg!="none") {
-      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb))
-    } else if (argv$off_ver_cv!="none") {
-      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yav))
-    } else {
-      ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya))
+    # --
+    if (!is.na(argv$off_ver)) {
+      cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver,append=F)
+      cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver,append=T)
+      cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
+          file=argv$off_ver,append=T)
+      if (argv$off_ver_fg!="none" & argv$off_ver_cv!="none") {
+        ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb) & !is.na(yav))
+      } else if (argv$off_ver_fg!="none") {
+        ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yb))
+      } else if (argv$off_ver_cv!="none") {
+        ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya) & !is.na(yav))
+      } else {
+        ix<-which(ydqc.flag<=0 & !is.na(yo) & !is.na(ya))
+      }
+      cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
+                 rep(0,length(ix))," ",
+                 VecS[ix]," ",
+                 VecLat[ix]," ",
+                 VecLon[ix]," ",
+                 elev_for_verif[ix]," ",
+                 round(yo[ix],1)," ",
+                 round(ya[ix],1),"\n",
+                 sep=""),
+          file=argv$off_ver,append=T)
+      print(paste("data saved on file",argv$off_ver))
     }
-    cat(paste( as.numeric(as.POSIXct(argv$date_out, format=argv$date_out_fmt))," ",
-               rep(0,length(ix))," ",
-               VecS[ix]," ",
-               VecLat[ix]," ",
-               VecLon[ix]," ",
-               elev_for_verif[ix]," ",
-               round(yo[ix],1)," ",
-               round(ya[ix],1),"\n",
-               sep=""),
-        file=argv$off_ver,append=T)
-    print(paste("data saved on file",argv$off_ver))
-    if (argv$off_ver_fg!="none") {
+    # --
+    if (!is.na(argv$off_ver_fg)) {
       cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_fg,append=F)
       cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_fg,append=T)
       cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
@@ -4368,7 +4459,8 @@ if (argv$cv_mode|argv$cv_mode_random) {
           file=argv$off_ver_fg,append=T)
       print(paste("data saved on file",argv$off_ver_fg))
     }
-    if (argv$off_ver_cv!="none") {
+    # --
+    if (!is.na(argv$off_ver_cv)) {
       cat(paste0("# variable: ",argv$verif_var,"\n"),file=argv$off_ver_cv,append=F)
       cat(paste0("# units: $",argv$verif_units,"$\n"),file=argv$off_ver_cv,append=T)
       cat("unixtime     leadtime location  lat     lon      altitude obs      fcst\n",
@@ -4385,211 +4477,216 @@ if (argv$cv_mode|argv$cv_mode_random) {
           file=argv$off_ver_cv,append=T)
       print(paste("data saved on file",argv$off_ver_cv))
     }
-    cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
-        file=argv$off_stn,append=F)
-    digxy<-0
-    if (argv$grid_master.proj4==proj4.llwgs84) digxy<-6
-    cat(paste(argv$date_out,
-              formatC(VecS,format="f",digits=0),
-              formatC(VecX,format="f",digits=digxy),
-              formatC(VecY,format="f",digits=digxy),
-              formatC(VecZ,format="f",digits=0),
-              formatC(yo,format="f",digits=1),
-              formatC(yb,format="f",digits=1),
-              formatC(ya,format="f",digits=1),
-              formatC(yav,format="f",digits=1),
-              formatC(ydqc.flag,format="f",digits=0),
-              "\n",sep=";"),
-        file=argv$off_stn,append=T)
-    print(paste("data saved on file",argv$off_stn))
+    # --
+    if (!is.na(argv$off_stn)) {
+      cat("date;sourceId;x;y;z;yo;yb;ya;yav;dqc;\n",
+          file=argv$off_stn,append=F)
+      digxy<-0
+      if (argv$grid_master.proj4==proj4.llwgs84) digxy<-6
+      cat(paste(argv$date_out,
+                formatC(VecS,format="f",digits=0),
+                formatC(VecX,format="f",digits=digxy),
+                formatC(VecY,format="f",digits=digxy),
+                formatC(VecZ,format="f",digits=0),
+                formatC(yo,format="f",digits=1),
+                formatC(yb,format="f",digits=1),
+                formatC(ya,format="f",digits=1),
+                formatC(yav,format="f",digits=1),
+                formatC(ydqc.flag,format="f",digits=0),
+                "\n",sep=";"),
+          file=argv$off_stn,append=T)
+      print(paste("data saved on file",argv$off_stn))
+    }
   # Station Points - non-CVmode - case of ensemble analysis
   } else {
-    # off_vernc_a / off_vernc_b
-    # write off_vernc_a (analysis)
-    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
-                      format="%Y%m%d%H%M",tz="GMT")
-    dim_t<-list(name="time",
-                units="H",
-                vals=tstamp_nc,
-                is_time=T,
-                unlim=T,
-                times.unit="S",
-                times.format="%Y%m%d%H%M",
-                timeref="197001010000",
-                timeref.format="%Y%m%d%H%M")
-    dim_lt<-list(name="leadtime",units="",vals=0)
-    dim_loc<-list(name="location",units="",vals=VecS)
-    dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
-    dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
-    nr<-length(argv$off_vernc.thresholds)
-    nq<-length(argv$off_vernc.quantile)
-    nlt<-1
-    nt<-1
-    nloc<-n0
-    dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
-    dim_list[[(length(dim_list)+1)]]<-dim_r
-    dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
-    dim_list[[(length(dim_list)+1)]]<-dim_q
-    # variables
-    var_lat<-list(name="lat",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(VecLat,dim=c(nloc)))
-    var_lon<-list(name="lon",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(VecLon,dim=c(nloc)))
-    var_ele<-list(name="altitude",
-                  units="",
-                  dim_names=c("location"),
-                  vals=array(elev_for_verif,dim=c(nloc)))
-    obs<-array(data=NA,dim=c(nloc,nlt,nt))
-    obs[,nlt,nt]<-yo
-    var_obs<-list(name="obs",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=obs)
-    rm(obs)
-    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-    fcst[,nlt,nt]<-rowMeans(ya,na.rm=T)
-    var_fcst<-list(name="fcst",
+    if (!is.na(argv$off_vernc_a) & !is.na(argv$off_vernc_b)) { 
+      # off_vernc_a / off_vernc_b
+      # write off_vernc_a (analysis)
+      tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                        format="%Y%m%d%H%M",tz="GMT")
+      dim_t<-list(name="time",
+                  units="H",
+                  vals=tstamp_nc,
+                  is_time=T,
+                  unlim=T,
+                  times.unit="S",
+                  times.format="%Y%m%d%H%M",
+                  timeref="197001010000",
+                  timeref.format="%Y%m%d%H%M")
+      dim_lt<-list(name="leadtime",units="",vals=0)
+      dim_loc<-list(name="location",units="",vals=VecS)
+      dim_ens<-list(name="ensemble_member",units="",vals=argv$iff_fg.e)
+      dim_list<-list(dim_t,dim_lt,dim_loc,dim_ens)
+      nr<-length(argv$off_vernc.thresholds)
+      nq<-length(argv$off_vernc.quantile)
+      nlt<-1
+      nt<-1
+      nloc<-n0
+      dim_r<-list(name="threshold",units="",vals=argv$off_vernc.thresholds)
+      dim_list[[(length(dim_list)+1)]]<-dim_r
+      dim_q<-list(name="quantile",units="",vals=argv$off_vernc.quantile)
+      dim_list[[(length(dim_list)+1)]]<-dim_q
+      # variables
+      var_lat<-list(name="lat",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLat,dim=c(nloc)))
+      var_lon<-list(name="lon",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(VecLon,dim=c(nloc)))
+      var_ele<-list(name="altitude",
+                    units="",
+                    dim_names=c("location"),
+                    vals=array(elev_for_verif,dim=c(nloc)))
+      obs<-array(data=NA,dim=c(nloc,nlt,nt))
+      obs[,nlt,nt]<-yo
+      var_obs<-list(name="obs",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=obs)
+      rm(obs)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(ya,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+      xval[,,nlt,nt]<-ya
+      var_ens<-list(name="ensemble",
+                    units="",
+                    dim_names=c("ensemble_member","location","leadtime","time"),
+                    vals=xval)
+      rm(xval)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+      pit<-array(data=NA,dim=c(nloc,nlt,nt))
+      pit[,nlt,nt]<-apply(cbind(ya,yo),
+                       MARGIN=1,
+                       FUN=function(x){
+                         if (is.na(x[length(x)])) return(NA)
+                         ix<-which(!is.na(x[1:(length(x)-1)]))
+                         if (length(ix)==0) return(NA)
+                         ecdf(x[ix])(x[length(x)])})
+      var_pit<-list(name="pit",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=pit)
+      rm(pit)
+      var_list[[(length(var_list)+1)]]<-var_pit
+      rm(var_pit)
+      cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      cdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          ecdf(x[ix])(argv$off_vernc.thresholds)})
+      pdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+      var_cdf<-list(name="cdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=cdf)
+      rm(cdf)
+      var_list[[(length(var_list)+1)]]<-var_cdf
+      var_pdf<-list(name="pdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=pdf)
+      rm(pdf)
+      var_list[[(length(var_list)+1)]]<-var_pdf
+      qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+      qx[1:nq,1:nloc,nlt,nt]<-apply(ya,MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+      var_qx<-list(name="x",
                    units="",
-                   dim_names=c("location","leadtime","time"),
-                   vals=fcst)
-    rm(fcst)
-    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
-    xval[,,nlt,nt]<-ya
-    var_ens<-list(name="ensemble",
-                  units="",
-                  dim_names=c("ensemble_member","location","leadtime","time"),
-                  vals=xval)
-    rm(xval)
-    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
-    pit<-array(data=NA,dim=c(nloc,nlt,nt))
-    pit[,nlt,nt]<-apply(cbind(ya,yo),
-                     MARGIN=1,
-                     FUN=function(x){
-                       if (is.na(x[length(x)])) return(NA)
-                       ix<-which(!is.na(x[1:(length(x)-1)]))
-                       if (length(ix)==0) return(NA)
-                       ecdf(x[ix])(x[length(x)])})
-    var_pit<-list(name="pit",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=pit)
-    rm(pit)
-    var_list[[(length(var_list)+1)]]<-var_pit
-    rm(var_pit)
-    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    cdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        ecdf(x[ix])(argv$off_vernc.thresholds)})
-    pdf[1:nr,1:nloc,nlt,nt]<-apply(ya, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
-    var_cdf<-list(name="cdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=cdf)
-    rm(cdf)
-    var_list[[(length(var_list)+1)]]<-var_cdf
-    var_pdf<-list(name="pdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=pdf)
-    rm(pdf)
-    var_list[[(length(var_list)+1)]]<-var_pdf
-    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
-    qx[1:nq,1:nloc,nlt,nt]<-apply(ya,MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
-    var_qx<-list(name="x",
-                 units="",
-                 dim_names=c("quantile","location","leadtime","time"),
-                 vals=qx)
-    rm(qx)
-    var_list[[(length(var_list)+1)]]<-var_qx
-    gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
-    gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
-    gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
-    res<-write_generic_dotnc(nc.file=argv$off_vernc_a,
-                             dims=dim_list,
-                             vars=var_list,
-                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res)) {
-      print(paste("ERROR while writing ",argv$off_vernc_a))
-    }
-    print(paste("written file",argv$off_vernc_a))
-    # write off_vernc_b (background)
-    fcst<-array(data=NA,dim=c(nloc,nlt,nt))
-    fcst[,nlt,nt]<-rowMeans(yb,na.rm=T)
-    var_fcst<-list(name="fcst",
+                   dim_names=c("quantile","location","leadtime","time"),
+                   vals=qx)
+      rm(qx)
+      var_list[[(length(var_list)+1)]]<-var_qx
+      gatt_longn<-list(attname="long_name",attval=argv$off_vernc.varname,prec="text")
+      gatt_stdn<-list(attname="standard_name",attval=argv$off_vernc.stdvarname,prec="text")
+      gatt_units<-list(attname="units",attval=argv$off_vernc.varunits,prec="text")
+      res<-write_generic_dotnc(nc.file=argv$off_vernc_a,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res)) {
+        print(paste("ERROR while writing ",argv$off_vernc_a))
+      }
+      print(paste("written file",argv$off_vernc_a))
+      # write off_vernc_b (background)
+      fcst<-array(data=NA,dim=c(nloc,nlt,nt))
+      fcst[,nlt,nt]<-rowMeans(yb,na.rm=T)
+      var_fcst<-list(name="fcst",
+                     units="",
+                     dim_names=c("location","leadtime","time"),
+                     vals=fcst)
+      rm(fcst)
+      xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
+      xval[,,nlt,nt]<-yb
+      var_ens<-list(name="ensemble",
+                    units="",
+                    dim_names=c("ensemble_member","location","leadtime","time"),
+                    vals=xval)
+      rm(xval)
+      var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
+      pit<-array(data=NA,dim=c(nloc,nlt,nt))
+      pit[,nlt,nt]<-apply(cbind(yb,yo),
+                       MARGIN=1,
+                       FUN=function(x){
+                         if (is.na(x[length(x)])) return(NA)
+                         ix<-which(!is.na(x[1:(length(x)-1)]))
+                         if (length(ix)==0) return(NA)
+                         ecdf(x[ix])(x[length(x)])})
+      var_pit<-list(name="pit",
+                    units="",
+                    dim_names=c("location","leadtime","time"),
+                    vals=pit)
+      rm(pit)
+      var_list[[(length(var_list)+1)]]<-var_pit
+      rm(var_pit)
+      cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
+      cdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          ecdf(x[ix])(argv$off_vernc.thresholds)})
+      pdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
+      var_cdf<-list(name="cdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=cdf)
+      rm(cdf)
+      var_list[[(length(var_list)+1)]]<-var_cdf
+      var_pdf<-list(name="pdf",
+                    units="",
+                    dim_names=c("threshold","location","leadtime","time"),
+                    vals=pdf)
+      rm(pdf)
+      var_list[[(length(var_list)+1)]]<-var_pdf
+      qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
+      qx[1:nq,1:nloc,nlt,nt]<-apply(yb,MARGIN=1,
+        FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
+          as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
+      var_qx<-list(name="x",
                    units="",
-                   dim_names=c("location","leadtime","time"),
-                   vals=fcst)
-    rm(fcst)
-    xval<-array(data=NA,dim=c(length(argv$iff_fg.e),nloc,nlt,nt))
-    xval[,,nlt,nt]<-yb
-    var_ens<-list(name="ensemble",
-                  units="",
-                  dim_names=c("ensemble_member","location","leadtime","time"),
-                  vals=xval)
-    rm(xval)
-    var_list<-list(var_lat,var_lon,var_ele,var_obs,var_fcst,var_ens)
-    pit<-array(data=NA,dim=c(nloc,nlt,nt))
-    pit[,nlt,nt]<-apply(cbind(yb,yo),
-                     MARGIN=1,
-                     FUN=function(x){
-                       if (is.na(x[length(x)])) return(NA)
-                       ix<-which(!is.na(x[1:(length(x)-1)]))
-                       if (length(ix)==0) return(NA)
-                       ecdf(x[ix])(x[length(x)])})
-    var_pit<-list(name="pit",
-                  units="",
-                  dim_names=c("location","leadtime","time"),
-                  vals=pit)
-    rm(pit)
-    var_list[[(length(var_list)+1)]]<-var_pit
-    rm(var_pit)
-    cdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    pdf<-array(data=NA,dim=c(nr,nloc,nlt,nt))
-    cdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        ecdf(x[ix])(argv$off_vernc.thresholds)})
-    pdf[1:nr,1:nloc,nlt,nt]<-apply(yb, MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        approxfun(density(x[ix]),yleft=0,yright=0)(argv$off_vernc.thresholds)})
-    var_cdf<-list(name="cdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=cdf)
-    rm(cdf)
-    var_list[[(length(var_list)+1)]]<-var_cdf
-    var_pdf<-list(name="pdf",
-                  units="",
-                  dim_names=c("threshold","location","leadtime","time"),
-                  vals=pdf)
-    rm(pdf)
-    var_list[[(length(var_list)+1)]]<-var_pdf
-    qx<-array(data=NA,dim=c(nq,nloc,nlt,nt))
-    qx[1:nq,1:nloc,nlt,nt]<-apply(yb,MARGIN=1,
-      FUN=function(x){ix<-which(!is.na(x)); if (length(ix)==0) return(NA)
-        as.vector(quantile(x[ix],probs=argv$off_vernc.quantile))})
-    var_qx<-list(name="x",
-                 units="",
-                 dim_names=c("quantile","location","leadtime","time"),
-                 vals=qx)
-    rm(qx)
-    var_list[[(length(var_list)+1)]]<-var_qx
-    res<-write_generic_dotnc(nc.file=argv$off_vernc_b,
-                             dims=dim_list,
-                             vars=var_list,
-                             glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
-    if (is.null(res)) {
-      print(paste("ERROR while writing ",argv$off_vernc_b))
+                   dim_names=c("quantile","location","leadtime","time"),
+                   vals=qx)
+      rm(qx)
+      var_list[[(length(var_list)+1)]]<-var_qx
+      res<-write_generic_dotnc(nc.file=argv$off_vernc_b,
+                               dims=dim_list,
+                               vars=var_list,
+                               glob_attrs=list(gatt_longn,gatt_stdn,gatt_units))
+      if (is.null(res)) {
+        print(paste("ERROR while writing ",argv$off_vernc_b))
+      }
+      print(paste("written file",argv$off_vernc_b))
     }
-    print(paste("written file",argv$off_vernc_b))
   }
 #------------------------------------------------------------------------------
   # Gridpoints - non-CVmode(only)
@@ -4597,43 +4694,58 @@ if (argv$cv_mode|argv$cv_mode_random) {
   # to customize the output, use the config argument "off_grd.variables"
   # default output: just the analysis
   if (!argv$twostep_nogrid) {
-    if (!exists("r.list")) {
-      r.list<-list()
-      r.list[[1]]<-matrix(data=getValues(ra),
-                          ncol=length(y),
-                          nrow=length(x))
+    if (!is.na(argv$off_grd)) {
+      if (!exists("r.list")) r.list<-list()
+      r<-rmaster; r[]<-NA
+      for (i in 1:length(argv$off_grd.variables)) {
+        if (argv$off_grd.variables[i]=="analysis") {
+          if (!exists("xa") | length(xa)!=length(aix)) {xa<-aix;xa[]<-NA}
+          r[aix]<-xa
+        } else if (argv$off_grd.variables[i]=="background") {
+          if (!exists("xb") | length(xb)!=length(aix)) {xb<-aix;xb[]<-NA}
+          r[aix]<-xb
+        } else if (argv$off_grd.variables[i]=="idi") {
+          if (!exists("xidi") | length(xidi)!=length(aix)) {xidi<-aix;xidi[]<-NA}
+          r[aix]<-xidi
+        } else if (argv$off_grd.variables[i]=="observations") {
+          r<-rasterize(x=cbind(VecX,VecY),y=rmaster,field=yo,fun=mean,na.rm=T)
+        } 
+        r.list[[i]]<-matrix(data=getValues(r),
+                            ncol=length(y),
+                            nrow=length(x))
+      }
+      # define time for output
+      tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                        format="%Y%m%d%H%M",tz="GMT")
+      time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
+                                               length=2,by=argv$time_bnds_string)),
+                       format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
+      out<-write_dotnc(grid.list=r.list,
+                       file.name=argv$off_grd,
+                       grid.type=argv$off_grd.grid,
+                       x=x,
+                       y=y,
+                       var.name=argv$off_grd.varname,
+                       var.longname=argv$off_grd.varlongname,
+                       var.standardname=argv$off_grd.varstandardname,
+                       var.version=argv$off_grd.varversion,
+                       var.unit=argv$off_grd.varunit,
+                       times=tstamp_nc,
+                       times.unit=argv$off_grd.timesunit,
+                       reference=argv$off_grd.reference,
+                       proj4.string=argv$grid_master.proj4,
+                       lonlat.out=argv$off_grd.write_lonlat,
+                       round.dig=argv$off_grd.diground,
+                       summary=argv$off_grd.summary,
+                       source.string=argv$off_grd.sourcestring,
+                       title=argv$off_grd.title,
+                       comment=argv$off_grd.comment,
+                       atts.var.add=NULL,
+                       var.cell_methods=argv$off_grd.cell_methods,
+                       time_bnds=time_bnds,
+                       cf_1.7=T)
+      print(paste("data saved on file",argv$off_grd))
     }
-    # define time for output
-    tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
-                      format="%Y%m%d%H%M",tz="GMT")
-    time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
-                                             length=2,by=argv$time_bnds_string)),
-                     format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
-    out<-write_dotnc(grid.list=r.list,
-                     file.name=argv$off_grd,
-                     grid.type=argv$off_grd.grid,
-                     x=x,
-                     y=y,
-                     var.name=argv$off_grd.varname,
-                     var.longname=argv$off_grd.varlongname,
-                     var.standardname=argv$off_grd.varstandardname,
-                     var.version=argv$off_grd.varversion,
-                     var.unit=argv$off_grd.varunit,
-                     times=tstamp_nc,
-                     times.unit=argv$off_grd.timesunit,
-                     reference=argv$off_grd.reference,
-                     proj4.string=argv$grid_master.proj4,
-                     lonlat.out=argv$off_grd.write_lonlat,
-                     round.dig=argv$off_grd.diground,
-                     summary=argv$off_grd.summary,
-                     source.string=argv$off_grd.sourcestring,
-                     title=argv$off_grd.title,
-                     comment=argv$off_grd.comment,
-                     atts.var.add=NULL,
-                     var.cell_methods=argv$off_grd.cell_methods,
-                     time_bnds=time_bnds,
-                     cf_1.7=T)
-    print(paste("data saved on file",argv$off_grd))
   }
 }
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
