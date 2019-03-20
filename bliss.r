@@ -844,6 +844,7 @@ oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
     if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+    if (length(ixa)==0) return(c(xb_spint[i],0,NA,0,idiv,av))
   }
   rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
   if (length(ixa)>pmax) {
@@ -894,6 +895,7 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F) {
     if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+    if (length(ixa)==0) return(c(xb_spint[i],0,NA,0,idiv,av))
   }
   distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
   rloc<-(1+distnorm)*exp(-distnorm)
