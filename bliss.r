@@ -1094,6 +1094,7 @@ p <- add_argument(p, "--oimult.Dh_idi",
                   help="OI multiscale, optional, horizontal de-corellation length scale for IDI (km)",
                   type="numeric",
                   default=NULL)
+# NOTE: ovarc is somewhat equivalent to oifg.eps2_r...
 p <- add_argument(p, "--ovarc",
                   help="observation error variance correction factor",
                   type="numeric",
@@ -1910,9 +1911,9 @@ if (!is.na(argv$off_cv_table)   | !is.na(argv$off_cvt_table)   |
 if (!is.na(argv$off_lcv_table)   | !is.na(argv$off_lcvt_table)   |
     !is.na(argv$off_lcv_verif_a) | !is.na(argv$off_lcvt_verif_a) |
     !is.na(argv$off_lcv_verif_b) | !is.na(argv$off_lcvt_verif_b) ) {
-  lcv_elab<-T
+  loocv_elab<-T
 } else {
-  lcv_elab<-F
+  loocv_elab<-F
 }
 #
 #
@@ -2671,6 +2672,9 @@ if (argv$verbose) {
 #..............................................................................
 # ===> OI with deterministic background  <===
 if (argv$mode=="OI_firstguess") {
+  if (argv$verbose) {
+    print("OI_firstguess")
+  }
   # set eps2 (station-dependent and value-dependent)
   eps2<-vector(mode="numeric",length=n0)
   ixdef<-which(is.na(argv$oifg.eps2_prId))
@@ -2891,11 +2895,6 @@ if (argv$mode=="OI_firstguess") {
                       pmax=argv$pmax))
       }
     }
-    if (argv$verbose) {
-      t11<-Sys.time()
-      print(paste("oi gridpoint by gridpoint, time=",
-                  round(t11-t00,1),attr(t11-t00,"unit")))
-    }
     yidi_cv<-arr[,4]
     if (argv$idiv_instead_of_elev) {
       elev_for_verif_cv<-yidi_cv
@@ -2905,6 +2904,7 @@ if (argv$mode=="OI_firstguess") {
     if (argv$transf=="Box-Cox") {
       yta_cv<-arr[,1]
       ytb_cv<-xb_spint
+      yto_cv<-boxcox(yo_cv,argv$transf.boxcox_lambda)
       brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
       ya_cv<-apply(cbind(yta_cv,sqrt(abs(arr[,2]))),
                        MARGIN=1,
@@ -2915,6 +2915,11 @@ if (argv$mode=="OI_firstguess") {
       ya_cv<-arr[,1]
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("cv_elab, time=",
+                  round(t11-t00,1),attr(t11-t00,"unit")))
+    }
   } # end cv_elab
   #
   # -- elaboration on station points, loocv_elab --
@@ -4409,15 +4414,15 @@ if (!is.na(argv$off_cv_table)) {
   cat("date;sourceId;x;y;z;yo_cv;yb_cv;ya_cv;yidi_cv;dqc;\n",
       file=argv$off_cv_table,append=F)
   cat(paste(argv$date_out,
-            formatC(VecS,format="f",digits=0),
-            formatC(VecX,format="f",digits=0),
-            formatC(VecY,format="f",digits=0),
-            formatC(VecZ,format="f",digits=0),
+            formatC(VecS_cv,format="f",digits=0),
+            formatC(VecX_cv,format="f",digits=0),
+            formatC(VecY_cv,format="f",digits=0),
+            formatC(VecZ_cv,format="f",digits=0),
             formatC(yo_cv,format="f",digits=2),
             formatC(yb_cv,format="f",digits=2),
             formatC(ya_cv,format="f",digits=2),
             formatC(yidi_cv,format="f",digits=4),
-            rep(0,length(VecS)),
+            rep(0,length(VecS_cv)),
             "\n",sep=";"),
       file=argv$off_cv_table,append=T)
   print(paste("output saved on file",argv$off_cv_table))
@@ -4429,15 +4434,15 @@ if (!is.na(argv$off_cvt_table)) {
   cat("date;sourceId;x;y;z;yto_cv;ytb_cv;yta_cv;yidi_cv;dqc;\n",
       file=argv$off_cvt_table,append=F)
   cat(paste(argv$date_out,
-            formatC(VecS,format="f",digits=0),
-            formatC(VecX,format="f",digits=0),
-            formatC(VecY,format="f",digits=0),
-            formatC(VecZ,format="f",digits=0),
+            formatC(VecS_cv,format="f",digits=0),
+            formatC(VecX_cv,format="f",digits=0),
+            formatC(VecY_cv,format="f",digits=0),
+            formatC(VecZ_cv,format="f",digits=0),
             formatC(yto_cv,format="f",digits=2),
             formatC(ytb_cv,format="f",digits=2),
             formatC(yta_cv,format="f",digits=2),
             formatC(yidi_cv,format="f",digits=4),
-            rep(0,length(VecS)),
+            rep(0,length(VecS_cv)),
             "\n",sep=";"),
       file=argv$off_cvt_table,append=T)
   print(paste("output saved on file",argv$off_cvt_table))
@@ -4492,86 +4497,86 @@ for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,
                argv$off_cv_verif_a,argv$off_cv_verif_b,
                argv$off_cvt_verif_a,argv$off_cvt_verif_b,
                argv$off_lcv_verif_a,argv$off_lcv_verif_b,
-               argv$off_lcvt_verif_a,argv$off_lcvt_verif_b,)) {
+               argv$off_lcvt_verif_a,argv$off_lcvt_verif_b)) {
   if (is.na(file)) next
-  if (file==argv$off_y_verif_a) {
+  if (file==argv$off_y_verif_a & !is.na(argv$off_y_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif
     obs_vals<-yo
     fcst_vals<-ya
-  } else if (file==argv$off_y_verif_b) {
+  } else if (file==argv$off_y_verif_b & !is.na(argv$off_y_verif_b)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif
     obs_vals<-yo
     fcst_vals<-yb
-  } else if (file==argv$off_yt_verif_a) {
+  } else if (file==argv$off_yt_verif_a & !is.na(argv$off_yt_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif
     obs_vals<-yto
     fcst_vals<-yta
-  } else if (file==argv$off_yt_verif_b) {
+  } else if (file==argv$off_yt_verif_b & !is.na(argv$off_yt_verif_b)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif
     obs_vals<-yto
     fcst_vals<-ytb
-  } else if (file==argv$off_cv_verif_a) {
+  } else if (file==argv$off_cv_verif_a & !is.na(argv$off_cv_verif_a)) {
     loc_vals<-VecS_cv
     lat_vals<-VecLat_cv
     lon_vals<-VecLon_cv
     elev_vals<-elev_for_verif_cv
     obs_vals<-yo_cv
     fcst_vals<-ya_cv
-  } else if (file==argv$off_cv_verif_b) {
+  } else if (file==argv$off_cv_verif_b & !is.na(argv$off_cv_verif_b)) {
     loc_vals<-VecS_cv
     lat_vals<-VecLat_cv
     lon_vals<-VecLon_cv
     elev_vals<-elev_for_verif_cv
     obs_vals<-yo_cv
     fcst_vals<-yb_cv
-  } else if (file==argv$off_cvt_verif_a) {
+  } else if (file==argv$off_cvt_verif_a & !is.na(argv$off_cvt_verif_a)) {
     loc_vals<-VecS_cv
     lat_vals<-VecLat_cv
     lon_vals<-VecLon_cv
     elev_vals<-elev_for_verif_cv
     obs_vals<-yto_cv
     fcst_vals<-yta_cv
-  } else if (file==argv$off_cvt_verif_b) {
+  } else if (file==argv$off_cvt_verif_b & !is.na(argv$off_cvt_verif_b)) {
     loc_vals<-VecS_cv
     lat_vals<-VecLat_cv
     lon_vals<-VecLon_cv
     elev_vals<-elev_for_verif_cv
     obs_vals<-yto_cv
     fcst_vals<-ytb_cv
-  } else if (file==argv$off_lcv_verif_a) {
+  } else if (file==argv$off_lcv_verif_a & !is.na(argv$off_lcv_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif_lcv
     obs_vals<-yo_lcv
     fcst_vals<-ya_lcv
-  } else if (file==argv$off_lcv_verif_b) {
+  } else if (file==argv$off_lcv_verif_b & !is.na(argv$off_lcv_verif_b)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif_lcv
     obs_vals<-yo_lcv
     fcst_vals<-yb_lcv
-  } else if (file==argv$off_lcvt_verif_a) {
+  } else if (file==argv$off_lcvt_verif_a & !is.na(argv$off_lcvt_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
     elev_vals<-elev_for_verif_lcv
     obs_vals<-yto_lcv
     fcst_vals<-yta_lcv
-  } else if (file==argv$off_lcvt_verif_b) {
+  } else if (file==argv$off_lcvt_verif_b & !is.na(argv$off_lcvt_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
