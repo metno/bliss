@@ -823,22 +823,26 @@ obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
 #}
 # optimal interpolation - correlation function "gaussian"
 oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
-# return(c(xa,xa_errvar,o_errvar,xidi,idiv))
+# return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
+# NOTE: av is the leave-one-out CV. However, its errvar is not returned.
+#       todo: figure out how to compute the leave-one-out errvar.
   deltax<-abs(xgrid_spint[i]-VecX)
   deltay<-abs(ygrid_spint[i]-VecY)
   if (y_elab) {
+    av<-yb_spint[i]
     idiv<-0
     xidi<-1/(1+eps2[i])
-    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv))
-    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv))
+    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
+    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
     exclude_i<-rep(T,n0)
     if (loocv) exclude_i[i]<-F
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv))
+    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv,av))
   } else {
     idiv<-NA
-    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv))
-    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv))
+    av<-NA
+    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
+    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
   }
   rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
@@ -859,32 +863,36 @@ oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
   xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa]))) * 
              (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
   xa<-xb_spint[i]+sum(rloc*as.vector(SRinv_di))
-  if (y_elab) {
+  if (y_elab & !loocv) {
     ii<-which(ixa==i)
     Wii<-sum(rloc*SRinv[ii,])
     idiv<-(xidi-Wii)/(1-Wii)
-#    av<-(xa-Wii*yo[ii])/(1-Wii)
+    av<-(xa-Wii*yo_spint[i])/(1-Wii)
   }
-  return(c(xa,xa_errvar,o_errvar,xidi,idiv))
+  return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 }
 # optimal interpolation - correlation function "soar"
-oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax) {
-# return(c(xa,xa_errvar,o_errvar,xidi,idiv))
+oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F) {
+# return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
+# NOTE: av is the leave-one-out CV. However, its errvar is not returned.
+#       todo: figure out how to compute the leave-one-out errvar.
   deltax<-abs(xgrid_spint[i]-VecX)
   deltay<-abs(ygrid_spint[i]-VecY)
   if (y_elab) {
+    av<-NA
     idiv<-0
     xidi<-1/(1+eps2[i])
-    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv))
-    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv))
+    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
+    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
     exclude_i<-rep(T,n0)
     if (loocv) exclude_i[i]<-F
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv))
+    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv,av))
   } else {
+    av<-NA
     idiv<-NA
-    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv))
-    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv))
+    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
+    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
   }
   distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
@@ -909,13 +917,13 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax) {
   xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa])),na.rm=T) * 
            (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
   xa<-xb_spint[i]+sum(rloc*as.vector(SRinv_di))
-  if (y_elab) {
+  if (y_elab & !loocv) {
     ii<-which(ixa==i)
     Wii<-sum(rloc*SRinv[ii,])
     idiv<-(xidi-Wii)/(1-Wii)
-#    av<-(xa-Wii*yo[ii])/(1-Wii)
+    av<-(xa-Wii*yo_spint[i])/(1-Wii)
   }
-  return(c(xa,xa_errvar,o_errvar,xidi,idiv))
+  return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 }
 # optimal interpolation - correlation function "gaussian"
 #oi_var_stnpoint_by_stnpoint_gaussian<-function(i,pmax,loocv=F) {
@@ -1280,12 +1288,20 @@ p <- add_argument(p, "--off_y_verif_a",
                   help="full file name for output at station locations analysis vs obs, verif format (nc)",
                   type="character",
                   default=NA)
+p <- add_argument(p, "--off_y_verif_av",
+                  help="full file name for output at station locations cv-analysis vs obs, verif format (nc)",
+                  type="character",
+                  default=NA)
 p <- add_argument(p, "--off_y_verif_b",
                   help="full file name for output at station locations background vs obs, verif format (nc)",
                   type="character",
                   default=NA)
 p <- add_argument(p, "--off_yt_verif_a",
                   help="full file name for output at station locations analysis vs obs, verif format, transformed values (nc)",
+                  type="character",
+                  default=NA)
+p <- add_argument(p, "--off_yt_verif_av",
+                  help="full file name for output at station locations cv-analysis vs obs, verif format, transformed values (nc)",
                   type="character",
                   default=NA)
 p <- add_argument(p, "--off_yt_verif_b",
@@ -2831,17 +2847,22 @@ if (argv$mode=="OI_firstguess") {
       elev_for_verif_y<-VecZ
     }
     if (argv$transf=="Box-Cox") {
+      # NOTE: if no transformation, yav is the leave-one-out cv.
+      #       if transformation, yav is not the leave-one-out cv.
       yta<-arr[,1]
       ytb<-yb_spint
       yto<-yo_spint
+      ytav<-arr[,6]
       brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
       ya<-apply(cbind(yta,sqrt(abs(arr[,2]))),
                       MARGIN=1,
                       FUN=tboxcox4pdf_apply,
                           lambda=argv$transf.boxcox_lambda,
                           brrinf=brrinf)
+      yav<-tboxcox(ytav,argv$transf.boxcox_lambda)
     } else {
       ya<-arr[,1]
+      yav<-arr[,6]
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
     if (argv$verbose) {
@@ -2924,7 +2945,6 @@ if (argv$mode=="OI_firstguess") {
   #
   # -- elaboration on station points, loocv_elab --
   if (loocv_elab) {
-    print("@@@ STILL TO TEST @@@")
     t00<-Sys.time()
     xgrid_spint<-VecX
     ygrid_spint<-VecY
@@ -2989,7 +3009,7 @@ if (argv$mode=="OI_firstguess") {
     }
     if (argv$verbose) {
       t11<-Sys.time()
-      print(paste("oi stnpoint by stnpoint, time=",
+      print(paste("loocv_elab, time=",
                   round(t11-t00,1),attr(t11-t00,"unit")))
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
@@ -4369,7 +4389,7 @@ if (argv$verbose) print("++ Output")
 #
 # table
 if (!is.na(argv$off_y_table)) { 
-  cat("date;sourceId;x;y;z;yo;yb;ya;yidi;yidiv;dqc;\n",
+  cat("date;sourceId;x;y;z;yo;yb;ya;yav;yidi;yidiv;dqc;\n",
       file=argv$off_y_table,append=F)
   cat(paste(argv$date_out,
             formatC(VecS,format="f",digits=0),
@@ -4379,6 +4399,7 @@ if (!is.na(argv$off_y_table)) {
             formatC(yo,format="f",digits=2),
             formatC(yb,format="f",digits=2),
             formatC(ya,format="f",digits=2),
+            formatC(yav,format="f",digits=2),
             formatC(yidi,format="f",digits=4),
             formatC(yidiv,format="f",digits=4),
             rep(0,length(VecS)),
@@ -4390,7 +4411,7 @@ if (!is.na(argv$off_y_table)) {
 #
 # table
 if (!is.na(argv$off_yt_table)) { 
-  cat("date;sourceId;x;y;z;yto;ytb;yta;yidi;yidiv;dqc;\n",
+  cat("date;sourceId;x;y;z;yto;ytb;yta;ytav;yidi;yidiv;dqc;\n",
       file=argv$off_yt_table,append=F)
   cat(paste(argv$date_out,
             formatC(VecS,format="f",digits=0),
@@ -4400,6 +4421,7 @@ if (!is.na(argv$off_yt_table)) {
             formatC(yto,format="f",digits=2),
             formatC(ytb,format="f",digits=2),
             formatC(yta,format="f",digits=2),
+            formatC(ytav,format="f",digits=2),
             formatC(yidi,format="f",digits=4),
             formatC(yidiv,format="f",digits=4),
             rep(0,length(VecS)),
@@ -4492,8 +4514,8 @@ if (!is.na(argv$off_lcvt_table)) {
 #------------------------------------------------------------------------------
 #
 # verif
-for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,
-               argv$off_yt_verif_a,argv$off_yt_verif_b,
+for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,argv$off_y_verif_av,
+               argv$off_yt_verif_a,argv$off_yt_verif_b,argv$off_yt_verif_av,
                argv$off_cv_verif_a,argv$off_cv_verif_b,
                argv$off_cvt_verif_a,argv$off_cvt_verif_b,
                argv$off_lcv_verif_a,argv$off_lcv_verif_b,
@@ -4503,30 +4525,44 @@ for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
-    elev_vals<-elev_for_verif
+    elev_vals<-elev_for_verif_y
     obs_vals<-yo
     fcst_vals<-ya
   } else if (file==argv$off_y_verif_b & !is.na(argv$off_y_verif_b)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
-    elev_vals<-elev_for_verif
+    elev_vals<-elev_for_verif_y
     obs_vals<-yo
     fcst_vals<-yb
+  } else if (file==argv$off_y_verif_av & !is.na(argv$off_y_verif_av)) {
+    loc_vals<-VecS
+    lat_vals<-VecLat
+    lon_vals<-VecLon
+    elev_vals<-elev_for_verif_y
+    obs_vals<-yo
+    fcst_vals<-yav
   } else if (file==argv$off_yt_verif_a & !is.na(argv$off_yt_verif_a)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
-    elev_vals<-elev_for_verif
+    elev_vals<-elev_for_verif_y
     obs_vals<-yto
     fcst_vals<-yta
   } else if (file==argv$off_yt_verif_b & !is.na(argv$off_yt_verif_b)) {
     loc_vals<-VecS
     lat_vals<-VecLat
     lon_vals<-VecLon
-    elev_vals<-elev_for_verif
+    elev_vals<-elev_for_verif_y
     obs_vals<-yto
     fcst_vals<-ytb
+  } else if (file==argv$off_yt_verif_av & !is.na(argv$off_yt_verif_av)) {
+    loc_vals<-VecS
+    lat_vals<-VecLat
+    lon_vals<-VecLon
+    elev_vals<-elev_for_verif_y
+    obs_vals<-yto
+    fcst_vals<-ytav
   } else if (file==argv$off_cv_verif_a & !is.na(argv$off_cv_verif_a)) {
     loc_vals<-VecS_cv
     lat_vals<-VecLat_cv
