@@ -240,31 +240,131 @@ boxcox<-function(x,lambda) {
   }
 }
 
-#+
-tboxcox4pdf_apply<-function(par,
-                            lambda,
-                            brrinf,
-                            int=400) {
-  mean<-par[1]
-  sd<-par[2]
-  if (mean<brrinf) return(0)
-  if (sd==0) return(tboxcox(mean,lambda))
-  aux<-qnorm(mean=mean,sd=sd,p=seq(1/int,(1-1/int),length=(int-1)))
-  if (lambda!=0) aux[aux<(-1/lambda)]<-(-1/lambda)
-  mean(tboxcox(aux,lambda=lambda))
-}
 
-#+
-tboxcox<-function(x,lambda,brrinf=-100) {
-  if (lambda==0) {
-    res<-exp(x)
+#+ Box-Cox back-transformation function for precipitation values
+tboxcox<-function(x=NULL,
+                  x_mean_sd_in_xbctmp=F,
+                  lambda=0.5,
+                  threshold=NA,
+                  distribution=F,
+                  statistics=NULL,
+                  method=NULL,
+                  p=NULL) {
+#------------------------------------------------------------------------------
+# x. numeric. It can be either an array of values to be back-transformed or
+#             a distribution of Box-Cox transformed values to be used to 
+#             estimate the mean (expected) value of the back-transformed
+#             non-Gaussian distribution
+# lambda. numeric. Box-Cox transformation parameter
+# threshold. numeric. Box-Cox transformed rain/no-rain threshold (used only if
+#                     distribution is TRUE)
+# distribution. logical. TRUE=x values define an empirical Gaussian distribution
+#                        FALSE=x values are an array of (independent) numbers
+# statistics character. distribution statistics to be computed
+#                       "mean_sd" mean and (pseuso) standard-deviation
+#                       "quantile" quantile corresponding to probability p
+# method. character. Approach to compute the back-transformed mean for a 
+#                    distribution or values: "quantile" or "Taylor"
+# p. numeric. probability (0-1) for quantile statistics
+#==============================================================================
+  if (is.null(x)) return(NULL)
+  # DITRIBUTION=F
+  if (!distribution) {
+    if (lambda==0) {
+      return(exp(x))
+    } else {
+      return((1+lambda*x)**(1./lambda))
+    }
+  # DITRIBUTION=T
   } else {
-    res<-(1+lambda*x)**(1./lambda)
-  }
-  if (any(x<brrinf)) res[which(x<brrinf)]<-0
-#print(paste("tboxcox",length(which(x<brrinf)),length(which(x<=brrinf))))
-  res
-}
+    if (is.null(statistics)) {
+      print("ERROR in tboxcox: distribution=T and statistics is NULL")
+      return(NULL)
+    }
+    if (!(statistics %in% c("mean_sd","quantile"))) {
+      print("ERROR in tboxcox: distribution=T and statistics is not defined")
+      return(NULL)
+    }
+    #
+    if (!x_mean_sd_in_xbctmp) {
+      if (length(x)<=1) return(c(NA,NA))
+      mean<-mean(x,na.rm=T)
+      if (is.na(mean)) return(c(NA,NA))
+      if (!is.na(threshold)) {
+       n0<-length(which(x<threshold))
+       if (n0>(0.5*length(x))) return(c(0,0))
+      }
+      sd<-sd(x,na.rm=T)
+    } else {
+      mean<-xbctmp[x,1]
+      sd<-xbctmp[x,2]
+    }
+    if (mean<threshold) return(c(0,0))
+    if (sd==0) return(tboxcox(mean,lambda=lambda,distribution=F))
+    #
+    if (statistics=="mean_sd") {
+      if (is.null(method)) {
+        print("ERROR in tboxcox: distribution=T and statistics=\"mean_sd\" and method is NULL")
+        return(NULL)
+      }
+      if (!(method %in% c("quantile","Taylor"))) return(NULL)
+      if (method=="quantile") {
+        qn<-qnorm(mean=mean,sd=sd,p=seq(1/400,(1-1/400),length=399))
+        if (lambda!=0) qn[qn<(-1/lambda)]<-(-1/lambda)
+        tqn<-tboxcox(qn,lambda=lambda,distribution=F)
+        tmean<-mean(tqn)
+        # robust estimator of the (pseudo) standard deviation for a non-Gaussian distribution (Lanzante)
+        tsd<-diff(as.vector(quantile(tqn,probs=c(0.25,0.75))))/1.349
+      } else if (method=="Taylor") {
+        if (lambda==0) {
+          f<- exp(mean)
+          f1<-exp(mean)
+          f2<-exp(mean)
+        } else {
+          f<- (lambda*mean+1)**(1/lambda)
+          f1<-(lambda*mean+1)**(1/lambda-1) # first derivative
+          f2<-(1-lambda)*(lambda*mean+1)**(1/lambda-2) # second der
+        }
+        # mean and standard deviation in back-transformed space (2nd order approx)
+        tmean<-f+0.5*sd*sd*f2
+        tsd<-sqrt(f1**2 * sd**2 + 0.5 * f2**2 * sd**4)
+      } # end if over methods
+      return(c(tmean,tsd))
+    } else if (statistics=="quantile") {
+      if (is.null(p)) {
+        print("ERROR in tboxcox: distribution=T and statistics=\"quantile\" and p is NULL")
+        return(NULL)
+      }
+      return(tboxcox(qnorm(mean=mean,sd=sd,p=p),lambda=lambda,distribution=F))
+    } # end if statistics
+  } # end if over array/distribution
+} # end function
+
+##+
+#tboxcox4pdf_apply<-function(par,
+#                            lambda,
+#                            brrinf,
+#                            int=400) {
+#  mean<-par[1]
+#  sd<-par[2]
+#  if (mean<brrinf) return(0)
+#  if (sd==0) return(tboxcox(mean,lambda))
+#  aux<-qnorm(mean=mean,sd=sd,p=seq(1/int,(1-1/int),length=(int-1)))
+#  if (lambda!=0) aux[aux<(-1/lambda)]<-(-1/lambda)
+#  mean(tboxcox(aux,lambda=lambda))
+#}
+#
+##+
+#tboxcox<-function(x,lambda,brrinf=-100) {
+#  if (lambda==0) {
+#    res<-exp(x)
+#  } else {
+#    res<-(1+lambda*x)**(1./lambda)
+#  }
+#  if (any(x<brrinf)) res[which(x<brrinf)]<-0
+##print(paste("tboxcox",length(which(x<brrinf)),length(which(x<=brrinf))))
+#  res
+#}
 
 #------------------------------------------------------------------------------
 # code specific for Temperature
@@ -763,59 +863,13 @@ obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
 }
 
 #------------------------------------------------------------------------------
-# optimal interpolation - correlation function "gaussian"
-oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_min=0.001) {
-# return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
-# NOTE: av is the leave-one-out CV. However, its errvar is not returned.
-#       todo: figure out how to compute the leave-one-out errvar.
-  deltax<-abs(xgrid_spint[i]-VecX)
-  deltay<-abs(ygrid_spint[i]-VecY)
-  if (y_elab) {
-    av<-yb_spint[i]
-    idiv<-0
-    xidi<-1/(1+eps2[i])
-    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
-    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
-    exclude_i<-rep(T,n0)
-    if (loocv) exclude_i[i]<-F
-    ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv,av))
-  } else {
-    idiv<-NA
-    av<-NA
-    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
-    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
-    ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
-    if (length(ixa)==0) return(c(xb_spint[i],0,NA,0,idiv,av))
-  }
-  rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
-  if (length(ixa)>pmax) {
-    ixb<-order(rloc, decreasing=T)[1:pmax]
-    rloc<-rloc[ixb]
-    ixa<-ixa[ixb]
-    rm(ixb)
-  }
-  di<-yo_spint[ixa]-yb_spint[ixa]
-  S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-               outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
-  SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
-  xidi<-sum(rloc*as.vector(rowSums(SRinv)))
-  SRinv_di<-crossprod(SRinv,di)       
-  o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
-  rm(S)
-  xa_errvar<-max(xa_errvar_min,(o_errvar/ mean(eps2[ixa]))) * 
-             (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
-  xa<-xb_spint[i]+sum(rloc*as.vector(SRinv_di))
-  if (y_elab & !loocv) {
-    ii<-which(ixa==i)
-    Wii<-sum(rloc*SRinv[ii,])
-    idiv<-(xidi-Wii)/(1-Wii)
-    av<-(xa-Wii*yo_spint[i])/(1-Wii)
-  }
-  return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
-}
-# optimal interpolation - correlation function "soar"
-oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_min=0.001) {
+# optimal interpolation 
+oi_var_gridpoint_by_gridpoint<-function(i,
+                                        corr="soar",
+                                        pmax,
+                                        y_elab=F,
+                                        loocv=F,
+                                        xa_errvar_min=0.001) {
 # return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 # NOTE: av is the leave-one-out CV. However, its errvar is not returned.
 #       todo: figure out how to compute the leave-one-out errvar.
@@ -839,9 +893,13 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_m
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
     if (length(ixa)==0) return(c(xb_spint[i],0,NA,0,idiv,av))
   }
-  distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
-  rloc<-(1+distnorm)*exp(-distnorm)
-  rm(distnorm)
+  if (corr="gaussian") {
+    rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
+  } else if (corr="soar")  {
+    distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
+    rloc<-(1+distnorm)*exp(-distnorm)
+    rm(distnorm)
+  }
   if (length(ixa)>pmax) {
     ixb<-order(rloc, decreasing=T)[1:pmax]
     rloc<-rloc[ixb]
@@ -849,10 +907,16 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_m
     rm(ixb)
   }
   di<-yo_spint[ixa]-yb_spint[ixa]
-  distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-                 outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh 
-  S<-(1+distnorm)*exp(-distnorm)
-  rm(distnorm)
+  if (corr="gaussian") {
+    S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                 outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
+  } else if (corr="soar")  {
+    distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
+                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh 
+    S<-(1+distnorm)*exp(-distnorm)
+    rm(distnorm)
+  }
+
   SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
   xidi<-sum(rloc*as.vector(rowSums(SRinv)))
   SRinv_di<-crossprod(SRinv,di)       
@@ -2618,39 +2682,58 @@ if (argv$mode=="OI_firstguess") {
     # multicores
     # xa=arr[,1], xa_errvar=arr[,2], o_errvar=arr[,3], xidi=arr[,4], idiv=arr[,5]
     if (!is.na(argv$cores)) {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                        1:ngrid,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
-                        1:ngrid,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax))
-      }
+      arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint,
+                      1:ngrid,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      pmax=argv$pmax,
+                      corr=argv$corrfun))
     # no-multicores
     } else {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                      1:ngrid,SIMPLIFY=T,
-                      pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
-                      1:ngrid,SIMPLIFY=T,
-                      pmax=argv$pmax))
-      }
+      arr<-t(mapply(oi_var_gridpoint_by_gridpoint,
+                    1:ngrid,
+                    SIMPLIFY=T,
+                    pmax=argv$pmax,
+                    corr=argv$corrfun))
     }
     xidi<-arr[,4]
     if (argv$transf=="Box-Cox") {
       xta<-arr[,1]
+      r<-rmaster;r[]<-NA
+      r[aix]<-arr[,2]
+      r1<-focal(r,w=matrix(1,5,5),fun=mean,na.rm=T)
+      xta_errvar<-getValues(r1)[aix]; rm(r,r1)
       xtb<-xb_spint
-      brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
-      xa<-apply(cbind(xta,sqrt(abs(arr[,2]))),
-                      MARGIN=1,
-                      FUN=tboxcox4pdf_apply,
-                          lambda=argv$transf.boxcox_lambda,
-                          brrinf=brrinf)
+      xbctmp<-cbind(xta,sqrt(abs(xta_errvar)))
+      if (!is.na(argv$cores)) {
+        res<-t(mcmapply(tboxcox,
+                        1:ngrid,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T,
+                        x_mean_sd_in_xbctmp=T,
+                        lambda=argv$transf.boxcox_lambda,
+                        threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                        distribution=T,
+                        statistics="mean_sd",
+                        method="Taylor"))
+      } else {
+        res<-t(mapply(tboxcox,
+                      1:ngrid,
+                      SIMPLIFY=T,
+                      x_mean_sd_in_xbctmp=T,
+                      lambda=argv$transf.boxcox_lambda,
+                      threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                      distribution=T,
+                      statistics="mean_sd",
+                      method="Taylor"))
+      }
+      rm(xbctmp)
+      xa<-res[,1]
+      xa_errsd<-res[,2]
+      rm(res)
     } else {
       xa<-arr[,1]
+      xa_errsd<-sqrt(abs(arr[,2]))
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
     if (argv$verbose) {
@@ -2683,26 +2766,21 @@ if (argv$mode=="OI_firstguess") {
     # multicores
     # xa=arr[,1], xa_errvar=arr[,2], o_errvar=arr[,3], xidi=arr[,4], idiv=arr[,5]
     if (!is.na(argv$cores)) {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                        1:n0,mc.cores=argv$cores,SIMPLIFY=T,
-                        y_elab=T,pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
-                        1:n0,mc.cores=argv$cores,SIMPLIFY=T,
-                        y_elab=T,pmax=argv$pmax))
-      }
+      arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint,
+                      1:n0,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      y_elab=T,
+                      pmax=argv$pmax,
+                      corr=argv$corrfun))
     # no-multicores
     } else {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                      1:n0,SIMPLIFY=T,
-                      y_elab=T,pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
-                      1:n0,SIMPLIFY=T,
-                      y_elab=T,pmax=argv$pmax))
-      }
+      arr<-t(mapply(oi_var_gridpoint_by_gridpoint,
+                    1:n0,
+                    SIMPLIFY=T,
+                    y_elab=T,
+                    pmax=argv$pmax,
+                    corr=argv$corrfun))
     }
     yidi<-arr[,4]
     yidiv<-arr[,5]
@@ -2712,21 +2790,49 @@ if (argv$mode=="OI_firstguess") {
       elev_for_verif_y<-VecZ
     }
     if (argv$transf=="Box-Cox") {
-      # NOTE: if no transformation, yav is the leave-one-out cv.
-      #       if transformation, yav is not the leave-one-out cv.
       yta<-arr[,1]
+      yta_errvar<-arr[,2]
       ytb<-yb_spint
       yto<-yo_spint
       ytav<-arr[,6]
-      brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
-      ya<-apply(cbind(yta,sqrt(abs(arr[,2]))),
-                      MARGIN=1,
-                      FUN=tboxcox4pdf_apply,
-                          lambda=argv$transf.boxcox_lambda,
-                          brrinf=brrinf)
-      yav<-tboxcox(ytav,argv$transf.boxcox_lambda)
+      xbctmp<-cbind(yta,sqrt(abs(yta_errvar)))
+      if (!is.na(argv$cores)) {
+        res<-t(mcmapply(tboxcox,
+                        1:n0,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T,
+                        x_mean_sd_in_xbctmp=T,
+                        lambda=argv$transf.boxcox_lambda,
+                        threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                        distribution=T,
+                        statistics="mean_sd",
+                        method="Taylor"))
+      } else {
+        res<-t(mapply(tboxcox,
+                      1:n0,
+                      SIMPLIFY=T,
+                      x_mean_sd_in_xbctmp=T,
+                      lambda=argv$transf.boxcox_lambda,
+                      threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                      distribution=T,
+                      statistics="mean_sd",
+                      method="Taylor"))
+      }
+      rm(xbctmp)
+      ya<-res[,1]
+      ya_errsd<-res[,2]
+      rm(res)
+      # NOTE: if no transformation, yav is the leave-one-out cv.
+      #       if transformation, yav is not the leave-one-out cv.
+#      ya<-apply(cbind(yta,sqrt(abs(arr[,2]))),
+#                      MARGIN=1,
+#                      FUN=tboxcox4pdf_apply,
+#                          lambda=argv$transf.boxcox_lambda,
+#                          brrinf=brrinf)
+      yav<-tboxcox(ytav,lambda=argv$transf.boxcox_lambda,distribution=F)
     } else {
       ya<-arr[,1]
+      ya_errsd<-sqrt(abs(arr[,2]))
       yav<-arr[,6]
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
@@ -2760,26 +2866,19 @@ if (argv$mode=="OI_firstguess") {
     # multicores
     # xa=arr[,1], xa_errvar=arr[,2], o_errvar=arr[,3], xidi=arr[,4], idiv=arr[,5]
     if (!is.na(argv$cores)) {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                        1:ncv,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
-                        1:ncv,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax))
-      }
+      arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint,
+                      1:ncv,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      pmax=argv$pmax,
+                      corr=argv$corrfun))
     # no-multicores
     } else {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                      1:ncv,SIMPLIFY=T,
-                      pmax=argv$pmax))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
-                      1:ncv,SIMPLIFY=T,
-                      pmax=argv$pmax))
-      }
+      arr<-t(mapply(oi_var_gridpoint_by_gridpoint,
+                    1:ncv,
+                    SIMPLIFY=T,
+                    pmax=argv$pmax,
+                    corr=argv$corrfun))
     }
     yidi_cv<-arr[,4]
     if (argv$idiv_instead_of_elev) {
@@ -2789,16 +2888,39 @@ if (argv$mode=="OI_firstguess") {
     }
     if (argv$transf=="Box-Cox") {
       yta_cv<-arr[,1]
+      yta_errvar_cv<-arr[,2]
       ytb_cv<-xb_spint
       yto_cv<-boxcox(yo_cv,argv$transf.boxcox_lambda)
-      brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
-      ya_cv<-apply(cbind(yta_cv,sqrt(abs(arr[,2]))),
-                       MARGIN=1,
-                       FUN=tboxcox4pdf_apply,
-                           lambda=argv$transf.boxcox_lambda,
-                           brrinf=brrinf)
+      xbctmp<-cbind(yta_cv,sqrt(abs(yta_errvar_cv)))
+      if (!is.na(argv$cores)) {
+        res<-t(mcmapply(tboxcox,
+                        1:ncv,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T,
+                        x_mean_sd_in_xbctmp=T,
+                        lambda=argv$transf.boxcox_lambda,
+                        threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                        distribution=T,
+                        statistics="mean_sd",
+                        method="Taylor"))
+      } else {
+        res<-t(mapply(tboxcox,
+                      1:ncv,
+                      SIMPLIFY=T,
+                      x_mean_sd_in_xbctmp=T,
+                      lambda=argv$transf.boxcox_lambda,
+                      threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                      distribution=T,
+                      statistics="mean_sd",
+                      method="Taylor"))
+      }
+      rm(xbctmp)
+      ya_cv<-res[,1]
+      ya_errsd_cv<-res[,2]
+      rm(res)
     } else {
       ya_cv<-arr[,1]
+      ya_errsd_cv<-sqrt(abs(arr[,2]))
     }
     rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
     if (argv$verbose) {
@@ -2831,26 +2953,23 @@ if (argv$mode=="OI_firstguess") {
     # multicores
     # xa=arr[,1], xa_errvar=arr[,2], o_errvar=arr[,3], xidi=arr[,4], idiv=arr[,5]
     if (!is.na(argv$cores)) {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                        1:n0,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax,loocv=T,y_elab=T))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint_soar,
-                        1:n0,mc.cores=argv$cores,SIMPLIFY=T,
-                        pmax=argv$pmax,loocv=T,y_elab=T))
-      }
+      arr<-t(mcmapply(oi_var_gridpoint_by_gridpoint,
+                      1:n0,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      corr=argv$corrfun,
+                      pmax=argv$pmax,
+                      loocv=T,
+                      y_elab=T))
     # no-multicores
     } else {
-      if (argv$corrfun=="gaussian") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_gaussian,
-                      1:n0,SIMPLIFY=T,
-                      pmax=argv$pmax,loocv=T,y_elab=T))
-      } else if (argv$corrfun=="soar") {
-        arr<-t(mapply(oi_var_gridpoint_by_gridpoint_soar,
-                      1:n0,SIMPLIFY=T,
-                      pmax=argv$pmax,loocv=T,y_elab=T))
-      }
+      arr<-t(mapply(oi_var_gridpoint_by_gridpoint,
+                    1:n0,
+                    SIMPLIFY=T,
+                    corr=argv$corrfun,
+                    pmax=argv$pmax,
+                    loocv=T,
+                    y_elab=T))
     }
     yidi_lcv<-arr[,4]
     yidiv_lcv<-arr[,5]
@@ -2861,16 +2980,39 @@ if (argv$mode=="OI_firstguess") {
     }
     if (argv$transf=="Box-Cox") {
       yta_lcv<-arr[,1]
+      yta_errvar_lcv<-arr[,2]
       ytb_lcv<-yb_spint
       yto_lcv<-yo_spint
-      brrinf<-boxcox(argv$rrinf,argv$transf.boxcox_lambda)
-      ya_lcv<-apply(cbind(yta_lcv,sqrt(abs(arr[,2]))),
-                       MARGIN=1,
-                       FUN=tboxcox4pdf_apply,
-                           lambda=argv$transf.boxcox_lambda,
-                           brrinf=brrinf)
+      xbctmp<-cbind(yta_lcv,sqrt(abs(yta_errvar_lcv)))
+      if (!is.na(argv$cores)) {
+        res<-t(mcmapply(tboxcox,
+                        1:n0,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T,
+                        x_mean_sd_in_xbctmp=T,
+                        lambda=argv$transf.boxcox_lambda,
+                        threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                        distribution=T,
+                        statistics="mean_sd",
+                        method="Taylor"))
+      } else {
+        res<-t(mapply(tboxcox,
+                      1:n0,
+                      SIMPLIFY=T,
+                      x_mean_sd_in_xbctmp=T,
+                      lambda=argv$transf.boxcox_lambda,
+                      threshold=boxcox(argv$rrinf,argv$transf.boxcox_lambda),
+                      distribution=T,
+                      statistics="mean_sd",
+                      method="Taylor"))
+      }
+      rm(xbctmp)
+      ya_lcv<-res[,1]
+      ya_errsd_lcv<-res[,2]
+      rm(res)
     } else {
       ya_lcv<-arr[,1]
+      ya_errsd_lcv<-sqrt(abs(arr[,2]))
     }
     if (argv$verbose) {
       t11<-Sys.time()
@@ -4620,6 +4762,10 @@ if (!is.na(argv$off_x)) {
     if (argv$off_x.variables[i]=="analysis") {
       if (!exists("xa") | length(xa)!=length(aix)) {xa<-aix;xa[]<-NA}
       r[aix]<-xa
+    } else if (argv$off_x.variables[i]=="analysis_errsd") {
+      if (!exists("xa_errsd") | length(xa_errsd)!=length(aix)) 
+        {xa_errsd<-aix;xa_errsd[]<-NA}
+      r[aix]<-xa_errsd
     } else if (argv$off_x.variables[i]=="background") {
       if (!exists("xb") | length(xb)!=length(aix)) {xb<-aix;xb[]<-NA}
       r[aix]<-xb
