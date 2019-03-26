@@ -763,66 +763,8 @@ obsop_LapseRateConst<-function(s,m,xm,ym,zm,xs,ys,zs,
 }
 
 #------------------------------------------------------------------------------
-# optimal interpolation - xa only - correlation function "gaussian"
-#oi_Asolo_gridpoint_by_gridpoint_gaussian<-function(i, dh,dh2,eps2,pmax) {
-#  deltax<-abs(xgrid[i]-VecX)
-#  deltay<-abs(ygrid[i]-VecY)
-#  if (!any(deltax<(7*dh))) return(NA)
-#  if (!any(deltay<(7*dh))) return(NA)
-#  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
-#  if (length(ixa)>0) {
-#    rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
-#    if (length(ixa)>pmax) {
-#      ixb<-order(rloc, decreasing=T)[1:pmax]
-#      rloc<-rloc[ixb]
-#      ixa<-ixa[ixb]
-#      rm(ixb)
-#    }
-#    xa<-xb[i] + 
-#        as.numeric(crossprod(rloc,
-#                   crossprod(t(chol2inv(chol(
-#                     exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-#                               outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)+
-#                     diag(x=eps2,length(ixa))))),
-#                    (yo[ixa]-yb[ixa]))))
-#  } else {
-#    xa<-xb[i]
-#  }
-#  return(xa)
-#}
-# optimal interpolation - xa only - correlation function "soar"
-#oi_Asolo_gridpoint_by_gridpoint_soar<-function(i, dh,dh2,eps2,pmax) {
-#  deltax<-abs(xgrid[i]-VecX)
-#  deltay<-abs(ygrid[i]-VecY)
-#  if (!any(deltax<(7*dh))) return(NA)
-#  if (!any(deltay<(7*dh))) return(NA)
-#  ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
-#  if (length(ixa)>0) {
-#    distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
-#    rloc<-(1+distnorm)*exp(-distnorm)
-#    rm(distnorm)
-#    if (length(ixa)>pmax) {
-#      ixb<-order(rloc, decreasing=T)[1:pmax]
-#      rloc<-rloc[ixb]
-#      ixa<-ixa[ixb]
-#      rm(ixb)
-#    }
-#    distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-#                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh
-#    xa<-xb[i] + 
-#        as.numeric(crossprod(rloc,
-#                  crossprod(t(chol2inv(chol(
-#                    (1+distnorm)*exp(-distnorm) +
-#                    diag(x=eps2,length(ixa))))),
-#                   (yo[ixa]-yb[ixa]))))
-#  # i-th gridpoint is isolated
-#  } else {
-#    xa<-xb[i]
-#  }
-#  return(xa)
-#}
 # optimal interpolation - correlation function "gaussian"
-oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
+oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_min=0.001) {
 # return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 # NOTE: av is the leave-one-out CV. However, its errvar is not returned.
 #       todo: figure out how to compute the leave-one-out errvar.
@@ -861,7 +803,7 @@ oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
   SRinv_di<-crossprod(SRinv,di)       
   o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
   rm(S)
-  xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa]))) * 
+  xa_errvar<-max(xa_errvar_min,(o_errvar/ mean(eps2[ixa]))) * 
              (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
   xa<-xb_spint[i]+sum(rloc*as.vector(SRinv_di))
   if (y_elab & !loocv) {
@@ -873,7 +815,7 @@ oi_var_gridpoint_by_gridpoint_gaussian<-function(i,pmax,y_elab=F,loocv=F) {
   return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 }
 # optimal interpolation - correlation function "soar"
-oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F) {
+oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F,xa_errvar_min=0.001) {
 # return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 # NOTE: av is the leave-one-out CV. However, its errvar is not returned.
 #       todo: figure out how to compute the leave-one-out errvar.
@@ -916,7 +858,7 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F) {
   SRinv_di<-crossprod(SRinv,di)       
   o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
   rm(S)
-  xa_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa])),na.rm=T) * 
+  xa_errvar<-max(xa_errvar_min,(o_errvar/ mean(eps2[ixa]))) * 
            (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
   xa<-xb_spint[i]+sum(rloc*as.vector(SRinv_di))
   if (y_elab & !loocv) {
@@ -927,85 +869,6 @@ oi_var_gridpoint_by_gridpoint_soar<-function(i,pmax,y_elab=F,loocv=F) {
   }
   return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 }
-# optimal interpolation - correlation function "gaussian"
-#oi_var_stnpoint_by_stnpoint_gaussian<-function(i,pmax,loocv=F) {
-#  deltax<-abs(VecX[i]-VecX)
-#  deltay<-abs(VecY[i]-VecY)
-#  if (length(which(deltax<(7*dh)))==1) return(c(yb[i],0,NA,0))
-#  if (length(which(deltay<(7*dh)))==1) return(c(yb[i],0,NA,0))
-#  exclude_i<-rep(T,n0)
-#  if (loocv) exclude_i[i]<-F
-#  ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-#  if (length(ixa)>0) {
-#    rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
-#    if (length(ixa)>pmax) {
-#      ixb<-order(rloc, decreasing=T)[1:pmax]
-#      rloc<-rloc[ixb]
-#      ixa<-ixa[ixb]
-#      rm(ixb)
-#    }
-#    di<-yo[ixa]-yb[ixa]
-#    S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-#                 outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
-#    SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
-#    yidi<-sum(rloc*as.vector(rowSums(SRinv)))
-#    SRinv_di<-crossprod(SRinv,di)       
-#    o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
-#    rm(S)
-#    ya_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa]))) * 
-#               (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
-#    rm(SRinv)
-#    ya<-yb[i]+sum(rloc*as.vector(SRinv_di))
-#  } else {
-#    ya<-yb[i]
-#    yidi<-0
-#    ya_errvar<-0
-#    o_errvar<-NA
-#  }
-#  return(c(ya,ya_errvar,o_errvar,yidi))
-#}
-# optimal interpolation - correlation function "soar"
-#oi_var_stnpoint_by_stnpoint_soar<-function(i,pmax,loocv=F) {
-#  deltax<-abs(VecX[i]-VecX)
-#  deltay<-abs(VecY[i]-VecY)
-#  if (length(which(deltax<(7*dh)))==1) return(c(yb[i],0,NA,0))
-#  if (length(which(deltay<(7*dh)))==1) return(c(yb[i],0,NA,0))
-#  exclude_i<-rep(T,n0)
-#  if (loocv) exclude_i[i]<-F
-#  ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-#  if (length(ixa)>0) {
-#    distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
-#    rloc<-(1+distnorm)*exp(-distnorm)
-#    rm(distnorm)
-#    if (length(ixa)>pmax) {
-#      ixb<-order(rloc, decreasing=T)[1:pmax]
-#      rloc<-rloc[ixb]
-#      ixa<-ixa[ixb]
-#      rm(ixb)
-#    }
-#    di<-yo[ixa]-yb[ixa]
-#    distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
-#                   outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh 
-#    S<-(1+distnorm)*exp(-distnorm)
-#    rm(distnorm)
-#    SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
-#    yidi<-sum(rloc*as.vector(rowSums(SRinv)))
-#    SRinv_di<-crossprod(SRinv,di)       
-#    o_errvar<-mean( di * (di-crossprod(S,SRinv_di)) )
-#    rm(S)
-#    ya_errvar<-max((var(di)-o_errvar),(o_errvar/ mean(eps2[ixa])),na.rm=T) * 
-#               (1-sum(as.vector(crossprod(rloc,SRinv))*rloc))
-#    rm(SRinv)
-#    ya<-yb[i]+sum(rloc*as.vector(SRinv_di))
-#  } else {
-#    ya<-yb[i]
-#    yidi<-0
-#    ya_errvar<-0
-#    o_errvar<-NA
-#  }
-#  return(c(ya,ya_errvar,o_errvar,yidi))
-#}
-
 #
 #==============================================================================
 # MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN -
@@ -1918,7 +1781,7 @@ if (!is.na(argv$off_cv_table)   | !is.na(argv$off_cvt_table)   |
     !is.na(argv$off_cv_verif_a) | !is.na(argv$off_cvt_verif_a) |
     !is.na(argv$off_cv_verif_b) | !is.na(argv$off_cvt_verif_b) ) {
   cv_elab<-T
-  if (any(is.na(argv$prId.cv))) {
+  if (any(!is.na(argv$prId.cv))) {
     cv_mode<-T
   } else {
     cv_mode_random<-T
