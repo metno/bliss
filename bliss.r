@@ -242,7 +242,7 @@ boxcox<-function(x,lambda) {
 
 
 #+ Box-Cox back-transformation function for precipitation values
-tboxcox<-function(x=NULL,
+tboxcox<-function(x,
                   x_mean_sd_in_xbctmp=F,
                   lambda=0.5,
                   threshold=NA,
@@ -299,8 +299,10 @@ tboxcox<-function(x=NULL,
       mean<-xbctmp[x,1]
       sd<-xbctmp[x,2]
     }
+    if (is.na(mean)) return(c(NA,NA))
     if (mean<threshold) return(c(0,0))
-    if (sd==0) return(tboxcox(mean,lambda=lambda,distribution=F))
+    if (is.na(sd)) return(c(tboxcox(mean,lambda=lambda,distribution=F),NA))
+    if (sd==0) return(c(tboxcox(mean,lambda=lambda,distribution=F),0))
     #
     if (statistics=="mean_sd") {
       if (is.null(method)) {
@@ -879,23 +881,23 @@ oi_var_gridpoint_by_gridpoint<-function(i,
     av<-NA
     idiv<-0
     xidi<-1/(1+eps2[i])
-    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
-    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],0,NA,xidi,idiv,av))
+    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
+    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
     exclude_i<-rep(T,n0)
     if (loocv) exclude_i[i]<-F
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
-    if (length(ixa)==0) return(c(yb_spint[i],0,NA,xidi,idiv,av))
+    if (length(ixa)==0) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
   } else {
     av<-NA
     idiv<-NA
-    if (!any(deltax<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
-    if (!any(deltay<(7*dh))) return(c(xb_spint[i],0,NA,0,idiv,av))
+    if (!any(deltax<(7*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
+    if (!any(deltay<(7*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
     ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
-    if (length(ixa)==0) return(c(xb_spint[i],0,NA,0,idiv,av))
+    if (length(ixa)==0) return(c(xb_spint[i],NA,NA,0,idiv,av))
   }
-  if (corr="gaussian") {
+  if (corr=="gaussian") {
     rloc<-exp( -0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh2 )
-  } else if (corr="soar")  {
+  } else if (corr=="soar")  {
     distnorm<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / dh
     rloc<-(1+distnorm)*exp(-distnorm)
     rm(distnorm)
@@ -907,10 +909,10 @@ oi_var_gridpoint_by_gridpoint<-function(i,
     rm(ixb)
   }
   di<-yo_spint[ixa]-yb_spint[ixa]
-  if (corr="gaussian") {
+  if (corr=="gaussian") {
     S<-exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
                  outer(VecX[ixa],VecX[ixa],FUN="-")**2)/dh2)
-  } else if (corr="soar")  {
+  } else if (corr=="soar")  {
     distnorm<-sqrt(outer(VecY[ixa],VecY[ixa],FUN="-")**2. + 
                    outer(VecX[ixa],VecX[ixa],FUN="-")**2) / dh 
     S<-(1+distnorm)*exp(-distnorm)
@@ -2696,12 +2698,15 @@ if (argv$mode=="OI_firstguess") {
                     pmax=argv$pmax,
                     corr=argv$corrfun))
     }
+print("1")
     xidi<-arr[,4]
     if (argv$transf=="Box-Cox") {
       xta<-arr[,1]
       r<-rmaster;r[]<-NA
       r[aix]<-arr[,2]
       r1<-focal(r,w=matrix(1,5,5),fun=mean,na.rm=T)
+print("2")
+save.image("tmp.RData")
       xta_errvar<-getValues(r1)[aix]; rm(r,r1)
       xtb<-xb_spint
       xbctmp<-cbind(xta,sqrt(abs(xta_errvar)))
@@ -2727,6 +2732,7 @@ if (argv$mode=="OI_firstguess") {
                       statistics="mean_sd",
                       method="Taylor"))
       }
+print("2")
       rm(xbctmp)
       xa<-res[,1]
       xa_errsd<-res[,2]
