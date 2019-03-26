@@ -300,7 +300,7 @@ tboxcox<-function(x,
       sd<-xbctmp[x,2]
     }
     if (is.na(mean)) return(c(NA,NA))
-    if (mean<threshold) return(c(0,0))
+    if (mean<threshold) return(c(0,NA))
     if (is.na(sd)) return(c(tboxcox(mean,lambda=lambda,distribution=F),NA))
     if (sd==0) return(c(tboxcox(mean,lambda=lambda,distribution=F),0))
     #
@@ -918,7 +918,7 @@ oi_var_gridpoint_by_gridpoint<-function(i,
     S<-(1+distnorm)*exp(-distnorm)
     rm(distnorm)
   }
-
+  #
   SRinv<-chol2inv(chol( (S+diag(x=eps2[ixa],length(ixa))) ))
   xidi<-sum(rloc*as.vector(rowSums(SRinv)))
   SRinv_di<-crossprod(SRinv,di)       
