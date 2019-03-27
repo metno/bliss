@@ -2698,15 +2698,14 @@ if (argv$mode=="OI_firstguess") {
                     pmax=argv$pmax,
                     corr=argv$corrfun))
     }
-print("1")
     xidi<-arr[,4]
     if (argv$transf=="Box-Cox") {
       xta<-arr[,1]
       r<-rmaster;r[]<-NA
       r[aix]<-arr[,2]
-      r1<-focal(r,w=matrix(1,5,5),fun=mean,na.rm=T)
-print("2")
-save.image("tmp.RData")
+      r1<-r
+      for (ii in 1:10) r1<-focal(r1,w=matrix(1,25,25),fun=mean,na.rm=T,NAonly=T)
+      r1<-focal(r1,w=matrix(1,25,25),fun=mean,na.rm=T)
       xta_errvar<-getValues(r1)[aix]; rm(r,r1)
       xtb<-xb_spint
       xbctmp<-cbind(xta,sqrt(abs(xta_errvar)))
@@ -2732,7 +2731,6 @@ save.image("tmp.RData")
                       statistics="mean_sd",
                       method="Taylor"))
       }
-print("2")
       rm(xbctmp)
       xa<-res[,1]
       xa_errsd<-res[,2]
