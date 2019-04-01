@@ -1795,6 +1795,10 @@ p <- add_argument(p, "--obspp.dqcpuddle_fact",
                   help="observation post-processing, dqc puddle aggregation factor (with respect to the master grid)",
                   type="numeric",
                   default=NA)
+p <- add_argument(p, "--off_obspp",
+                  help="output full file name for the post-processed observations. write file in TITAN format, then exit",
+                  type="character",
+                  default=NA)
 #------------------------------------------------------------------------------
 #
 argv <- parse_args(p)
@@ -2831,6 +2835,27 @@ if (argv$verbose) {
     print(paste("#observations =",n0))
   }
   print("+...............................................................+")
+}
+if (!is.na(argv$off_obspp)) {
+  dataout<-array(data=NA, dim=c(length(VecLat),8))
+  names(dataout)<-c("lat","lon","elev","value","prid","dqc","sct","rep")
+  dataout[,1]<-VecLat
+  dataout[,2]<-VecLon
+  dataout[,3]<-VecZ
+  dataout[,4]<-yo
+  dataout[,5]<-prId
+  dataout[,6]<-ydqc.flag
+  dataout[,7]<-0
+  dataout[,8]<-eps2[-ixsus]
+  write.table(file=argv$off_obspp,
+              dataout,
+              quote=F,
+              col.names=c("lat","lon","elev","value","prid","dqc","sct","rep"),
+              row.names=F,
+              dec=".",
+              sep=";")
+  print(paste("output saved on file",argv$off_obspp))
+  quit(status=0)
 }
 #
 #------------------------------------------------------------------------------
