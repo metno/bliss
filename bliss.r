@@ -1052,6 +1052,29 @@ p <- add_argument(p, "--prId.exclude",
                   default=NULL,
                   nargs=Inf)
 # OI_firstguess
+p <- add_argument(p, "--oifg.eps2",
+                  help="eps2 values for \"OI_firstguess\" mode, prId- and observation- dependent",
+                  type="numeric",
+                  default=NULL,
+                  nargs=Inf)
+p <- add_argument(p, "--oifg.eps2_prId",
+                  help="provided Id associated with eps2, NA stands for default",
+                  type="numeric",
+                  default=NULL,
+                  nargs=Inf)
+p <- add_argument(p, "--oifg.eps2_r",
+                  help="threshold for observed value (e.g., two different eps2 for observations [0,1) and [1,1000) is oifg.eps2_r=c(0,1,1000))",
+                  type="numeric",
+                  default=NULL,
+                  nargs=Inf)
+p <- add_argument(p, "--oifg.Dh",
+                  help="horizontal decorrelation lenght for \"OI_firstguess\" mode (km)",
+                  type="numeric",
+                  default=NULL)
+p <- add_argument(p, "--oifg.xta_errvar_smooth",
+                  help="smoothing length for the analysis error variance (m), used only in case of data transformation",
+                  type="numeric",
+                  default=50000)
 
 # additional OI parameters two-step temperature
 p <- add_argument(p, "--nmaxo",
