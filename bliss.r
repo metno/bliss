@@ -2839,12 +2839,12 @@ if (argv$verbose) {
 if (!is.na(argv$off_obspp)) {
   dataout<-array(data=NA, dim=c(length(VecLat),8))
   names(dataout)<-c("lat","lon","elev","value","prid","dqc","sct","rep")
-  dataout[,1]<-VecLat
-  dataout[,2]<-VecLon
-  dataout[,3]<-VecZ
-  dataout[,4]<-yo
+  dataout[,1]<-round(VecLat,6)
+  dataout[,2]<-round(VecLon,6)
+  dataout[,3]<-round(VecZ,0)
+  dataout[,4]<-round(yo,3)
   dataout[,5]<-prId
-  dataout[,6]<-ydqc.flag
+  dataout[,6]<-round(ydqc.flag,0)
   dataout[,7]<-0
   dataout[,8]<-eps2[-ixsus]
   write.table(file=argv$off_obspp,
