@@ -2637,7 +2637,7 @@ if (argv$obspp.agg) {
       x1_orig<-x1
       y1_orig<-y1
     }
-    if (argv$iff_obs.proj4!=proj4.llwgs84) {
+    if (proj4.llwgs84!=argv$grid_master.proj4) {
       xyll<-spTransform(SpatialPoints(cbind(x1,y1),
                                       proj4string=CRS(argv$grid_master.proj4)) ,
                         CRS(proj4.llwgs84))
@@ -2654,7 +2654,7 @@ if (argv$obspp.agg) {
     VecYorig<-c(VecYorig,y1_orig)
     VecLat<-c(VecLat,x1_ll)
     VecLon<-c(VecLon,y1_ll)
-    VecZ<-c(VecZ,rep(NA,length(x1)))
+    VecZ<-c(VecZ,rep(0,length(x1)))
     VecS<-c(VecS,rep(NA,length(x1)))
     yo<-c(yo,v1)
     if (exists("rrf"))  yrf<-c(yrf,extract(rrf,cbind(x1,y1),na.rm=T))
