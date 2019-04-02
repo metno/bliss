@@ -2652,8 +2652,8 @@ if (argv$obspp.agg) {
     VecY<-c(VecY,y1)
     VecXorig<-c(VecXorig,x1_orig)
     VecYorig<-c(VecYorig,y1_orig)
-    VecLat<-c(VecLat,x1_ll)
-    VecLon<-c(VecLon,y1_ll)
+    VecLat<-c(VecLat,y1_ll)
+    VecLon<-c(VecLon,x1_ll)
     VecZ<-c(VecZ,rep(0,length(x1)))
     VecS<-c(VecS,rep(NA,length(x1)))
     yo<-c(yo,v1)
@@ -2846,7 +2846,7 @@ if (!is.na(argv$off_obspp)) {
   dataout[,5]<-prId
   dataout[,6]<-round(ydqc.flag,0)
   dataout[,7]<-0
-  dataout[,8]<-eps2[-ixsus]
+  dataout[,8]<-round(sqrt(eps2[-ixsus]),5)
   write.table(file=argv$off_obspp,
               dataout,
               quote=F,
