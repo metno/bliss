@@ -2855,7 +2855,6 @@ if (!is.na(argv$off_obspp)) {
   dataout[,5]<-prId
   dataout[,6]<-round(ydqc.flag,0)
   dataout[,7]<-0
-  dataout[,8]<-round(eps2[-ixsus],5)
   dataout[,8]<-round(eps2[-ixsus],6)
   write.table(file=argv$off_obspp,
               dataout,
