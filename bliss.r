@@ -871,6 +871,7 @@ oi_var_gridpoint_by_gridpoint<-function(i,
                                         pmax,
                                         y_elab=F,
                                         loocv=F,
+                                        isolation_factor=7,
                                         xa_errvar_min=0.001) {
 # return(c(xa,xa_errvar,o_errvar,xidi,idiv,av))
 # NOTE: av is the leave-one-out CV. However, its errvar is not returned.
@@ -883,18 +884,23 @@ oi_var_gridpoint_by_gridpoint<-function(i,
     av<-NA
     idiv<-0
     xidi<-1/(1+eps2[i])
-    if (length(which(deltax<(7*dh)))==1) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
-    if (length(which(deltay<(7*dh)))==1) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
+    if (length(which(deltax<(isolation_factor*dh)))==1) 
+      return(c(yb_spint[i],NA,NA,xidi,idiv,av))
+    if (length(which(deltay<(isolation_factor*dh)))==1) 
+      return(c(yb_spint[i],NA,NA,xidi,idiv,av))
     exclude_i<-rep(T,n0)
     if (loocv) exclude_i[i]<-F
-    ixa<-which( deltax<(7*dh) & deltay<(7*dh) & exclude_i )
+    ixa<-which( deltax<(isolation_factor*dh) & 
+                deltay<(isolation_factor*dh) & 
+                exclude_i )
     if (length(ixa)==0) return(c(yb_spint[i],NA,NA,xidi,idiv,av))
   } else {
     av<-NA
     idiv<-NA
-    if (!any(deltax<(7*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
-    if (!any(deltay<(7*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
-    ixa<-which( deltax<(7*dh) & deltay<(7*dh) )
+    if (!any(deltax<(isolation_factor*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
+    if (!any(deltay<(isolation_factor*dh))) return(c(xb_spint[i],NA,NA,0,idiv,av))
+    ixa<-which( deltax<(isolation_factor*dh) & 
+                deltay<(isolation_factor*dh) )
     if (length(ixa)==0) return(c(xb_spint[i],NA,NA,0,idiv,av))
   }
   if (corr=="gaussian") {
@@ -2264,6 +2270,7 @@ if (file.exists(argv$iff_fg)) {
     print("+---------------------------------------------------------------+")
     print(paste("+ first guess ",argv$iff_fg))
   }
+  iff_is_ens<-F
   argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
   argv$iff_fg.tpos<-set_NAs_to_NULL(argv$iff_fg.tpos)
   argv$iff_fg.e<-set_NAs_to_NULL(argv$iff_fg.e)
@@ -2298,6 +2305,7 @@ if (file.exists(argv$iff_fg)) {
     rm(xb0)
   # First-guess is an ensemble
   } else {
+    iff_is_ens<-T
     nens<-0 # number of ensemble members having at least one value different from NA
     for (e in 1:length(argv$iff_fg.e)) {
       raux<-try(read_dotnc(nc.file=argv$iff_fg,
@@ -2344,6 +2352,7 @@ if (file.exists(argv$iff_fg)) {
     }
     rm(xb1)
     if (!is.na(argv$min_plaus_val)) xb[which(xb<argv$min_plaus_val)]<-argv$min_plaus_val
+    if (nens==1) { xb<-drop(xb); iff_is_ens<-F }
   }
   if (argv$verbose) {
     print(paste("# grid points (not NAs)=",length(aix)))
@@ -2846,7 +2855,7 @@ if (!is.na(argv$off_obspp)) {
   dataout[,5]<-prId
   dataout[,6]<-round(ydqc.flag,0)
   dataout[,7]<-0
-  dataout[,8]<-round(sqrt(eps2[-ixsus]),5)
+  dataout[,8]<-round(eps2[-ixsus],5)
   write.table(file=argv$off_obspp,
               dataout,
               quote=F,
@@ -4985,7 +4994,7 @@ for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,argv$off_y_verif_av,
                 dim_names=c("location","leadtime","time"),
                 vals=obs)
   rm(obs)
-  if (is.null(argv$iff_fg.epos)) { 
+  if (!iff_is_ens) { 
     dim_list<-list(dim_t,dim_lt,dim_loc)
     fcst<-array(data=NA,dim=c(nloc,nlt,nt))
     fcst[,nlt,nt]<-fcst_vals
