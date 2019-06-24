@@ -3448,7 +3448,22 @@ if (argv$mode=="OI_firstguess") {
       xa<-xa.l
     }
     if (exists("rf")) xa<-xa*rf[mask.l]
-    ra[mask.l]<-xa
+    print("refine prec/no-prec borders and remove wet regions with no obs in them")
+    for (frac_rr in c(100,50,10)) {
+      if (frac_rr==100) xa[which(!is.na(xa) & xa<(argv$rrinf/frac_rr))]<-0
+      ra[mask.l]<-xa
+      xa_aux<-getValues(ra)
+      xa_aux[which(!is.na(xa_aux) & xa_aux<(argv$rrinf/frac_rr))]<-NA
+      ra[]<-xa_aux
+      rclump<-clump(ra)
+      oclump<-extract(rclump,cbind(VecX[ixwet],VecY[ixwet]))
+      fr<-freq(rclump)
+      # remove clumps of YESprec cells less than (4x4)km^2 or not including wet obs
+      ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=16) | !(fr[,1] %in% oclump)) )
+      xa[which(getValues(rclump)[mask.l] %in% fr[ix,1])]<-0
+      rm(xa_aux,rclump,oclump,fr,ix)
+      ra[mask.l]<-xa
+    }
     rm(mask.l,xa,xa.l)
     ya<-extract(ra,cbind(VecX,VecY),method="bilinear")
     yb<-rep(-9999,length(ya))
