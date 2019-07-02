@@ -997,7 +997,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"hyletkf\",\"letkf\")",
+                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"OI_Bratseth\",\"hyletkf\",\"letkf\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1134,6 +1134,43 @@ p <- add_argument(p, "--obs.outbuffer",
                   type="numeric",
                   default=50000)
 #------------------------------------------------------------------------------
+# OI_Bratseth
+p <- add_argument(p, "--oibr.nSCloops",
+                  help="number of Successive Corrections loops (\"OI_Bratset\")",
+                  type="numeric",
+                  default=10)
+p <- add_argument(p, "--oibr.dh",
+                  help="horizontal decorellation length scale (m) (\"OI_Bratset\")",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--oibr.delta_hor",
+                  help="horizontal displacement (m) used for adaptive estimation of dh (\"OI_Bratset\")",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--oibr.box_o_nearest_halfwidth",
+                  help="search neighbours within a box (m) (\"OI_Bratset\")",
+                  type="numeric",
+                  default=200000)
+p <- add_argument(p, "--oibr.dz",
+                  help="vertical decorellation length scale (m) (\"OI_Bratset\")",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--oibr.lafmin",
+                  help="land-area fraction minimum (\"OI_Bratset\")",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--oibr.dh_adaptive",
+                  help="adaptive estimation of dh (\"OI_Bratset\")",
+                  flag=T)
+p <- add_argument(p, "--oibr.dh_adaptive_min",
+                  help="minimum allowed distance (m) (\"OI_Bratset\")",
+                  type="numeric",
+                  default=0)
+p <- add_argument(p, "--oibr.dh_adaptive_max",
+                  help="maximum allowed distance (m) (\"OI_Bratset\")",
+                  type="numeric",
+                  default=0)
+#------------------------------------------------------------------------------
 # hyletkf
 p <- add_argument(p, "--hyletkf.eps2_prec_default",
                   help="LETKF default value for the ratio between obs error variance and backg error variance in case of precipitation",
@@ -1183,6 +1220,10 @@ p <- add_argument(p, "--path2src",
                   help="path to the shared objects (.so files)",
                   type="character",
                   default="none")
+p <- add_argument(p, "--path2bliss",
+                  help="path to the bliss main directory",
+                  type="character",
+                  default="none")
 #------------------------------------------------------------------------------
 # input files
 p <- add_argument(p, "--config.file",
@@ -1220,6 +1261,9 @@ p <- add_argument(p, "--iff_black",
                   default="none")
 #------------------------------------------------------------------------------
 # output files
+p <- add_argument(p, "--empty_grid",
+                  help="create an output file on the grid with all NAs",
+                  flag=T)
 p <- add_argument(p, "--off_x",
                   help="full file name for output at gridpoints (nc)",
                   type="character",
@@ -1858,6 +1902,8 @@ if (argv$mode=="OI_multiscale") {
   print("Hybrid Local Ensemble Transform Kalman Filter")
 } else if (argv$mode=="letkf") {
   print("Local Ensemble Transform Kalman Filter")
+} else if (argv$mode=="OI_Bratseth") {
+  print("OI_Bratseth")
 } else {
   boom("error statistical interpolation scheme undefined")
 }
@@ -1920,7 +1966,6 @@ if (!is.na(argv$off_lcv_table)   | !is.na(argv$off_lcvt_table)   |
 } else {
   loocv_elab<-F
 }
-#
 #
 #------------------------------------------------------------------------------
 # Create master grid
@@ -1998,6 +2043,50 @@ if (argv$verbose) {
     round(ymx,2)))
   print(paste("# grid points=",as.integer(ng)))
   print(paste("# unmasked grid points=",as.integer(ngrid)))
+}
+#
+#------------------------------------------------------------------------------
+# Empty grid on a gridded output
+if (argv$empty_grid & !is.na(argv$off_x)) {
+  if (!exists("r.list")) r.list<-list()
+  r<-rmaster; r[]<-NA
+  for (i in 1:length(argv$off_x.variables)) {
+    r.list[[i]]<-matrix(data=getValues(r),
+                        ncol=length(y),
+                        nrow=length(x))
+  }
+  # define time for output
+  tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
+                    format="%Y%m%d%H%M",tz="GMT")
+  time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
+                                           length=2,by=argv$time_bnds_string)),
+                   format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
+  out<-write_dotnc(grid.list=r.list,
+                   file.name=argv$off_x,
+                   grid.type=argv$off_x.grid,
+                   x=x,
+                   y=y,
+                   var.name=argv$off_x.varname,
+                   var.longname=argv$off_x.varlongname,
+                   var.standardname=argv$off_x.varstandardname,
+                   var.version=argv$off_x.varversion,
+                   var.unit=argv$off_x.varunit,
+                   times=tstamp_nc,
+                   times.unit=argv$off_x.timesunit,
+                   reference=argv$off_x.reference,
+                   proj4.string=argv$grid_master.proj4,
+                   lonlat.out=argv$off_x.write_lonlat,
+                   round.dig=argv$off_x.diground,
+                   summary=argv$off_x.summary,
+                   source.string=argv$off_x.sourcestring,
+                   title=argv$off_x.title,
+                   comment=argv$off_x.comment,
+                   atts.var.add=NULL,
+                   var.cell_methods=argv$off_x.cell_methods,
+                   time_bnds=time_bnds,
+                   cf_1.7=T)
+  print(paste("output saved on file",argv$off_x))
+  quit(status=0)
 }
 #
 #------------------------------------------------------------------------------
@@ -3858,6 +3947,182 @@ if (argv$mode=="OI_firstguess") {
   elev_for_verif<-VecZ
 # END of OI two-step spatial interpolation (without background)
 #..............................................................................
+# ===>  OI Bratseth, Brathset's iterative method for OI (with background)  <===
+} else if (argv$mode=="OI_Bratseth") {
+  if (!file.exists(file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r")))
+    boom(paste("file not found",file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r")))
+  source(file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r"))
+  if (argv$verbose) print("OI_Bratseth")
+  # set eps2 (station-dependent and value-dependent)
+  eps2<-vector(mode="numeric",length=n0)
+  ixdef<-which(is.na(argv$oifg.eps2_prId))
+  for (r in 1:(length(argv$oifg.eps2_r)-1)) {
+    ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+               yo<argv$oifg.eps2_r[(r+1)])
+    eps2[ixr]<-argv$oifg.eps2[r,ixdef]
+    for (i in 1:length(argv$oifg.eps2_prId)) {
+      if (is.na(argv$oifg.eps2_prId[i])) next
+      ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+                 yo<argv$oifg.eps2_r[(r+1)] & 
+                 prId==argv$oifg.eps2_prId[i]) 
+      eps2[ixr]<-argv$oifg.eps2[r,i]
+    }
+  }
+  # background at station locations
+  yb<-extract(rfg, cbind(VecX,VecY), method="bilinear")
+  # if CVmode, then fix the background
+  if (cv_elab) 
+    yb_cv<-extract(rfg, cbind(VecX_cv,VecY_cv), method="bilinear")
+  rm(rfg)
+  # -- elaboration on the grid, x_elab --
+  if (x_elab) {
+    t00<-Sys.time()
+    xgrid_spint<-xgrid[aix]
+    ygrid_spint<-ygrid[aix]
+    xobs_spint<-VecX
+    yobs_spint<-VecY
+    zobs_spint<-VecZ
+    xb_spint<-xb
+    yo_spint<-yo
+    yb_spint<-yb
+    nobs<-length(yo_spint)
+    # multicores
+    # xa=arr[,1], dh=arr[,2]
+    if (!is.na(argv$cores)) {
+      arr<-t(mcmapply(oi_bratseth_gridpoint_by_gridpoint,
+                      1:ngrid,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      nSCloops=argv$oibr.nSCloops,
+                      delta_hor=argv$oibr.delta_hor, #m
+                      dh=argv$oibr.dh,
+                      box_o_nearest_halfwidth=argv$oibr.box_o_nearest_halfwidth, #m
+                      dz=argv$oibr.dz,
+                      lafmin=argv$oibr.lafmin,
+                      dh_adaptive=argv$oibr.dh_adaptive,
+                      dh_adaptive_min=argv$oibr.dh_adaptive_min,
+                      dh_adaptive_max=argv$oibr.dh_adaptive_max,
+                      loocv=F,
+                      pmax=argv$pmax,
+                      corr=argv$corrfun))
+    # no-multicores
+    } else {
+      arr<-t(mapply(oi_bratseth_gridpoint_by_gridpoint,
+                    1:ngrid,
+                    SIMPLIFY=T,
+                    nSCloops=argv$oibr.nSCloops,
+                    delta_hor=argv$oibr.delta_hor, #m
+                    dh=argv$oibr.dh,
+                    box_o_nearest_halfwidth=argv$oibr.box_o_nearest_halfwidth, #m
+                    dz=argv$oibr.dz,
+                    lafmin=argv$oibr.lafmin,
+                    dh_adaptive=argv$oibr.dh_adaptive,
+                    dh_adaptive_min=argv$oibr.dh_adaptive_min,
+                    dh_adaptive_max=argv$oibr.dh_adaptive_max,
+                    loocv=F,
+                    pmax=argv$pmax,
+                    corr=argv$corrfun))
+    }
+    xa<-arr[,1]
+    xdh<-arr[,2]
+    rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("x_elab, time=",
+                  round(t11-t00,1),attr(t11-t00,"unit")))
+    }
+  } # end x_elab
+  #
+# END of OI Bratseth, Brathset's iterative method for OI (with background) 
+#..............................................................................
+# ===>  SCB, Successive Correction Barnes' scheme (with background)  <===
+} else if (argv$mode=="SC_Barnes") {
+  if (!file.exists(file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r")))
+    boom(paste("file not found",file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r")))
+  source(file.path(argv$path2bliss,"src","oi_bratseth_gridpoint_by_gridpoint.r"))
+  if (argv$verbose) print("OI_Barnes")
+  # set eps2 (station-dependent and value-dependent)
+  eps2<-vector(mode="numeric",length=n0)
+  ixdef<-which(is.na(argv$oifg.eps2_prId))
+  for (r in 1:(length(argv$oifg.eps2_r)-1)) {
+    ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+               yo<argv$oifg.eps2_r[(r+1)])
+    eps2[ixr]<-argv$oifg.eps2[r,ixdef]
+    for (i in 1:length(argv$oifg.eps2_prId)) {
+      if (is.na(argv$oifg.eps2_prId[i])) next
+      ixr<-which(yo>=argv$oifg.eps2_r[r] & 
+                 yo<argv$oifg.eps2_r[(r+1)] & 
+                 prId==argv$oifg.eps2_prId[i]) 
+      eps2[ixr]<-argv$oifg.eps2[r,i]
+    }
+  }
+  # background at station locations
+  yb<-extract(rfg, cbind(VecX,VecY), method="bilinear")
+  # if CVmode, then fix the background
+  if (cv_elab) 
+    yb_cv<-extract(rfg, cbind(VecX_cv,VecY_cv), method="bilinear")
+  rm(rfg)
+  # -- elaboration on the grid, x_elab --
+  if (x_elab) {
+    t00<-Sys.time()
+    xgrid_spint<-xgrid[aix]
+    ygrid_spint<-ygrid[aix]
+    xobs_spint<-VecX
+    yobs_spint<-VecY
+    zobs_spint<-VecZ
+    xb_spint<-xb
+    yo_spint<-yo
+    yb_spint<-yb
+    nobs<-length(yo_spint)
+    # multicores
+    # xa=arr[,1], dh=arr[,2]
+    if (!is.na(argv$cores)) {
+      arr<-t(mcmapply(oi_bratseth_gridpoint_by_gridpoint,
+                      1:ngrid,
+                      mc.cores=argv$cores,
+                      SIMPLIFY=T,
+                      nSCloops=argv$oibr.nSCloops,
+                      delta_hor=argv$oibr.delta_hor, #m
+                      dh=argv$oibr.dh,
+                      box_o_nearest_halfwidth=argv$oibr.box_o_nearest_halfwidth, #m
+                      dz=argv$oibr.dz,
+                      lafmin=argv$oibr.lafmin,
+                      dh_adaptive=argv$oibr.dh_adaptive,
+                      dh_adaptive_min=argv$oibr.dh_adaptive_min,
+                      dh_adaptive_max=argv$oibr.dh_adaptive_max,
+                      loocv=F,
+                      pmax=argv$pmax,
+                      corr=argv$corrfun))
+    # no-multicores
+    } else {
+      arr<-t(mapply(oi_bratseth_gridpoint_by_gridpoint,
+                    1:ngrid,
+                    SIMPLIFY=T,
+                    nSCloops=argv$oibr.nSCloops,
+                    delta_hor=argv$oibr.delta_hor, #m
+                    dh=argv$oibr.dh,
+                    box_o_nearest_halfwidth=argv$oibr.box_o_nearest_halfwidth, #m
+                    dz=argv$oibr.dz,
+                    lafmin=argv$oibr.lafmin,
+                    dh_adaptive=argv$oibr.dh_adaptive,
+                    dh_adaptive_min=argv$oibr.dh_adaptive_min,
+                    dh_adaptive_max=argv$oibr.dh_adaptive_max,
+                    loocv=F,
+                    pmax=argv$pmax,
+                    corr=argv$corrfun))
+    }
+    xa<-arr[,1]
+    xdh<-arr[,2]
+    rm(arr,xgrid_spint,ygrid_spint,xb_spint,yb_spint,yo_spint)
+    if (argv$verbose) {
+      t11<-Sys.time()
+      print(paste("x_elab, time=",
+                  round(t11-t00,1),attr(t11-t00,"unit")))
+    }
+  } # end x_elab
+  #
+# END of SCB, Successive Correction Barnes' scheme (with background)  <===
+#..............................................................................
 # ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
 } else if (argv$mode=="hyletkf") {
   argv$hyletkf.Dh<-1000*argv$hyletkf.Dh # km to m
@@ -4047,7 +4312,6 @@ if (argv$mode=="OI_firstguess") {
   if (argv$verbose) {
     t11<-Sys.time()
     print(paste("hyletkf step1, time=",round(t11-t00,1),attr(t11-t00,"unit")))
-    #save.image("tmp.RData")
   }
   # analysis at observation locations
   if (!(argv$cv_mode|argv$cv_mode_random)) {
@@ -4080,7 +4344,6 @@ if (argv$mode=="OI_firstguess") {
     if (argv$verbose) {
       t11<-Sys.time()
       print(paste("ya hyletkf step1, time=",round(t11-t00,1),attr(t11-t00,"unit")))
-      #save.image("tmp.RData")
     }
     xgrid<-xgrid_bak
     ygrid<-ygrid_bak
@@ -4144,7 +4407,6 @@ if (argv$mode=="OI_firstguess") {
   if (argv$verbose) {
     t11<-Sys.time()
     print(paste("hyletkf step2, time=",round(t11-t00,1),attr(t11-t00,"unit")))
-#    save.image("tmp.RData")
   }
 #  # intialize analysis vector
 #  xa<-xb
@@ -5117,6 +5379,9 @@ if (!is.na(argv$off_x)) {
     } else if (argv$off_x.variables[i]=="idi") {
       if (!exists("xidi") | length(xidi)!=length(aix)) {xidi<-aix;xidi[]<-NA}
       r[aix]<-xidi
+    } else if (argv$off_x.variables[i]=="dh") {
+      if (!exists("xdh") | length(xdh)!=length(aix)) {xdh<-aix;xdh[]<-NA}
+      r[aix]<-xdh
     } else if (argv$off_x.variables[i]=="observations") {
       r<-rasterize(x=cbind(VecX,VecY),y=rmaster,field=yo,fun=mean,na.rm=T)
     } 
