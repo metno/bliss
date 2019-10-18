@@ -4250,7 +4250,7 @@ if (argv$mode=="OI_firstguess") {
     ybvar<-pmax(ybvar,ybvar_ref**2)
     rm(tybm,ybvar_ref,ix_tmp)
   } else  {
-    ybvar[ybvar<argv$hyletkf.sigma2_min]<-argv$hyletkf.sigma2_min
+  ybvar[ybvar<argv$hyletkf.sigma2_min]<-argv$hyletkf.sigma2_min
   }
   #
   #............................................................................
@@ -4696,7 +4696,7 @@ if (argv$mode=="OI_firstguess") {
   Xb<-xb-xbm
   Yb<-yb-ybm
   # ensemble variances
-  ybvar<-apply(Yb,MAR=1,FUN=mean)**2
+  ybvar<-apply(Yb,MAR=1,FUN=sd)**2
   # intialize analysis vector
   xa<-xb
   xa[]<-NA
@@ -4712,7 +4712,8 @@ if (argv$mode=="OI_firstguess") {
     sel<-which(rloc>argv$letkf.rloc_min)
     # i-th gridpoint analysis 
     if (length(sel)>0) {
-      if (length(sel)>argv$letkf.pmax) sel<-order(dist)[1:argv$letkf.pmax]
+#      if (length(sel)>argv$letkf.pmax) sel<-order(dist,decreasing=T)[1:argv$letkf.pmax]
+      if (length(sel)>argv$letkf.pmax) sel<-order(dist,decreasing=F)[1:argv$letkf.pmax]
       sigma2<-max(c(mean(ybvar[sel]),argv$letkf.sigma2_min))
       Yb.i<-Yb[sel,,drop=F]
       d.i<-yo[sel]-ybm[sel]
