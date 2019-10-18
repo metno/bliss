@@ -997,7 +997,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"OI_Bratseth\",\"hyletkf\",\"letkf\")",
+                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"prensi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1904,6 +1904,8 @@ if (argv$mode=="OI_multiscale") {
   print("Local Ensemble Transform Kalman Filter")
 } else if (argv$mode=="OI_Bratseth") {
   print("OI_Bratseth")
+} else if (argv$mode=="prensi") {
+  print("PrEnSI")
 } else {
   boom("error statistical interpolation scheme undefined")
 }
@@ -1922,11 +1924,11 @@ argv$iff_fg.adjval<-as.numeric(gsub("_","-",argv$iff_fg.adjval))
 # parameter used in output session, select between deterministic/ensemble
 argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
 # load external C functions
-dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
-dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
-dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
-dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
-dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
+#dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
+#dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
+#dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
+#dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
+#dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
 if (!is.na(argv$cores)) {
   suppressPackageStartupMessages(library("parallel"))
   if (argv$cores==0) argv$cores <- detectCores()
@@ -4845,6 +4847,156 @@ if (argv$mode=="OI_firstguess") {
     }
   } # end prepare for gridded output
 # END of Local Ensemble Transform Kalman Filter
+#..............................................................................
+# ===>  PrEnSI  <===
+} else if (argv$mode=="prensi") {
+  source(file.path(argv$path2src,"henoi.r"))
+#
+gamma_anamorphosis<-function(x,shape,rate=0.1,small_const=NA) {
+  if (!is.na(small_const)) x<-x+small_const
+  qnorm(pgamma(x,shape=shape,rate=rate),mean=0,sd=1)
+}
+
+#
+inv_gamma_anamorphosis<-function(x,sigma=NA,shape,rate,
+                                 small_const=NA,threshold0=0) {
+  if (any(is.na(sigma))) {
+    res<-qgamma(pnorm(x,mean=0,sd=1),shape=shape,rate=rate)
+  } else {
+    res<-apply(cbind(x,sqrt(sigma),shape,rate),
+           MAR=1,
+           FUN=function(x){
+            y<-x[1];sd<-x[2];s<-x[3];r<-x[4]
+            if (sd==0) return(y)
+            seq<-seq((y-3*sd),(y+3*sd),length=100)
+            dy<-seq[2]-seq[1]
+            sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r) * dnorm(seq,mean=y,sd=sd) * dy)
+           }) 
+  }
+  if (!is.na(small_const)) res<-res-small_const
+  if (!is.na(threshold0)) res[res<threshold0]<-0
+  res
+}
+
+#
+inv_gamma_anamorphosis_var<-function(x,sigma,shape,rate,xstar) {
+  return( apply(cbind(x,sqrt(sigma),shape,rate,xstar),
+         MAR=1,
+         FUN=function(x){
+          y<-x[1];sd<-x[2];s<-x[3];r<-x[4];z<-x[5]
+          if (sd==0) return(y)
+          seq<-seq((y-3*sd),(y+3*sd),length=100)
+          dy<-seq[2]-seq[1]
+          sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r)**2 * dnorm(seq,mean=y,sd=sd) * dy)-z*z
+         }) )
+}
+
+  # prepare stuff
+  grid_x<-xgrid[aix]
+  grid_y<-ygrid[aix]
+  ngrid<-length(grid_x)
+  #
+  # background at observation locations
+obsop_precip<-function(method="bilinear",inf=0) {
+  r<-rmaster
+  yb0<-array(data=NA,dim=c(n0,nens))
+  for (e in 1:nens) {
+    r[]<-NA
+    r[aix]<-xb[,e]
+    yb0[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
+    auxx<-which(yb0[,e]<0 | is.na(yb0[,e]) | is.nan(yb0[,e]))
+    if (length(auxx)>0) yb0[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
+    rm(auxx)
+  }
+  rm(r)
+  # index over yb with all the ensemble members finite and not NAs
+  ix<-which(apply(yb0,MAR=1,
+                  FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
+            ==nens)
+  n1<-length(ix)
+  yb<-array(data=NA,dim=c(n1,nens))
+  for (e in 1:nens) yb[,e]<-yb0[ix,e]
+  rm(yb0)
+  yb[yb<inf]<-inf
+  return(list(yb=yb,ix=ix))
+}
+  res<-obsop_precip()
+  Yb<-res$yb
+yb_bak<-apply(Yb,MAR=1,FUN=mean)
+  obs_x<-VecX[res$ix]
+  obs_y<-VecY[res$ix]
+  nobs<-length(res$ix)
+  Xb<-xb
+  Xb[Xb<0]<-0
+  # transformation
+  # simulate the estimation of gamma shape param at grid points
+  xshape<-rep(0.1,ngrid)
+  yshape<-rep(0.1,nobs)
+  rate<-0.1
+# add a small constant to all data to avoid problem with the gamma
+# gamma anamorphosis
+  yo<-gamma_anamorphosis(yo,shape=yshape,rate=rate,small_const=0.001) 
+  for (e in 1:nens) {
+    Xb[,e]<-gamma_anamorphosis(Xb[,e],shape=xshape,rate=rate,small_const=0.001)
+    Yb[,e]<-gamma_anamorphosis(Yb[,e],shape=yshape,rate=rate,small_const=0.001)
+  }
+  xb<-apply(Xb,MAR=1,FUN=mean)
+  yb<-apply(Yb,MAR=1,FUN=mean)
+#print(cbind(yb,yb_bak,Yb))
+  henoi_Dh<-vector(mode="numeric",length=ngrid)
+  henoi_Dh_loc<-vector(mode="numeric",length=ngrid)
+  henoi_eps2<-vector(mode="numeric",length=ngrid)
+  var_o_coeff<-vector(mode="numeric",length=nobs)
+argv$prensi.pmax<-200
+argv$prensi.rloc_min<-0
+  henoi_Dh_loc[]<-20000
+  henoi_Dh[]<-20000
+  henoi_eps2[]<-0.1
+  var_o_coeff[]<-1
+  Af<-Xb-xb
+  HAf<-Yb-yb
+  Pfdiag<-apply(Af,MAR=1,FUN=sd)**2
+t0<-Sys.time()
+  if (!is.na(argv$cores)) {
+    res<-t( mcmapply(henoi, 1:ngrid, SIMPLIFY=T,
+                     mc.cores=argv$cores,
+                     pmax=argv$prensi.pmax,
+                     rloc_min=argv$prensi.rloc_min,
+                     nens=nens) )
+  } else {
+    res<-t( mapply(henoi,1:ngrid,SIMPLIFY=T,
+                   pmax=argv$prensi.pmax,
+                   rloc_min=argv$prensi.rloc_min,
+                   nens=nens) )
+  }
+t1<-Sys.time()
+print(paste("henoi time=",round(t1-t0,1),attr(t1-t0,"unit")))
+save.image("tmp0.RData")
+  xa_tr<-res[,1]
+  xa_evar_tr<-res[,2]
+  xidi<-res[,3]
+  alpha<-res[,4]
+  xa_itr_expv<-inv_gamma_anamorphosis(xa_tr,sigma=xa_evar_tr,shape=xshape,rate=rate,small_const=0.001)
+# get the variance
+  xa_itr_var<-inv_gamma_anamorphosis_var(xa_tr,sigma=xa_evar_tr,shape=xshape,rate=rate,xstar=xa_itr_expv)
+  xa_evar_tr_adj<-xa_evar_tr * xidi**2
+  xa_itr_expv_adj<-inv_gamma_anamorphosis(xa_tr,sigma=xa_evar_tr_adj,shape=xshape,rate=rate,small_const=0.001)
+  xa_itr_var_adj<-inv_gamma_anamorphosis_var(xa_tr,sigma=xa_evar_tr_adj,shape=xshape,rate=rate,xstar=xa_itr_expv_adj)
+  # quantiles
+  a_gamma_shape<-xa_itr_expv**2/xa_itr_var
+  a_gamma_rate<-xa_itr_expv/xa_itr_var
+  xa_q10<-vector(mode="numeric",length=ngrid); xa_q10[]<-0
+  xa_q90<-vector(mode="numeric",length=ngrid); xa_q90[]<-0
+  xa_q25<-vector(mode="numeric",length=ngrid); xa_q25[]<-0
+  xa_q75<-vector(mode="numeric",length=ngrid); xa_q75[]<-0
+  if ( length( ix<-which(a_gamma_shape!=0 | a_gamma_rate!=0) )>0 ) {
+    xa_q10[ix]<-qgamma(0.1,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
+    xa_q90[ix]<-qgamma(0.9,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
+    xa_q25[ix]<-qgamma(0.25,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
+    xa_q75[ix]<-qgamma(0.75,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
+  }
+save.image("tmp.RData")
+q()
 } # end if for the selection among OIs
 #..............................................................................
 #..............................................................................
