@@ -1215,6 +1215,32 @@ p <- add_argument(p, "--hyletkf.rloc_min",
                   type="numeric",
                   default=0.0013)
 #------------------------------------------------------------------------------
+# PrEnSI
+p <- add_argument(p, "--prensi.pmax",
+                  help="max number of neighbouring observations to consider",
+                  type="numeric",
+                  default=200)
+p <- add_argument(p, "--prensi.rloc_min",
+                  help="do not use observations if they are too far from a location. pmax is still they strongest constrain. Set this parameter to 0 to use always pmax observations.",
+                  type="numeric",
+                  default=0)
+p <- add_argument(p, "--prensi.henoi_Dh_loc",
+                  help="Reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
+                  type="numeric",
+                  default=20000)
+p <- add_argument(p, "--prensi.henoi_Dh",
+                  help="Reference lenght scale for static background error covariance matrix (m, or same unit as grid/observation coords).",
+                  type="numeric",
+                  default=20000)
+p <- add_argument(p, "--prensi.henoi_eps2",
+                  help="eps2",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--prensi.var_o_coeff",
+                  help="coefficient(s) for the observation error variance",
+                  type="numeric",
+                  default=1)
+#------------------------------------------------------------------------------
 # paths
 p <- add_argument(p, "--path2src",
                   help="path to the shared objects (.so files)",
@@ -4851,112 +4877,55 @@ if (argv$mode=="OI_firstguess") {
 # ===>  PrEnSI  <===
 } else if (argv$mode=="prensi") {
   source(file.path(argv$path2src,"henoi.r"))
-#
-gamma_anamorphosis<-function(x,shape,rate=0.1,small_const=NA) {
-  if (!is.na(small_const)) x<-x+small_const
-  qnorm(pgamma(x,shape=shape,rate=rate),mean=0,sd=1)
-}
-
-#
-inv_gamma_anamorphosis<-function(x,sigma=NA,shape,rate,
-                                 small_const=NA,threshold0=0) {
-  if (any(is.na(sigma))) {
-    res<-qgamma(pnorm(x,mean=0,sd=1),shape=shape,rate=rate)
-  } else {
-    res<-apply(cbind(x,sqrt(sigma),shape,rate),
-           MAR=1,
-           FUN=function(x){
-            y<-x[1];sd<-x[2];s<-x[3];r<-x[4]
-            if (sd==0) return(y)
-            seq<-seq((y-3*sd),(y+3*sd),length=100)
-            dy<-seq[2]-seq[1]
-            sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r) * dnorm(seq,mean=y,sd=sd) * dy)
-           }) 
-  }
-  if (!is.na(small_const)) res<-res-small_const
-  if (!is.na(threshold0)) res[res<threshold0]<-0
-  res
-}
-
-#
-inv_gamma_anamorphosis_var<-function(x,sigma,shape,rate,xstar) {
-  return( apply(cbind(x,sqrt(sigma),shape,rate,xstar),
-         MAR=1,
-         FUN=function(x){
-          y<-x[1];sd<-x[2];s<-x[3];r<-x[4];z<-x[5]
-          if (sd==0) return(y)
-          seq<-seq((y-3*sd),(y+3*sd),length=100)
-          dy<-seq[2]-seq[1]
-          sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r)**2 * dnorm(seq,mean=y,sd=sd) * dy)-z*z
-         }) )
-}
-
-  # prepare stuff
+  source(file.path(argv$path2src,"gamma_anamorphosis.r"))
+  source(file.path(argv$path2src,"obsop_precip.r"))
+  # NOTE: a feel better with changing all the variable names from time to time...
+  # prepare stuff 
+  # backup of the original data
+  Xb_bak<-xb
+  yo_bak<-yo
+  #  grid stuff
   grid_x<-xgrid[aix]
   grid_y<-ygrid[aix]
   ngrid<-length(grid_x)
-  #
-  # background at observation locations
-obsop_precip<-function(method="bilinear",inf=0) {
-  r<-rmaster
-  yb0<-array(data=NA,dim=c(n0,nens))
-  for (e in 1:nens) {
-    r[]<-NA
-    r[aix]<-xb[,e]
-    yb0[,e]<-extract(r,cbind(VecX,VecY),method="bilinear")
-    auxx<-which(yb0[,e]<0 | is.na(yb0[,e]) | is.nan(yb0[,e]))
-    if (length(auxx)>0) yb0[auxx,e]<-extract(r,cbind(VecX[auxx],VecY[auxx]))
-    rm(auxx)
-  }
-  rm(r)
-  # index over yb with all the ensemble members finite and not NAs
-  ix<-which(apply(yb0,MAR=1,
-                  FUN=function(x){length(which(!is.na(x) & !is.nan(x)))})
-            ==nens)
-  n1<-length(ix)
-  yb<-array(data=NA,dim=c(n1,nens))
-  for (e in 1:nens) yb[,e]<-yb0[ix,e]
-  rm(yb0)
-  yb[yb<inf]<-inf
-  return(list(yb=yb,ix=ix))
-}
-  res<-obsop_precip()
+  #  observation stuff
+  res<-obsop_precip() #yb / ix
   Yb<-res$yb
-yb_bak<-apply(Yb,MAR=1,FUN=mean)
+  ix_obs<-res$ix
   obs_x<-VecX[res$ix]
   obs_y<-VecY[res$ix]
   nobs<-length(res$ix)
+  is.prec<-vector(mode="logical",length=nobs); is.prec[]<-F
+  is.prec[ix<-which(yo_bak>=argv$rrinf)]<-T
+  # xb is a matrix (aix,nens). aix is a vector with indices of valid grid cells
   Xb<-xb
-  Xb[Xb<0]<-0
-  # transformation
-  # simulate the estimation of gamma shape param at grid points
+  Xb[Xb<0]<-0 # filter out unplausible values
+  # data transformation, Gaussian anamorphosis
   xshape<-rep(0.1,ngrid)
   yshape<-rep(0.1,nobs)
-  rate<-0.1
-# add a small constant to all data to avoid problem with the gamma
-# gamma anamorphosis
-  yo<-gamma_anamorphosis(yo,shape=yshape,rate=rate,small_const=0.001) 
+  xrate<-rep(0.1,ngrid)
+  yrate<-rep(0.1,nobs)
+  yo<-gamma_anamorphosis(yo,shape=yshape,rate=yrate,small_const=0.001) 
   for (e in 1:nens) {
-    Xb[,e]<-gamma_anamorphosis(Xb[,e],shape=xshape,rate=rate,small_const=0.001)
-    Yb[,e]<-gamma_anamorphosis(Yb[,e],shape=yshape,rate=rate,small_const=0.001)
+    Xb[,e]<-gamma_anamorphosis(Xb[,e],shape=xshape,rate=xrate,small_const=0.001)
+    Yb[,e]<-gamma_anamorphosis(Yb[,e],shape=yshape,rate=yrate,small_const=0.001)
   }
   xb<-apply(Xb,MAR=1,FUN=mean)
   yb<-apply(Yb,MAR=1,FUN=mean)
-#print(cbind(yb,yb_bak,Yb))
+  # spatial analysis, Hybrid Ensemble Optimal Interpolation
   henoi_Dh<-vector(mode="numeric",length=ngrid)
   henoi_Dh_loc<-vector(mode="numeric",length=ngrid)
   henoi_eps2<-vector(mode="numeric",length=ngrid)
   var_o_coeff<-vector(mode="numeric",length=nobs)
-argv$prensi.pmax<-200
-argv$prensi.rloc_min<-0
-  henoi_Dh_loc[]<-20000
-  henoi_Dh[]<-20000
-  henoi_eps2[]<-0.1
-  var_o_coeff[]<-1
+  henoi_Dh_loc[]<-argv$prensi.henoi_Dh_loc
+  henoi_Dh[]<-argv$prensi.henoi_Dh
+  henoi_eps2[]<-argv$prensi.henoi_eps2
+  var_o_coeff[]<-argv$prensi.var_o_coeff
+  #
   Af<-Xb-xb
   HAf<-Yb-yb
   Pfdiag<-apply(Af,MAR=1,FUN=sd)**2
-t0<-Sys.time()
+  if (argv$verbose) t0<-Sys.time()
   if (!is.na(argv$cores)) {
     res<-t( mcmapply(henoi, 1:ngrid, SIMPLIFY=T,
                      mc.cores=argv$cores,
@@ -4969,22 +4938,45 @@ t0<-Sys.time()
                    rloc_min=argv$prensi.rloc_min,
                    nens=nens) )
   }
-t1<-Sys.time()
-print(paste("henoi time=",round(t1-t0,1),attr(t1-t0,"unit")))
-save.image("tmp0.RData")
+  if (argv$verbose) {
+    t1<-Sys.time()
+    print(paste("henoi time=",round(t1-t0,1),attr(t1-t0,"unit")))
+  }
   xa_tr<-res[,1]
   xa_evar_tr<-res[,2]
-  xidi<-res[,3]
-  alpha<-res[,4]
-  xa_itr_expv<-inv_gamma_anamorphosis(xa_tr,sigma=xa_evar_tr,shape=xshape,rate=rate,small_const=0.001)
-# get the variance
-  xa_itr_var<-inv_gamma_anamorphosis_var(xa_tr,sigma=xa_evar_tr,shape=xshape,rate=rate,xstar=xa_itr_expv)
-  xa_evar_tr_adj<-xa_evar_tr * xidi**2
-  xa_itr_expv_adj<-inv_gamma_anamorphosis(xa_tr,sigma=xa_evar_tr_adj,shape=xshape,rate=rate,small_const=0.001)
-  xa_itr_var_adj<-inv_gamma_anamorphosis_var(xa_tr,sigma=xa_evar_tr_adj,shape=xshape,rate=rate,xstar=xa_itr_expv_adj)
+  xidi_res<-res[,3]
+  xalpha<-res[,4]
+  xzero<-as.logical(res[,5])
+  ix<-which(!xzero)
+  is0<-which(xzero)
+  # data back-transformation, Gaussian anamorphosis
+  a_gamma_shape<-vector(mode="numeric",length=ngrid)
+  a_gamma_rate<-vector(mode="numeric",length=ngrid)
+  xa_itr_expv<-vector(mode="numeric",length=ngrid)
+  xa_itr_var<-vector(mode="numeric",length=ngrid)
+  if ( length(ix)>0 ) {
+    # Gamma, expected values
+    xa_itr_expv[ix]<-inv_gamma_anamorphosis(xa_tr[ix],
+                                        sigma=xa_evar_tr[ix],
+                                        shape=xshape[ix],
+                                        rate=xrate[ix],
+                                        small_const=0.001)
+    # Gamma, variances
+    xa_itr_var[ix]<-inv_gamma_anamorphosis_var(xa_tr[ix],
+                                           sigma=xa_evar_tr[ix],
+                                           shape=xshape[ix],
+                                           rate=xrate[ix],
+                                           xstar=xa_itr_expv[ix])
+    a_gamma_shape[ix]<-xa_itr_expv[ix]**2/xa_itr_var[ix]
+    a_gamma_rate[ix]<-xa_itr_expv[ix]/xa_itr_var[ix]
+  }
+  if ( length(is0)>0 ) {
+    xa_itr_expv[is0]<-0
+    xa_itr_var[is0]<-0
+    a_gamma_shape[is0]<-0
+    a_gamma_rate[is0]<-0
+  }
   # quantiles
-  a_gamma_shape<-xa_itr_expv**2/xa_itr_var
-  a_gamma_rate<-xa_itr_expv/xa_itr_var
   xa_q10<-vector(mode="numeric",length=ngrid); xa_q10[]<-0
   xa_q90<-vector(mode="numeric",length=ngrid); xa_q90[]<-0
   xa_q25<-vector(mode="numeric",length=ngrid); xa_q25[]<-0
@@ -4995,8 +4987,110 @@ save.image("tmp0.RData")
     xa_q25[ix]<-qgamma(0.25,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
     xa_q75[ix]<-qgamma(0.75,shape=a_gamma_shape[ix],rate=a_gamma_rate[ix])
   }
-save.image("tmp.RData")
-q()
+  Xb_out<-Xb_bak[,1]
+  # CV statistics
+  grid_x_bak<-grid_x
+  grid_y_bak<-grid_y
+  grid_x<-obs_x
+  grid_y<-obs_y
+  xb<-yb
+  Af<-HAf
+  Pfdiag<-1/(nens-1)*diag(tcrossprod(Af,Af))
+  if (argv$verbose) t0<-Sys.time()
+  if (!is.na(argv$cores)) {
+    res<-t( mcmapply(henoi, 1:nobs, SIMPLIFY=T,
+                     mc.cores=argv$cores,
+                     pmax=argv$prensi.pmax,
+                     rloc_min=argv$prensi.rloc_min,
+                     nens=nens,
+                     mode="cvanalysis") )
+  } else {
+    res<-t( mapply(henoi,1:nobs,SIMPLIFY=T,
+                   pmax=argv$prensi.pmax,
+                   rloc_min=argv$prensi.rloc_min,
+                   nens=nens,
+                   mode="cvanalysis") )
+  }
+  if (argv$verbose) {
+    t1<-Sys.time()
+    print(paste("henoi time=",round(t1-t0,1),attr(t1-t0,"unit")))
+  }
+  grid_x<-grid_x_bak
+  grid_y<-grid_y_bak
+  yav_tr<-res[,1]
+  yav_evar_tr<-res[,2]
+  yidiv_res<-res[,3]
+  yalpha<-res[,4]
+  yzero<-as.logical(res[,5])
+  ix<-which(!yzero)
+  is0<-which(yzero)
+  av_gamma_shape<-vector(mode="numeric",length=nobs)
+  av_gamma_rate<-vector(mode="numeric",length=nobs)
+  yav_itr_expv<-vector(mode="numeric",length=nobs)
+  yav_itr_var<-vector(mode="numeric",length=nobs)
+  if ( length(ix)>0 ) {
+    yav_itr_expv[ix]<-inv_gamma_anamorphosis(yav_tr[ix],
+                                          sigma=yav_evar_tr[ix],
+                                          shape=yshape[ix],
+                                          rate=yrate[ix])
+    yav_itr_var[ix]<-inv_gamma_anamorphosis_var(yav_tr[ix],
+                                             sigma=yav_evar_tr[ix],
+                                             shape=yshape[ix],
+                                             rate=yrate[ix],
+                                             xstar=yav_itr_expv[ix])
+    av_gamma_shape[ix]<-yav_itr_expv[ix]**2/yav_itr_var[ix]
+    av_gamma_rate[ix]<-yav_itr_expv[ix]/yav_itr_var[ix]
+  }
+  if ( length(is0)>0 ) {
+    yav_itr_expv[is0]<-0
+    yav_itr_var[is0]<-0
+    av_gamma_shape[is0]<-0
+    av_gamma_rate[is0]<-0
+  }
+  # quantiles
+  yav_q10<-vector(mode="numeric",length=nobs); yav_q10[]<-0
+  yav_q90<-vector(mode="numeric",length=nobs); yav_q90[]<-0
+  yav_q25<-vector(mode="numeric",length=nobs); yav_q25[]<-0
+  yav_q75<-vector(mode="numeric",length=nobs); yav_q75[]<-0
+  if ( length( ix<-which(av_gamma_shape!=0 | av_gamma_rate!=0) )>0 ) {
+    yav_q10[ix]<-qgamma(0.1,shape=av_gamma_shape[ix],rate=av_gamma_rate[ix])
+    yav_q90[ix]<-qgamma(0.9,shape=av_gamma_shape[ix],rate=av_gamma_rate[ix])
+    yav_q25[ix]<-qgamma(0.25,shape=av_gamma_shape[ix],rate=av_gamma_rate[ix])
+    yav_q75[ix]<-qgamma(0.75,shape=av_gamma_shape[ix],rate=av_gamma_rate[ix])
+  }
+  # prepare for output
+  yo<-yo_bak
+  yb<-vector(mode="numeric",length=n0); yb[]<-NA
+  yb[ix_obs]<-inv_gamma_anamorphosis(Yb[,1],
+                                     sigma=NA,
+                                     shape=yshape,
+                                     rate=yrate,
+                                     small_const=0.001)
+  r<-rmaster
+  r[aix]<-xa_itr_expv
+  ya<-extract(r,cbind(VecX,VecY))
+  r[aix]<-xidi_res
+  yidi<-extract(r,cbind(VecX,VecY))
+  r[aix]<-xalpha
+  ya_alpha<-extract(r,cbind(VecX,VecY))
+  r[aix]<-a_gamma_shape
+  ya_gamma_shape<-extract(r,cbind(VecX,VecY))
+  r[aix]<-a_gamma_rate
+  ya_gamma_rate<-extract(r,cbind(VecX,VecY))
+  yav<-vector(mode="numeric",length=n0); yav[]<-NA
+  yav[ix_obs]<-yav_itr_expv
+  yav_var<-vector(mode="numeric",length=n0); yav_var[]<-NA
+  yav_var[ix_obs]<-yav_itr_var
+  yidiv<-vector(mode="numeric",length=n0); yidiv[]<-NA
+  yidiv[ix_obs]<-yidiv_res
+  yav_gamma_shape<-vector(mode="numeric",length=n0); yav_gamma_shape[]<-NA
+  yav_gamma_shape[ix_obs]<-av_gamma_shape
+  yav_gamma_rate<-vector(mode="numeric",length=n0); yav_gamma_rate[]<-NA
+  yav_gamma_rate[ix_obs]<-av_gamma_rate
+  yav_alpha<-vector(mode="numeric",length=n0); yav_alpha[]<-NA
+  yav_alpha[ix_obs]<-yalpha
+
+  
 } # end if for the selection among OIs
 #..............................................................................
 #..............................................................................
@@ -5156,22 +5250,48 @@ if (argv$verbose) print("++ Output")
 #
 # table
 if (!is.na(argv$off_y_table)) { 
-  cat("date;sourceId;x;y;z;yo;yb;ya;yav;yidi;yidiv;dqc;\n",
-      file=argv$off_y_table,append=F)
-  cat(paste(argv$date_out,
-            formatC(VecS,format="f",digits=0),
-            formatC(VecX,format="f",digits=0),
-            formatC(VecY,format="f",digits=0),
-            formatC(VecZ,format="f",digits=0),
-            formatC(yo,format="f",digits=2),
-            formatC(yb,format="f",digits=2),
-            formatC(ya,format="f",digits=2),
-            formatC(yav,format="f",digits=2),
-            formatC(yidi,format="f",digits=4),
-            formatC(yidiv,format="f",digits=4),
-            rep(0,length(VecS)),
-            "\n",sep=";"),
-      file=argv$off_y_table,append=T)
+  if (argv$mode=="prensi") {
+    cat("date;sourceId;x;y;z;yo;yb;ya;yav;yav_var;yidi;yidiv;dqc;ya_gamma_shape;ya_gamma_rate;ya_alpha;yav_gamma_shape;yav_gamma_rate;yav_alpha;\n",
+        file=argv$off_y_table,append=F)
+    cat(paste(argv$date_out,
+              formatC(VecS,format="f",digits=0),
+              formatC(VecX,format="f",digits=0),
+              formatC(VecY,format="f",digits=0),
+              formatC(VecZ,format="f",digits=0),
+              formatC(yo,format="f",digits=2),
+              formatC(yb,format="f",digits=2),
+              formatC(ya,format="f",digits=2),
+              formatC(yav,format="f",digits=5),
+              formatC(yav_var,format="f",digits=6),
+              formatC(yidi,format="f",digits=4),
+              formatC(yidiv,format="f",digits=4),
+              rep(0,length(VecS)),
+              formatC(ya_gamma_shape,format="f",digits=4),
+              formatC(ya_gamma_rate,format="f",digits=4),
+              formatC(ya_alpha,format="f",digits=4),
+              formatC(yav_gamma_shape,format="f",digits=4),
+              formatC(yav_gamma_rate,format="f",digits=4),
+              formatC(yav_alpha,format="f",digits=4),
+              "\n",sep=";"),
+        file=argv$off_y_table,append=T)
+  } else {
+    cat("date;sourceId;x;y;z;yo;yb;ya;yav;yidi;yidiv;dqc;\n",
+        file=argv$off_y_table,append=F)
+    cat(paste(argv$date_out,
+              formatC(VecS,format="f",digits=0),
+              formatC(VecX,format="f",digits=0),
+              formatC(VecY,format="f",digits=0),
+              formatC(VecZ,format="f",digits=0),
+              formatC(yo,format="f",digits=2),
+              formatC(yb,format="f",digits=2),
+              formatC(ya,format="f",digits=2),
+              formatC(yav,format="f",digits=2),
+              formatC(yidi,format="f",digits=4),
+              formatC(yidiv,format="f",digits=4),
+              rep(0,length(VecS)),
+              "\n",sep=";"),
+        file=argv$off_y_table,append=T)
+  }
   print(paste("output saved on file",argv$off_y_table))
 }
 #------------------------------------------------------------------------------
@@ -5520,22 +5640,36 @@ if (!is.na(argv$off_x)) {
   r<-rmaster; r[]<-NA
   for (i in 1:length(argv$off_x.variables)) {
     if (argv$off_x.variables[i]=="analysis") {
+      if (argv$mode=="prensi") xa<-xa_itr_expv
       if (!exists("xa") | length(xa)!=length(aix)) {xa<-aix;xa[]<-NA}
       r[aix]<-xa
     } else if (argv$off_x.variables[i]=="analysis_errsd") {
+      if (argv$mode=="prensi") xa_errsd<-xa_itr_var
       if (!exists("xa_errsd") | length(xa_errsd)!=length(aix)) 
         {xa_errsd<-aix;xa_errsd[]<-NA}
       r[aix]<-xa_errsd
     } else if (argv$off_x.variables[i]=="background") {
+      if (argv$mode=="prensi") xb<-Xb_out
       if (!exists("xb") | length(xb)!=length(aix)) {xb<-aix;xb[]<-NA}
       r[aix]<-xb
     } else if (argv$off_x.variables[i]=="idi") {
+      if (argv$mode=="prensi") xidi<-xidi_res
       if (!exists("xidi") | length(xidi)!=length(aix)) {xidi<-aix;xidi[]<-NA}
       r[aix]<-xidi
     } else if (argv$off_x.variables[i]=="dh") {
       if (!exists("xdh") | length(xdh)!=length(aix)) {xdh<-aix;xdh[]<-NA}
       r[aix]<-xdh
+    } else if (argv$off_x.variables[i]=="gamma_shape") {
+      if (!exists("a_gamma_shape") | length(a_gamma_shape)!=length(aix)) {a_gamma_shape<-aix;a_gamma_shape[]<-NA}
+      r[aix]<-a_gamma_shape
+    } else if (argv$off_x.variables[i]=="gamma_rate") {
+      if (!exists("a_gamma_rate") | length(a_gamma_rate)!=length(aix)) {a_gamma_rate<-aix;a_gamma_rate[]<-NA}
+      r[aix]<-a_gamma_rate
+    } else if (argv$off_x.variables[i]=="alpha") {
+      if (!exists("xalpha") | length(xalpha)!=length(aix)) {xalpha<-aix;xalpha[]<-NA}
+      r[aix]<-xalpha
     } else if (argv$off_x.variables[i]=="observations") {
+      if (argv$mode=="prensi") yo<-yo_bak
       r<-rasterize(x=cbind(VecX,VecY),y=rmaster,field=yo,fun=mean,na.rm=T)
     } 
     r.list[[i]]<-matrix(data=getValues(r),
