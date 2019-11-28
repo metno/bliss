@@ -5089,8 +5089,6 @@ if (argv$mode=="OI_firstguess") {
   yav_gamma_rate[ix_obs]<-av_gamma_rate
   yav_alpha<-vector(mode="numeric",length=n0); yav_alpha[]<-NA
   yav_alpha[ix_obs]<-yalpha
-
-  
 } # end if for the selection among OIs
 #..............................................................................
 #..............................................................................
