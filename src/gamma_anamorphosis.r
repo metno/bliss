@@ -45,9 +45,11 @@ inv_gamma_anamorphosis<-function(x,
                   y<-x[1]; sd<-x[2]; s<-x[3]; r<-x[4]
                   if (sd==0) return(y)
                   seq<-seq( (y-3*sd), (y+3*sd), length=100)
-                  dy<-seq[2]-seq[1]
-                  sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r) * 
-                       dnorm(seq,mean=y,sd=sd) * dy) }
+                  dy<-abs(seq[2]-seq[1])
+                  aux<-inv_gamma_anamorphosis(x=seq, shape=s, rate=r)
+                  ix<-which(is.finite(aux))
+                  sum( aux[ix] * dnorm(seq[ix],mean=y,sd=sd) * dy) 
+                }
               ) 
   }
   # remove small constant
@@ -74,10 +76,11 @@ inv_gamma_anamorphosis_var<-function(x,
                  FUN=function(x){
                    y<-x[1]; sd<-x[2]; s<-x[3]; r<-x[4]; z<-x[5]
                    if (sd==0) return(y)
-                   seq<-seq((y-3*sd),(y+3*sd),length=100)
-                   dy<-seq[2]-seq[1]
-                   sum( inv_gamma_anamorphosis(x=seq, shape=s, rate=r)**2 * 
-                        dnorm(seq,mean=y,sd=sd) * dy) - z*z
+                   seq<-seq( (y-3*sd), (y+3*sd), length=100)
+                   dy<-abs(seq[2]-seq[1])
+                   aux<-inv_gamma_anamorphosis(x=seq, shape=s, rate=r)
+                   ix<-which(is.finite(aux))
+                   sum( aux[ix]**2 * dnorm(seq[ix],mean=y,sd=sd) * dy) - z**2
                  }
                ) 
         )
