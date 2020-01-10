@@ -70,6 +70,8 @@ henoi<-function(i,
                  outer(obs_y.i,obs_y.i,FUN="-")**2                 # p_i x p_i
       S.i<-exp(-0.5*dist2_obs/henoi_Dh[i]**2)                      # p_i x p_i
       G.i<-exp(-0.5*dist2[sel]/henoi_Dh[i]**2)                     # p_i
+#      S.i<-exp(-sqrt(dist2_obs)/henoi_Dh[i])                      # p_i x p_i
+#      G.i<-exp(-sqrt(dist2[sel])/henoi_Dh[i])                     # p_i
       Sloc.i<-exp(-0.5*dist2_obs/henoi_Dh_loc[i]**2)               # p_i x p_i
       Gloc.i<-exp(-0.5*dist2[sel]/henoi_Dh_loc[i]**2)              # p_i
       relw_Gloc.i<-Gloc.i/sum(Gloc.i)
