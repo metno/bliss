@@ -997,7 +997,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"ensip\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"ensip\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1014,6 +1014,21 @@ p <- add_argument(p, "--time_bnds_string",
                   help="time bounds with respect to date_out (e.g., \"-1 day\" \"-1 min\")",
                   type="character",
                   default="none")
+#------------------------------------------------------------------------------
+# rasterize
+# output variables in the netcdf are "mean_raster", "sd_raster",
+#  "n_raster", "q_raster_XX" (e.g. XX=01 stands for 1st percentile).
+# q_raster_XX must have the same XX value in rasterize_q to actually generate
+# the output field (e.g. XX=01 corresponds to rasterize_q=0.01)
+p <- add_argument(p, "--rasterize_nmin",
+                  help="set to NA if less than this number of observations are within a box",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--rasterize_q",
+                  help="quantiles to be computed",
+                  type="numeric",
+                  default=NA,
+                  nargs=Inf)
 #------------------------------------------------------------------------------
 # OI shared
 p <- add_argument(p, "--corrfun",
@@ -1936,13 +1951,15 @@ if (argv$mode=="OI_multiscale") {
       print("warning: file not found",argv$iff_dem)
   }
 } else if (argv$mode=="hyletkf") {
-  print("Hybrid Local Ensemble Transform Kalman Filter")
+  print("chosen mode is Hybrid Local Ensemble Transform Kalman Filter")
 } else if (argv$mode=="letkf") {
-  print("Local Ensemble Transform Kalman Filter")
+  print("chosen mode is Local Ensemble Transform Kalman Filter")
 } else if (argv$mode=="OI_Bratseth") {
-  print("OI_Bratseth")
+  print("chosen mode is OI_Bratseth")
 } else if (argv$mode=="ensip") {
-  print("ensip")
+  print("chosen mode is ensip")
+} else if (argv$mode=="rasterize") {
+  print("chosen mode is rasterize")
 } else {
   boom("error statistical interpolation scheme undefined")
 }
@@ -3051,8 +3068,46 @@ if (argv$verbose) {
   print("Analysis")
 }
 #..............................................................................
+# ===> Rasterize  <===
+if (argv$mode=="rasterize") {
+  if (argv$verbose) print("Rasterize")
+  r<-rasterize( x=cbind(VecX,VecY), y=rmaster, field=yo, fun=mean, na.rm=T )
+  xr<-getValues(r)
+  r<-rasterize( x=cbind(VecX,VecY), y=rmaster, field=yo, fun=sd, na.rm=T )
+  xr_sd<-getValues(r)
+  r<-rasterize( x=cbind(VecX,VecY), y=rmaster, field=yo, 
+                fun=function(x,na.rm){length(na.omit(x))} )
+  xr_n<-getValues(r)
+  if (!is.na(argv$rasterize_nmin)) {
+    ix_raster<-which(!is.na(xr_n) & xr_n<argv$rasterize_nmin)
+    if (length(ix_raster)==0) {
+      rm(ix_raster)
+    } else {
+      xr[ix_raster]<-NA
+      xr_sd[ix_raster]<-NA
+    }
+    if (argv$verbose) {
+      print(paste("    number of boxes with observations within=",
+            length(which(!is.na(xr_n)))))
+      print(paste("    number of masked boxes with observations within=",
+            length(ix_raster)))
+      print(paste(" -> number of unmasked boxes=",length(which(!is.na(xr)))))
+    }
+  }
+  if (!any(is.na(argv$rasterize_q))) {
+    xr_q<-array(data=NA,dim=c(length(xr_n),length(argv$rasterize_q)))
+    for (i in 1:length(argv$rasterize_q)) {
+      r<-rasterize( x=cbind(VecX,VecY), y=rmaster, field=yo, 
+                    fun=function(x,na.rm){
+                     quantile(na.omit(x),prob=argv$rasterize_q[i],type=4)} )
+      xr_q[,i]<-getValues(r)
+    }
+    if (exists("ix_raster")) xr_q[ix_raster,]<-NA 
+    aix<-1:length(xr)
+  }
+#..............................................................................
 # ===> OI with deterministic background  <===
-if (argv$mode=="OI_firstguess") {
+} else if (argv$mode=="OI_firstguess") {
   if (argv$verbose) {
     print("OI_firstguess")
   }
@@ -5922,6 +5977,19 @@ if (!is.na(argv$off_x)) {
       xout<-xalpha
     } else if (argv$off_x.variables[i]=="observations") {
       xout<-getValues(rasterize(x=cbind(VecX,VecY),y=rmaster,field=yo,fun=mean,na.rm=T))
+    } else if (argv$off_x.variables[i]=="mean_raster") { 
+      xout<-xr 
+    } else if (argv$off_x.variables[i]=="sd_raster") { 
+      xout<-xr_sd 
+    } else if (argv$off_x.variables[i]=="n_raster") { 
+      xout<-xr_n 
+    } else if (substr(argv$off_x.variables[i],1,8)=="q_raster") { 
+      if (length( ix_q<-which(as.integer(100*argv$rasterize_q) ==
+           as.numeric(substr(argv$off_x.variables[i],10,11))))==0)
+        boom(paste("problem with variable ",argv$off_x.variables[i],
+                   "associated with quantile",
+                   as.numeric(substr(argv$off_x.variables[i],10,11))))
+      xout<-xr_q[,ix_q] 
     }
     if (is.array(xout)) {
       if (dim(xout)[1]==length(aix) & length(aix)!=ng) {
