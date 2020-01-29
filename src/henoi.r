@@ -90,9 +90,10 @@ henoi <- function( i,
       Sb.i<- Sf.i + alpha * S.i                                    # p_i x p_i
       Gb.i<- Gf.i + alpha * G.i                                    # 1 x p_i 
       diag_R.i <- alpha * henoi_eps2[i] * var_o_coeff.i / sum(var_o_coeff.i*relw_Gloc.i)
-      SbRinv.i <- try( chol2inv( chol( (Sb.i+diag(diag_R.i)))))    # p_i x p_i
+      SbRinv.i <- try( chol2inv( chol( (Sb.i + diag( diag_R.i, nrow=p_i, ncol=p_i)))))    # p_i x p_i
       # slower alternative
-      if ( !is.null( attr( SbRinv.i, "class"))) SbRinv.i <- solve( Sb.i + diag( diag_R.i))
+      if ( !is.null( attr( SbRinv.i, "class"))) 
+        SbRinv.i <- solve( Sb.i + diag( diag_R.i, nrow=p_i, ncol=p_i))
       K.i   <- tcrossprod( Gb.i, SbRinv.i) # 1 x p_i 
       xa    <- xb[i] + tcrossprod( K.i, d.i)
       xidi  <- rowSums( K.i)

@@ -1239,8 +1239,8 @@ p <- add_argument(p, "--ensip.rloc_min",
                   help="do not use observations if they are too far from a location. pmax is still they strongest constrain. Set this parameter to 0 to use always pmax observations.",
                   type="numeric",
                   default=0)
-p <- add_argument(p, "--ensip.henoi_alt",
-                  help="Alternative HEnOI",
+p <- add_argument(p, "--ensip.henoi_par_notadaptive",
+                  help="if true use the default values for henoi parameters",
                   flag=T)
 p <- add_argument(p, "--ensip.henoi_Dh_loc",
                   help="Reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
@@ -1258,6 +1258,22 @@ p <- add_argument(p, "--ensip.var_o_coeff",
                   help="coefficient(s) for the observation error variance",
                   type="numeric",
                   default=1)
+p <- add_argument(p, "--ensip.henoi_reflen_min",
+                  help="HEnOI adaptive parameter estimation (Dh and Dh_loc are set to the same value). Minimum value for the reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
+                  type="numeric",
+                  default=3000)
+p <- add_argument(p, "--ensip.henoi_reflen_max",
+                  help="HEnOI adaptive parameter estimation (Dh and Dh_loc are set to the same value). Maximum value for the reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--ensip.henoi_reflen_aggfact",
+                  help="HEnOI adaptive parameter estimation. The estimation needs a coarser grid and this is the aggregation factor applied to the original grid (number of grid cells).",
+                  type="numeric",
+                  default=5)
+p <- add_argument(p, "--ensip.henoi_reflen_k",
+                  help="HEnOI adaptive parameter estimation. The reflen is estimated for each grid point on a coarser grid (\"henoi_reflen_aggfact\") such that it coincides with the distance to the closest \"k\" observations, provided that is within a predetermined range (\"ensip.henoi_reflen_min\",\"ensip.henoi_reflen_max\") (k units = number of observations).",
+                  type="numeric",
+                  default=10)
 p <- add_argument(p, "--ensip.no_data_transf",
                   help="do not transform data",
                   flag=T)
@@ -1269,6 +1285,10 @@ p <- add_argument(p, "--ensip.rate",
                   help="Gamma distribution rate parameter",
                   type="numeric",
                   default=NA)
+p <- add_argument(p, "--ensip.henoi_statcov_backg",
+                  help="HEnOI static error covariance matrix function (exp or gauss)",
+                  type="character",
+                  default="gauss")
 #------------------------------------------------------------------------------
 # paths
 p <- add_argument(p, "--path2src",
@@ -1321,6 +1341,10 @@ p <- add_argument(p, "--empty_grid",
                   flag=T)
 p <- add_argument(p, "--off_x",
                   help="full file name for output at gridpoints (nc)",
+                  type="character",
+                  default=NA)
+p <- add_argument(p, "--off_rdata",
+                  help="full file name for output (rdata)",
                   type="character",
                   default=NA)
 p <- add_argument(p, "--off_y_table",
@@ -1953,15 +1977,15 @@ if (argv$mode=="OI_multiscale") {
     if (!(file.exists(argv$iff_dem))) 
       print("warning: file not found",argv$iff_dem)
   }
-} else if (argv$mode=="hyletkf") {
+} else if ( argv$mode=="hyletkf") {
   print("chosen mode is Hybrid Local Ensemble Transform Kalman Filter")
-} else if (argv$mode=="letkf") {
+} else if ( argv$mode=="letkf") {
   print("chosen mode is Local Ensemble Transform Kalman Filter")
-} else if (argv$mode=="OI_Bratseth") {
+} else if ( argv$mode=="OI_Bratseth") {
   print("chosen mode is OI_Bratseth")
-} else if (argv$mode=="ensip") {
+} else if ( argv$mode=="ensip") {
   print("chosen mode is ensip")
-} else if (argv$mode=="rasterize") {
+} else if ( argv$mode=="rasterize") {
   print("chosen mode is rasterize")
 } else {
   boom("error statistical interpolation scheme undefined")
@@ -2006,17 +2030,18 @@ if (!is.na(argv$off_y_table)   | !is.na(argv$off_yt_table)   |
 }
 cv_mode_random<-F
 cv_mode<-F
-if (!is.na(argv$off_cv_table)   | !is.na(argv$off_cvt_table)   |
-    !is.na(argv$off_cv_verif_a) | !is.na(argv$off_cvt_verif_a) |
-    !is.na(argv$off_cv_verif_b) | !is.na(argv$off_cvt_verif_b) ) {
-  cv_elab<-T
-  if (any(!is.na(argv$prId.cv))) {
-    cv_mode<-T
+if ( argv$cv_mode | 
+     !is.na( argv$off_cv_table)   | !is.na( argv$off_cvt_table)   |
+     !is.na( argv$off_cv_verif_a) | !is.na( argv$off_cvt_verif_a) |
+     !is.na( argv$off_cv_verif_b) | !is.na( argv$off_cvt_verif_b)) {
+  cv_elab <- T
+  if ( any( !is.na( argv$prId.cv))) {
+    cv_mode <- T
   } else {
-    cv_mode_random<-T
+    cv_mode_random <- T
   }
 } else {
-  cv_elab<-F
+  cv_elab <- F
 }
 if (!is.na(argv$off_lcv_table)   | !is.na(argv$off_lcvt_table)   |
     !is.na(argv$off_lcv_verif_a) | !is.na(argv$off_lcvt_verif_a) |
@@ -4958,9 +4983,9 @@ if (argv$mode=="rasterize") {
   Xb_bak <- xb
   yo_bak <- yo
   # check if an obs is prec
-  is.prec   <- vector( mode = "logical", length = nobs)
+  is.prec   <- vector( mode = "logical", length = n0)
   is.prec[] <- F
-  is.prec[ ix <- which( yo_bak >= argv$rrinf)] <- T
+  is.prec[ ix <- which( yo >= argv$rrinf)] <- T
   #  init grid stuff (aix index to not NAs background points)
   if ( ( ngrid <- length( aix)) == 0 ) { boom( "found no valid Xb grid points!") }
   grid_x <- xgrid[aix]
@@ -4973,7 +4998,7 @@ if (argv$mode=="rasterize") {
   if ( ( nobs <- length( res$ix)) == 0 ) { boom( "found no valid Yb grid points!") }
   Yb     <- res$yb # this has dimension length(ix_obs)
   Yb_bak <- Yb
-  ix_obs <- res$ix
+  ix_obs <- res$ix # used also for creating the output
   obs_x  <- VecX[ix_obs]
   obs_y  <- VecY[ix_obs]
   yo     <- yo[ix_obs]
@@ -5003,14 +5028,15 @@ if (argv$mode=="rasterize") {
       ix<-which(gammapar_back[1,]>0 & gammapar_back[2,]>0)
       shape<-mean(gammapar_back[1,ix])
       rate<-mean(gammapar_back[2,ix])
+      rm(aux,ix,gammapar_back)
     }
-    yo<-gamma_anamorphosis(yo,shape=shape,rate=rate,small_const=small_const)
+    yo <- gamma_anamorphosis( yo, shape=shape, rate=rate, small_const=small_const)
     for (e in 1:nens) {
-      Xb[,e]<-gamma_anamorphosis(Xb[,e],shape=shape,rate=rate,small_const=small_const)
-      Yb[,e]<-gamma_anamorphosis(Yb[,e],shape=shape,rate=rate,small_const=small_const)
+      Xb[,e] <- gamma_anamorphosis( Xb[,e], shape=shape, rate=rate, small_const=small_const)
+      Yb[,e] <- gamma_anamorphosis( Yb[,e], shape=shape, rate=rate, small_const=small_const)
     }
-    xb<-apply(Xb,MAR=1,FUN=mean)
-    yb<-apply(Yb,MAR=1,FUN=mean)
+    xb <- apply( Xb, MAR=1, FUN=mean)
+    yb <- apply( Yb, MAR=1, FUN=mean)
   }
   # -~- spatial analysis, Hybrid Ensemble Optimal Interpolation -~-
   # set the henoi parameters
@@ -5022,36 +5048,42 @@ if (argv$mode=="rasterize") {
   henoi_Dh[]     <- argv$ensip.henoi_Dh
   henoi_eps2[]   <- argv$ensip.henoi_eps2
   var_o_coeff[]  <- argv$ensip.var_o_coeff
-  rmaster_agg <- aggregate( rmaster, fact=5)
-  xy_agg <- xyFromCell( rmaster_agg, 1:ncell(rmaster_agg))
-  grid_x_bak<-grid_x; grid_y_bak<-grid_y; ngrid_bak<-ngrid
-  grid_x<-xy_agg[,1]; grid_y<-xy_agg[,2]; ngrid<-length(grid_x)
-  if (argv$verbose) {t0<-Sys.time(); cat("closest obs ... ")}
-  if (!is.na(argv$cores)) {
-    res<-t( mcmapply(distance_closest_k_obs,
-                     1:ngrid,
-                     SIMPLIFY=T,
-                     mc.cores=argv$cores,
-                     k=10) )
-  } else {
-    res<-t( mapply(distance_closest_k_obs,
-                   1:ngrid,
-                   SIMPLIFY=T,
-                   k=10) )
+  if (!argv$ensip.henoi_par_notadaptive) {
+    rmaster_agg <- aggregate( rmaster, fact=argv$ensip.henoi_reflen_aggfact)
+    xy_agg <- xyFromCell( rmaster_agg, 1:ncell(rmaster_agg))
+    grid_x_bak <- grid_x; grid_y_bak <- grid_y; ngrid_bak <- ngrid
+    grid_x <- xy_agg[,1]; grid_y <- xy_agg[,2]; ngrid <- length(grid_x)
+    if (argv$verbose) {t0<-Sys.time(); cat("closest obs ... ")}
+    if (!is.na(argv$cores)) {
+      res <- t( mcmapply( distance_closest_k_obs,
+                          1:ngrid,
+                          SIMPLIFY = T,
+                          mc.cores = argv$cores,
+                          k = argv$ensip.henoi_reflen_k))
+    } else {
+      res <- t( mapply( distance_closest_k_obs,
+                        1:ngrid,
+                        SIMPLIFY = T,
+                        k = argv$ensip.henoi_reflen_k))
+    }
+    if (argv$verbose) {
+      t1<-Sys.time()
+      cat(paste("time",round(t1-t0,1),attr(t1-t0,"unit"),"\n"))
+    }
+    grid_x<-grid_x_bak; grid_y<-grid_y_bak; ngrid<-ngrid_bak
+    rm(grid_x_bak,grid_y_bak)
+    rmaster_agg[] <- res[1,]
+    rmaster_agg[] <- pmax( pmin( getValues( rmaster_agg), argv$ensip.henoi_reflen_max), 
+                      argv$ensip.henoi_reflen_min)
+    r <- resample( focal( rmaster_agg, 
+           w=matrix( 1, argv$ensip.henoi_reflen_aggfact, argv$ensip.henoi_reflen_aggfact),
+           fun=mean, na.rm=T, pad=T),
+           rmaster, method="bilinear")
+    henoi_Dh_loc[] <- pmax( pmin( getValues(r)[aix], argv$ensip.henoi_reflen_max), 
+                       argv$ensip.henoi_reflen_min)
+    henoi_Dh[] <- henoi_Dh_loc
+    rm( r, rmaster_agg, res, xy_agg)
   }
-  if (argv$verbose) {
-    t1<-Sys.time()
-    cat(paste("time",round(t1-t0,1),attr(t1-t0,"unit"),"\n"))
-  }
-  grid_x<-grid_x_bak; grid_y<-grid_y_bak; ngrid<-ngrid_bak
-  rm(grid_x_bak,grid_y_bak)
-  rmaster_agg[] <- res[1,]
-  rmaster_agg[] <- pmax( pmin( getValues( rmaster_agg), 10000), 3000)
-  r <- resample( focal( rmaster_agg, w=matrix(1,5,5), fun=mean, na.rm=T, pad=T),
-                 rmaster, method="bilinear")
-  henoi_Dh_loc[] <- pmax( pmin( getValues(r)[aix], 10000), 3000)
-  henoi_Dh[] <- henoi_Dh_loc
-  rm(r)
   # henoi on the grid
   if (!is.na(argv$off_x)) {
     Af     <- Xb - xb
@@ -5065,7 +5097,8 @@ if (argv$mode=="rasterize") {
                         mc.cores = argv$cores,
                         pmax     = argv$ensip.pmax,
                         rloc_min = argv$ensip.rloc_min,
-                        rr_inf   = argv$rr_inf,
+                        rr_inf   = argv$rrinf,
+                        statcov_backg   = argv$ensip.henoi_statcov_backg,
                         nens     = nens))
     } else {
       res<-t( mapply( henoi,
@@ -5073,7 +5106,8 @@ if (argv$mode=="rasterize") {
                       SIMPLIFY = T,
                       pmax     = argv$ensip.pmax,
                       rloc_min = argv$ensip.rloc_min,
-                      rr_inf   = argv$rr_inf,
+                      rr_inf   = argv$rrinf,
+                      statcov_backg   = argv$ensip.henoi_statcov_backg,
                       nens     = nens))
     }
     if (argv$verbose) {
@@ -5085,7 +5119,7 @@ if (argv$mode=="rasterize") {
     xidi_res      <- res[,3]
     xalpha        <- res[,4]
     isp <- which( !as.logical( res[,5]))
-    rm(res)
+    rm( res, Pfdiag, Af, HAf)
     # data back-transformation (default = 0 everywhere)
     xa_xpv <- vector( mode="numeric", length=ngrid); xa_xpv[] <- 0
     xa_var <- vector( mode="numeric", length=ngrid); xa_var[] <- NA
@@ -5101,7 +5135,7 @@ if (argv$mode=="rasterize") {
                                                rate  = rate,
                                                small_const = small_const)
         # Gamma, variances
-        xa_var[isp] <- inv_gamma_anamorphosis_var( xa_tr[isp],
+        xa_var[isp] <- inv_gamma_anamorphosis_var( xa_henoi_mean[isp],
                                                    sigma = xa_henoi_var[isp],
                                                    shape = shape,
                                                    rate  = rate,
@@ -5117,7 +5151,7 @@ if (argv$mode=="rasterize") {
       xa_pdf_par[isp,1] <- xa_henoi_mean 
       xa_pdf_par[isp,2] <- xa_henoi_var
     }
-    rm(xa_henoi_mean,xa_henoi_var)
+    rm( xa_henoi_mean, xa_henoi_var, isp)
   } # end henoi on the grid
   # -~- CV statistics -~-
   if (cv_mode) {
@@ -5125,8 +5159,6 @@ if (argv$mode=="rasterize") {
     grid_x_avbak <- grid_x
     grid_y_avbak <- grid_y
     ngrid_avbak  <- ngrid
-    Xb_avbak <- Xb
-    xb_avbak <- xb
     # set background at CV locations (Xb is transformed)
     res <- obsop_precip( r=rmaster, xcoord=VecX_cv, ycoord=VecY_cv)
     if ( ( ngrid <- length( res$ix)) == 0 ) { boom( "found no valid Xb at cv points!") }
@@ -5135,6 +5167,7 @@ if (argv$mode=="rasterize") {
     xb <- rowMeans( Xb)
     grid_x <- VecX_cv[ix_cv]
     grid_y <- VecY_cv[ix_cv]
+    rm(res)
     # set henoi parameters in a constitent way as for the grid
     henoi_Dh_avbak     <- henoi_Dh 
     henoi_Dh_loc_avbak <- henoi_Dh_loc
@@ -5146,8 +5179,9 @@ if (argv$mode=="rasterize") {
     henoi_Dh_loc <- extract( r, cbind( grid_x, grid_y))
     r[aix]       <- henoi_eps2
     henoi_eps2   <- extract( r, cbind( grid_x, grid_y))
+    rm(r)
     # spatial analysis
-    if (!exists( HAf)) HAf <- Yb - yb
+    HAf <- Yb - yb
     Af <- HAf
     Pfdiag <- apply(  Af, MAR=1, FUN=var)
     if (argv$verbose) { t0<-Sys.time(); cat("cv henoi ... ") }
@@ -5158,7 +5192,8 @@ if (argv$mode=="rasterize") {
                           mc.cores = argv$cores,
                           pmax     = argv$ensip.pmax,
                           rloc_min = argv$ensip.rloc_min,
-                          rr_inf   = argv$rr_inf,
+                          rr_inf   = argv$rrinf,
+                          statcov_backg   = argv$ensip.henoi_statcov_backg,
                           nens     = nens))
     } else {
       res <- t( mapply( henoi,
@@ -5166,7 +5201,8 @@ if (argv$mode=="rasterize") {
                         SIMPLIFY = T,
                         pmax     = argv$ensip.pmax,
                         rloc_min = argv$ensip.rloc_min,
-                        rr_inf   = argv$rr_inf,
+                        rr_inf   = argv$rrinf,
+                        statcov_backg   = argv$ensip.henoi_statcov_backg,
                         nens     = nens))
     }
     if (argv$verbose) {
@@ -5175,43 +5211,60 @@ if (argv$mode=="rasterize") {
     }
     yav_henoi_mean <- res[,1]
     yav_henoi_var  <- res[,2]
-    yidiv_tmp      <- res[,3]
-    yav_alpha_tmp  <- res[,4]
+    yidiv      <- res[,3]
+    yav_alpha  <- res[,4]
     isp <- which( !as.logical( res[,5]))
-    rm(res)
+    rm( res, Pfdiag, Af, HAf)
     # data back-transformation (default = 0 everywhere)
-    yav_xpv_tmp <- vector( mode="numeric", length=ngrid); yav_xpv_tmp[] <- 0
-    yav_var_tmp <- vector( mode="numeric", length=ngrid); yav_var_tmp[] <- NA
+    yav_xpv <- vector( mode="numeric", length=ngrid); yav_xpv[] <- 0
+    yav_var <- vector( mode="numeric", length=ngrid); yav_var[] <- NA
     # pdf parameters. gamma, 1-shape, 2-rate / gauss, 1-mean, 2-var
-    yav_pdf_par_tmp <- array( data=0, dim=c(ngrid,2)) 
+    yav_pdf_par <- array( data=0, dim=c(ngrid,2)) 
     # Gaussian anamorphosis
     if ( !argv$ensip.no_data_transf ) {
       if ( length(isp) > 0 ) {
         # Gamma, expected values
-        yav_xpv_tmp[isp] <- inv_gamma_anamorphosis( yav_henoi_mean[isp],
-                                               sigma = yav_henoi_var[isp],
-                                               shape = shape,
-                                               rate  = rate,
-                                               small_const = small_const)
+        yav_xpv[isp] <- inv_gamma_anamorphosis( yav_henoi_mean[isp],
+                                                sigma = yav_henoi_var[isp],
+                                                shape = shape,
+                                                rate  = rate,
+                                                small_const = small_const)
         # Gamma, variances
-        yav_var_tmp[isp] <- inv_gamma_anamorphosis_var( yav_tr[isp],
-                                                   sigma = yav_henoi_var[isp],
-                                                   shape = shape,
-                                                   rate  = rate,
-                                                   xstar = yav_henoi_mean[isp])
+        yav_var[isp] <- inv_gamma_anamorphosis_var( yav_henoi_mean[isp],
+                                                    sigma = yav_henoi_var[isp],
+                                                    shape = shape,
+                                                    rate  = rate,
+                                                    xstar = yav_henoi_mean[isp])
       
-        yav_pdf_par_tmp[isp,1] <- yav_xpv[isp]**2 / yav_var[isp] # shape
-        yav_pdf_par_tmp[isp,2] <- yav_xpv[isp]    / yav_var[isp] # rate
+        yav_pdf_par[isp,1] <- yav_xpv[isp]**2 / yav_var[isp] # shape
+        yav_pdf_par[isp,2] <- yav_xpv[isp]    / yav_var[isp] # rate
       }
     # no back-transformation
     } else {
-      yav_xpv_tmp[isp] <- yav_henoi_mean[isp]
-      yav_var_tmp[isp] <- yav_henoi_var[isp]
-      yav_pdf_par_tmp[isp,1] <- yav_henoi_mean 
-      yav_pdf_par_tmp[isp,2] <- yav_henoi_var
+      yav_xpv[isp] <- yav_henoi_mean[isp]
+      yav_var[isp] <- yav_henoi_var[isp]
+      yav_pdf_par[isp,1] <- yav_henoi_mean 
+      yav_pdf_par[isp,2] <- yav_henoi_var
     }
-    rm(yav_henoi_mean,yav_henoi_var)
-    # arrange stuff so to get a nice cv-output and restore old grid variables 
+    rm( yav_henoi_mean, yav_henoi_var, isp)
+    # prepare for output
+    ya_cv <- vector( mode="numeric", length=ncv); ya_cv[] <- NA
+    yb_cv       <- ya_cv # NAs
+    ya_cv_var   <- ya_cv # NAs
+    yb_cv       <- ya_cv # NAs
+    yidi_cv     <- ya_cv # NAs
+    ya_cv_alpha <- ya_cv # NAs
+    ya_cv_pdf_par <- array( data=NA, dim=c(ncv,2))
+    Yb_cv         <- array( data=NA, dim=c(ncv,nens))
+    ya_cv[ix_cv]     <- yav_xpv
+    ya_cv_var[ix_cv] <- yav_var
+    yidi_cv[ix_cv]   <- yidiv
+    ya_cv_alpha[ix_cv]    <- yav_alpha
+    ya_cv_pdf_par[ix_cv,] <- yav_pdf_par
+    yb_cv[ix_cv]     <- xb
+    Yb_cv[ix_cv,]    <- Xb
+    rm(ix_cv, yav_xpv, yav_var, yidiv, yav_alpha, yav_pdf_par)
+    # restore old grid variables 
     grid_x <- grid_x_avbak
     grid_y <- grid_y_avbak
     ngrid  <- ngrid_avbak
@@ -5221,60 +5274,46 @@ if (argv$mode=="rasterize") {
     henoi_Dh     <- henoi_Dh_avbak
     henoi_Dh_loc <- henoi_Dh_loc_avbak
     henoi_eps2   <- henoi_eps2_avbak
-    Xb <- Xb_avbak
-    xb <- xb_avbak
     rm(list = ls()[grep("_avbak$", ls())])
   } # end of cv_mode
   # -~- prepare for output at observation point -~-
   # init
   ya_pdf_par <- array( data=NA, dim=c(n0,2))
   yb <- vector( mode="numeric", length=n0); yb[]<-NA
-  ya       <- yb 
-  yidi     <- yb
-  ya_alpha <- yb
-  yav_xpv <- vector( mode="numeric", length=ncv); yav_xpv[] <- NA
-  yav_var   <- yav_xpv
-  yidiv     <- yav_xpv
-  yav_alpha <- yav_xpv
-  yav_pdf_par <- array( data=NA, dim=c(ncv,2)) 
+  ya       <- yb #NAs
+  yidi     <- yb #NAs
+  ya_alpha <- yb #NAs
   # observations
   yo <- yo_bak
   # background ensemble mean at observation point
   yb[ix_obs] <- rowMeans( Yb_bak)
+  rm(ix_obs)
   # fill in only if the fields have been created
-  if (!is.na(argv$off_x)) {
+  if ( !is.na( argv$off_x)) {
     # analysis at observation points
     r <- rmaster
     r[aix] <- xa_xpv
-    ya <- extract(r,cbind(VecX,VecY))
+    ya     <- extract( r, cbind( VecX, VecY))
     # idi at observation points
     r[aix] <- xidi_res
-    yidi <- extract(r,cbind(VecX,VecY))
+    yidi   <- extract( r, cbind( VecX, VecY))
     # alpha at observation points
-    r[aix]<-xalpha
-    ya_alpha<-extract(r,cbind(VecX,VecY))
+    r[aix]   <- xalpha
+    ya_alpha <- extract( r, cbind( VecX, VecY))
     #
-    r[aix]<-xa_pdf_par[,1]
-    ya_pdf_par[,1]<-extract(r,cbind(VecX,VecY))
-    r[aix]<-xa_pdf_par[,2]
-    ya_pdf_par[,2]<-extract(r,cbind(VecX,VecY))
-  }
-  # fill in only if cv_mode is true
-  if (cv_mode) {
-    yav_xpv[ix_cv]   <- yav_xpv_tmp
-    yav_var[ix_cv]   <- yav_var_tmp
-    yidiv[ix_cv]     <- yidiv_tmp
-    yav_alpha[ix_cv] <- yav_alpha_tmp
-    yav_pdf_par[ix_cv,] <- yav_pdf_par_tmp
-    rm(ix_cv)
-    rm(list = ls()[grep("_tmp$", ls())])
+    r[aix]         <- xa_pdf_par[,1]
+    ya_pdf_par[,1] <- extract(r,cbind(VecX,VecY))
+    r[aix]         <- xa_pdf_par[,2]
+    ya_pdf_par[,2] <- extract(r,cbind(VecX,VecY))
+    rm(r)
   }
   # -~- prepare for gridded output -~-
-  if (!is.na(argv$off_x)) {
+  if ( !is.na( argv$off_x) ) {
     xa <- xa_xpv
+    xa_errsd <- xa_var; xa_errsd[] <- NA
     if ( length( ix <- which( xa_var < 0 ))) {
-      xa_errsd <- xa_var
-      xa_errsd[ix] <- sqrt( xa_var[ix])
+      xa_errsd[ix] <- xa_var[ix]
+      xa_errsd[-ix] <- sqrt( xa_var[-ix])
       cat(paste("@@ Warning: negative variance found for ",length(ix),"points.\n"))
       cat("For those points, the negative variance is reported as output.\n")
     } else {
@@ -5286,160 +5325,10 @@ if (argv$mode=="rasterize") {
       cat(paste("@@ Warning: negative IDI found for ",length(ix),"points.\n"))
     xdh  <- henoi_Dh_loc
     rm(list = ls()[grep("_bak$", ls())])
+    rm( xa_xpv, xa_var, henoi_Dh_loc, xidi_res)
   }
 } # end if for the selection among OIs
-#..............................................................................
-#..............................................................................
-# 
-#CVmode
-#if ((argv$cv_mode|argv$cv_mode_random)) {
-#  if (argv$verbose) t00<-Sys.time() 
-#  #CVmode for deterministic analysis
-#  if (is.null(argv$iff_fg.epos)) {
-##    ya_cv<-extract(ra,cbind(VecX_cv,VecY_cv),method="bilinear")
-##    yb_cv<-vector(mode="numeric",length=ncv)
-##    yb_cv[]<-NA
-#    ya_cv<-xa
-#    yb_cv<-xb
-#    Dh<-argv$Dh
-#  #CVmode for ensemble analysis
-#  } else {
-#    ya_cv<-array(data=NA,dim=c(ncv,length(argv$iff_fg.e)))
-#    yb_cv<-array(data=NA,dim=c(ncv,length(argv$iff_fg.e)))
-#    for (e in 1:length(argv$iff_fg.e)) {
-#      if (argv$iff_fg.e[e] %in% valens) {
-#        i<-which(valens==argv$iff_fg.e[e])
-#        ya_cv[,e]<-xa[,i]
-#        yb_cv[,e]<-xb[,i]
-#      }
-#    }
-#    if (argv$mode=="hyletkf") Dh<-argv$hyletkf.Dh_oi
-#  }
-#  #
-#  if (argv$idiv_instead_of_elev) {
-#    if (argv$mode=="OI_multiscale") {
-#      eps2_idiv<-argv$oimult.eps2_idi
-#      Dh_idiv<-argv$oimult.Dh_idi
-#    } else if (argv$mode=="OI_firstguess") {
-#      eps2_idiv<-eps2
-#      Dh_idiv<-dh
-#    } else {
-#      eps2_idiv<-argv$eps2
-#      Dh_idiv<-Dh
-#    }
-#    if (n0>=argv$maxobs_for_matrixInv) {
-#      Dh_idiv2<-Dh_idiv*Dh_idiv
-#      if (argv$mode=="OI_firstguess") {
-#        pmax<-argv$pmax
-#        idiv<-function(i) {
-#          # typeA vector VecX, VecY,... dimension 1:n0
-#          # typeB vector rloc, ... dimension 1:n.i
-#          deltax<-abs(VecX_cv[i]-VecX)
-#          deltay<-abs(VecY_cv[i]-VecY)
-#          if (!any(deltax<(7*Dh_idiv))) return(0)
-#          if (!any(deltay<(7*Dh_idiv))) return(0)
-#          ixa<-which( deltax<(7*Dh_idiv) & 
-#                      deltay<(7*Dh_idiv) )
-#          # i-th gridpoint analysis 
-#          if (length(ixa)>0) {
-#            # exp (-1/2 * dist**2 / dh**2)
-#            rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
-##            dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
-##            rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
-#            if (length(ixa)>argv$hyletkf.pmax) {
-#              ixb<-order(rloc, decreasing=T)[1:pmax]
-#              rloc<-rloc[ixb]
-#              ixa<-ixa[ixb]
-#              rm(ixb)
-#            }
-#            idiv<-rloc %*% rowSums( chol2inv(chol( 
-#             exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
-#                       outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
-#             eps2_idiv[ixa]*diag(length(ixa))
-#                            )) )
-#          # i-th gridpoint is isolated
-#          } else {
-#            idiv<-0
-#          }
-#          return(idiv)
-#        }
-#        if (!is.na(argv$cores)) {
-#          elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),
-#                               mc.cores=argv$cores,SIMPLIFY=T))
-#        } else {
-#          elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
-#        }
-#      } else {
-#        Dh_idiv2<-1000*Dh_idiv*1000*Dh_idiv
-#        pmax<-argv$pmax
-#        if (argv$mode=="hyletkf") pmax<-argv$hyletkf.pmax
-#        idiv<-function(i) {
-#          # typeA vector VecX, VecY,... dimension 1:n0
-#          # typeB vector rloc, ... dimension 1:n.i
-#          deltax<-abs(VecX_cv[i]-VecX)
-#          deltay<-abs(VecY_cv[i]-VecY)
-#          if (!any(deltax<(7*Dh_idiv))) return(0)
-#          if (!any(deltay<(7*Dh_idiv))) return(0)
-#          ixa<-which( deltax<(7*Dh_idiv) & 
-#                      deltay<(7*Dh_idiv) )
-#          # i-th gridpoint analysis 
-#          if (length(ixa)>0) {
-#            # exp (-1/2 * dist**2 / dh**2)
-#            rloc<-exp(-0.5* (deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa]) / Dh_idiv2)
-##            dist<-sqrt(deltax[ixa]*deltax[ixa]+deltay[ixa]*deltay[ixa])
-##            rloc<-(1+dist/Dh_oi)*exp(-dist/Dh_oi)
-#            if (length(ixa)>argv$hyletkf.pmax) {
-#              ixb<-order(rloc, decreasing=T)[1:pmax]
-#              rloc<-rloc[ixb]
-#              ixa<-ixa[ixb]
-#              rm(ixb)
-#            }
-#            idiv<-rloc %*% rowSums( chol2inv(chol( 
-#             exp(-0.5*(outer(VecY[ixa],VecY[ixa],FUN="-")**2.+ 
-#                       outer(VecX[ixa],VecX[ixa],FUN="-")**2.)/Dh_idiv2) +
-#             eps2_idiv*diag(length(ixa))
-#                            )) )
-#          # i-th gridpoint is isolated
-#          } else {
-#            idiv<-0
-#          }
-#          return(idiv)
-#        }
-#        if (!is.na(argv$cores)) {
-#          elev_for_verif_cv<-t(mcmapply(idiv,1:length(VecX_cv),
-#                               mc.cores=argv$cores,SIMPLIFY=T))
-#        } else {
-#          elev_for_verif_cv<-t(mapply(idiv,1:length(VecX_cv),SIMPLIFY=T))
-#        }
-#      }
-#    # if (n0<argv$maxobs_for_matrixInv) {
-#    } else {
-#      D<-exp(-0.5*((outer(VecY,VecY,FUN="-")**2.+
-#                    outer(VecX,VecX,FUN="-")**2.)**0.5/1000.
-#                   /Dh_idiv)**2.)
-#      diag(D)<-diag(D)+eps2_idiv
-#      InvD<-chol2inv(chol(D))
-#      rm(D)
-#      G<-exp(-0.5*((outer(VecY_cv,VecY,FUN="-")**2.+
-#                    outer(VecX_cv,VecX,FUN="-")**2.)**0.5/1000.
-#                   /Dh_idiv)**2.)
-#      W<-tcrossprod(G,InvD)
-#      rm(G,InvD)
-#      # this is the cross-validation integral data influence ("yidiv")
-#      elev_for_verif_cv<-rep(1,ncv) + 1./(1.-diag(W)) * (rowSums(W)-rep(1,ncv))
-#      rm(W)
-#    } 
-#  #
-#  # if (!argv$idiv_instead_of_elev)
-#  } else {
-#    elev_for_verif_cv<-VecZ_cv
-#  }
-#  if (argv$verbose) {
-#    t11<-Sys.time()
-#    print(paste("cv-mode prepare output time=",round(t11-t00,1),
-#                                               attr(t11-t00,"unit")))
-#  }
-#}
+#
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 if (argv$verbose) print("++ Output")
 #------------------------------------------------------------------------------
@@ -5829,10 +5718,22 @@ for (file in c(argv$off_y_verif_a,argv$off_y_verif_b,argv$off_y_verif_av,
   if (is.null(res)) print(paste("ERROR while writing ",file))
   print(paste("output saved on file",file))
 }
-#------------------------------------------------------------------------------
 #
+#------------------------------------------------------------------------------
+# rdata output
+if ( !is.na( argv$off_rdata)) {
+  if ( argv$mode=="ensip" ) {
+    save( file= argv$off_rdata,
+          # cv
+          yo_cv, ya_cv, ya_cv_var, yb_cv, yidi_cv, ya_cv_alpha, ya_cv_pdf_par, Yb_cv
+          )
+  }
+  print(paste("output saved on file",argv$off_rdata))
+}
+#
+#------------------------------------------------------------------------------
 # gridded output
-if (!is.na(argv$off_x)) {
+if ( !is.na( argv$off_x)) {
   if (!exists("r.list")) r.list<-list()
   r<-rmaster; r[]<-NA
   for (i in 1:length(argv$off_x.variables)) {
@@ -5853,10 +5754,10 @@ if (!is.na(argv$off_x)) {
       xout<-xdh
     } else if (argv$off_x.variables[i]=="gamma_shape") {
       if (!exists("a_gamma_shape")) {a_gamma_shape<-aix;a_gamma_shape[]<-NA}
-      xout<-a_gamma_shape
+      xout<-xa_pdf_par[,1]
     } else if (argv$off_x.variables[i]=="gamma_rate") {
       if (!exists("a_gamma_rate")) {a_gamma_rate<-aix;a_gamma_rate[]<-NA}
-      xout<-a_gamma_rate
+      xout<-xa_pdf_par[,2]
     } else if (argv$off_x.variables[i]=="alpha") {
       if (!exists("xalpha")) {xalpha<-aix;xalpha[]<-NA}
       xout<-xalpha
