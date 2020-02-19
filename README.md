@@ -1,5 +1,4 @@
-# bliss [![DOI](https://zenodo.org/badge/154810577.svg)](https://zenodo.org/badge/latestdoi/154810577)
-
+# bliss 
 
 BLISS is an R-program for spatial interpolation of near-surface meteorological variables through statistical methods.
 It includes several statistical interpolation schemes:
@@ -7,8 +6,14 @@ It includes several statistical interpolation schemes:
 * OI\_multiscale. Multiscale Optimal Interpolation based on observations only.
 * OI\_firstguess. Optimal Interpolation based on the combination of observations with a background field. It is possible to specify a data transformation as a pre-processing step (i.e., Gaussian anamorphosis).
 * OI\_twosteptemperature. Modified Optimal Interpolation based on observations only.
-* letkf. Local Ensemble Transform Kalman Filter.
-* hyletkf. Hybrid Local Ensemble Transform Kalman Filter.
+* OI\_Bratseth
+* SC\_Barnes
+* Ensemble-based Statitical Interpolation (EnSI)
+* EnSI with Gaussian Anamorphosis for Precipitation (EnSIGAP)
+
+and also:
+
+* Rasterize.
 
 Installation instructions
 -------------------------
@@ -22,13 +27,11 @@ The following R-libraries are needed:
 * ncdf4
 * dotnc (not available for public download, write a mail to Cristian Lussana)
 
-Install the R-package using either [devtools](https://cran.r-project.org/web/packages/devtools/README.html):
+bliss.r expect the envirnment variable BLISS\_PATH to be defined
 
 ```
-devtools::install_github("metno/bliss_rr")
+export BLISS_PATH="/home/cristianl/projects/bliss"
 ```
-
-or as described [here](https://cran.r-project.org/).
 
 Copyright and license
 ---------------------
