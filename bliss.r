@@ -1760,6 +1760,9 @@ p <- add_argument(p, "--iff_dem.adjval",
                   default="0")
 #------------------------------------------------------------------------------
 # first-guess file netcdf parameters
+p <- add_argument(p, "--fg_upscale",
+                  help="upscale first-guess on master grid",
+                  flag=T)
 p <- add_argument(p, "--iff_fg.varname",
                   help="name of the variable to read from the file",
                   type="character",
@@ -2015,6 +2018,9 @@ if (!is.na(argv$cores)) {
   if (argv$cores==0) argv$cores <- detectCores()
   print(paste("--> multi-core run, cores=",argv$cores))
 }
+if ( !file.exists( file.path( argv$path2src, "read_and_regrid_nc.r")))
+  boom( paste( "file not found", file.path(argv$path2src, "read_and_regrid_nc.r")))
+source( file.path( argv$path2src, "read_and_regrid_nc.r"))
 # define elaboration mode
 if (!is.na(argv$off_x)) {
   x_elab<-T
@@ -2177,359 +2183,227 @@ if (argv$empty_grid & !is.na(argv$off_x)) {
 # read rescaling factor
 if (file.exists(argv$iff_rf)) {
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    print(paste("+ rescaling factor",argv$iff_rf))
+    cat("+---------------------------------------------------------------+\n")
+    cat(paste("+ rescaling factor",argv$iff_rf,"\n"))
   }
-  argv$iff_rf.epos<-set_NAs_to_NULL(argv$iff_rf.epos)
-  argv$iff_rf.tpos<-set_NAs_to_NULL(argv$iff_rf.tpos)
-  argv$iff_rf.tpos_ll<-set_NAs_to_NULL(argv$iff_rf.tpos_ll)
-  argv$iff_rf.e<-set_NAs_to_NULL(argv$iff_rf.e)
-  if (any(argv$iff_rf.names=="time")) {
-    if (argv$iff_rf.t=="none") argv$iff_rf.t<-nc4.getTime(argv$iff_rf)[1]
-  } else {
-    argv$iff_rf.t<-NULL
-  }
-  raux<-try(read_dotnc(nc.file=argv$iff_rf,
-                       nc.varname=argv$iff_rf.varname,
-                       topdown=argv$iff_rf.topdown,
-                       out.dim=list(ndim=argv$iff_rf.ndim,
-                                    tpos=argv$iff_rf.tpos,
-                                    epos=argv$iff_rf.epos,
-                                    names=argv$iff_rf.names),
-                       proj4=argv$iff_rf.proj4,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_rf.t,
-                                      format=argv$iff_rf.tfmt,
-                                      e=argv$iff_rf.e)))
-  if (is.null(raux)) 
-    boom("error reading the rescaling file")
-  if (argv$iff_rf.adjfact!=1 | argv$iff_rf.adjval!=0) 
-    raux$stack[]<-getValues(raux$stack)*argv$iff_rf.adjfact+argv$iff_rf.adjval
-  rrf<-raux$stack; rm(raux)
-  if (!rasters_match(rrf,rmaster)) {
-    if (argv$iff_rf.varname_lat=="none") {
-      rrf<-projectRaster(rrf,rmaster)
-      rf<-getValues(rrf)
-    } else {
-      raux<-try(read_dotnc(nc.file=argv$iff_rf,
-                       nc.varname=argv$iff_rf.varname_lat,
-                       topdown=argv$iff_rf.topdown,
-                       out.dim=list(ndim=argv$iff_rf.ndim_ll,
-                                    tpos=argv$iff_rf.tpos_ll,
-                                    epos=NULL,
-                                    names=argv$iff_rf.names_ll),
-                       proj4=proj4.llwgs84,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_rf.t,
-                                      format=argv$iff_rf.tfmt,
-                                      e=NULL)))
-      if (is.null(raux)) 
-        boom("error reading the rescaling file (lat)")
-      lat<-raux$data; rm(raux)
-      raux<-try(read_dotnc(nc.file=argv$iff_rf,
-                           nc.varname=argv$iff_rf.varname_lon,
-                           topdown=argv$iff_rf.topdown,
-                           out.dim=list(ndim=argv$iff_rf.ndim_ll,
-                                        tpos=argv$iff_rf.tpos_ll,
-                                        epos=NULL,
-                                        names=argv$iff_rf.names_ll),
-                           proj4=proj4.llwgs84,
-                           nc.proj4=list(var=NULL,
-                                         att=NULL),
-                           selection=list(t=argv$iff_rf.t,
-                                          format=argv$iff_rf.tfmt,
-                                          e=NULL)))
-      if (is.null(raux)) 
-        boom("error reading the rescaling file (lon)")
-      lon<-raux$data; rm(raux)
-      coord.new<-spTransform(SpatialPoints(cbind(lon,lat),
-                                           proj4string=CRS(proj4.llwgs84)),
-                             CRS(argv$grid_master.proj4))
-      #
-      rf<-getValues(rrf)
-      rrfagg<-rasterize(coord.new,
-                        aggregate(rmaster,fact=4),
-                        rf)
-      rrf<-mask( crop( disaggregate(rrfagg,fact=4,method="bilinear"),
-                       rmaster),
-                 rmaster)
-      rf<-getValues(rrf)
-    }
-  }
+  res <- read_and_regrid_nc( 
+    nc.file    = argv$iff_rf,
+    nc.varname = argv$iff_rf.varname,
+    topdown    = argv$iff_rf.topdown,
+    out.dim    = list( ndim=argv$iff_rf.ndim,
+                       tpos=argv$iff_rf.tpos,
+                       epos=argv$iff_rf.epos,
+                       names=argv$iff_rf.names),
+    proj4      = argv$iff_rf.proj4,
+    nc.proj4   = list( var=NULL,
+                       att=NULL),
+    selection  = list( t=argv$iff_rf.t,
+                       format=argv$iff_rf.tfmt,
+                       e=argv$iff_rf.e),
+    adjfact    = argv$iff_rf.adjfact,
+    adjval     = argv$iff_rf.adjval,
+    rmaster    = rmaster,
+    grid_master.proj4 = argv$grid_master.proj4 ,
+    nc.varname_lat = "none",
+    nc.varname_lon = "none",
+    out.dim_ll     = list(ndim=argv$iff_rf.ndim_ll,
+                          tpos=argv$iff_rf.tpos_ll,
+                          epos=NULL,
+                          names=argv$iff_rf.names_ll)) 
+  rrf <- res$raster
+  rf  <- res$values
+  rm( res)
 }
 #
 #------------------------------------------------------------------------------
 # read land area fraction
 if (file.exists(argv$iff_laf)) {
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    print(paste("+ land area fraction",argv$iff_laf))
+    cat("+---------------------------------------------------------------+\n")
+    cat(paste("+ land area fraction",argv$iff_laf,"\n"))
   }
-  argv$iff_laf.epos<-set_NAs_to_NULL(argv$iff_laf.epos)
-  argv$iff_laf.tpos<-set_NAs_to_NULL(argv$iff_laf.tpos)
-  argv$iff_laf.e<-set_NAs_to_NULL(argv$iff_laf.e)
-  if (any(argv$iff_laf.names=="time")) {
-    if (argv$iff_laf.t=="none") argv$iff_laf.t<-nc4.getTime(argv$iff_laf)[1]
-  } else {
-    argv$iff_laf.t<-NULL
-  }
-  raux<-try(read_dotnc(nc.file=argv$iff_laf,
-                       nc.varname=argv$iff_laf.varname,
-                       topdown=argv$iff_laf.topdown,
-                       out.dim=list(ndim=argv$iff_laf.ndim,
-                                    tpos=argv$iff_laf.tpos,
-                                    epos=argv$iff_laf.epos,
-                                    names=argv$iff_laf.names),
-                       proj4=argv$iff_laf.proj4,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_laf.t,
-                                      format=argv$iff_laf.tfmt,
-                                      e=argv$iff_laf.e)))
-  if (is.null(raux)) 
-    boom("error reading the land area fraction file")
-  if (argv$iff_laf.adjfact!=1 | argv$iff_laf.adjval!=0) 
-    raux$stack[]<-getValues(raux$stack)*argv$iff_laf.adjfact+argv$iff_laf.adjval
-  rlaf<-raux$stack; rm(raux)
-  laf<-getValues(rlaf)
-  if (!rasters_match(rlaf,rmaster)) {
-    if (argv$iff_laf.varname_lat=="none") {
-      rlaf<-projectRaster(rlaf,rmaster)
-      laf<-getValues(rlaf)
-      rlaf[]<-laf
-    } else {
-      raux<-try(read_dotnc(nc.file=argv$iff_laf,
-                       nc.varname=argv$iff_laf.varname_lat,
-                       topdown=argv$iff_laf.topdown,
-                       out.dim=list(ndim=argv$iff_laf.ndim,
-                                    tpos=argv$iff_laf.tpos,
-                                    epos=argv$iff_laf.epos,
-                                    names=argv$iff_laf.names),
-                       proj4=argv$iff_laf.proj4,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_laf.t,
-                                      format=argv$iff_laf.tfmt,
-                                      e=argv$iff_laf.e)))
-      if (is.null(raux)) 
-        boom("error reading the land area fraction (lat)")
-      lat<-raux$data; rm(raux)
-      raux<-try(read_dotnc(nc.file=argv$iff_laf,
-                           nc.varname=argv$iff_laf.varname_lon,
-                           topdown=argv$iff_laf.topdown,
-                           out.dim=list(ndim=argv$iff_laf.ndim,
-                                        tpos=argv$iff_laf.tpos,
-                                        epos=argv$iff_laf.epos,
-                                        names=argv$iff_laf.names),
-                           proj4=argv$iff_laf.proj4,
-                           nc.proj4=list(var=NULL,
-                                         att=NULL),
-                           selection=list(t=argv$iff_laf.t,
-                                          format=argv$iff_laf.tfmt,
-                                          e=argv$iff_laf.e)))
-      if (is.null(raux)) 
-        boom("error reading the land area fraction (lon)")
-      lon<-raux$data; rm(raux)
-      coord.new<-spTransform(SpatialPoints(cbind(lon,lat),
-                                           proj4string=argv$iff_laf.proj4),
-                             CRS(argv$grid_master.proj4))
-      #
-      laf<-getValues(rlaf)
-      rlafagg<-rasterize(coord.new,
-                        aggregate(rmaster,fact=4),
-                        laf)
-      rlaf<-mask( crop( disaggregate(rlafagg,fact=4,method="bilinear"),
-                       rmaster),
-                 rmaster)
-      laf<-getValues(rlaf)
-      rlaf[]<-laf
-    }
-  }
+  res <- read_and_regrid_nc( 
+    nc.file    = argv$iff_laf,
+    nc.varname = argv$iff_laf.varname,
+    topdown    = argv$iff_laf.topdown,
+    out.dim    = list( ndim=argv$iff_laf.ndim,
+                       tpos=argv$iff_laf.tpos,
+                       epos=argv$iff_laf.epos,
+                       names=argv$iff_laf.names),
+    proj4      = argv$iff_laf.proj4,
+    nc.proj4   = list( var=NULL,
+                       att=NULL),
+    selection  = list( t=argv$iff_laf.t,
+                       format=argv$iff_laf.tfmt,
+                       e=argv$iff_laf.e),
+    adjfact    = argv$iff_laf.adjfact,
+    adjval     = argv$iff_laf.adjval,
+    rmaster    = rmaster,
+    grid_master.proj4 = argv$grid_master.proj4 ,
+    nc.varname_lat = "none",
+    nc.varname_lon = "none",
+    out.dim_ll     = list(ndim=argv$iff_laf.ndim_ll,
+                          tpos=argv$iff_laf.tpos_ll,
+                          epos=NULL,
+                          names=argv$iff_laf.names_ll)) 
+  rlaf <- res$raster
+  laf  <- res$values
+  rm( res)
 }
 #
 #------------------------------------------------------------------------------
 # read digital elevation model 
 if (file.exists(argv$iff_dem)) {
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    print(paste("+ digital elevation model",argv$iff_dem))
+    cat("+---------------------------------------------------------------+\n")
+    cat(paste("+ digital elevation model",argv$iff_dem,"\n"))
   }
-  argv$iff_dem.epos<-set_NAs_to_NULL(argv$iff_dem.epos)
-  argv$iff_dem.tpos<-set_NAs_to_NULL(argv$iff_dem.tpos)
-  argv$iff_dem.e<-set_NAs_to_NULL(argv$iff_dem.e)
-  if (any(argv$iff_dem.names=="time")) {
-    if (argv$iff_dem.t=="none") argv$iff_dem.t<-nc4.getTime(argv$iff_dem)[1]
-  } else {
-    argv$iff_dem.t<-NULL
-  }
-  raux<-try(read_dotnc(nc.file=argv$iff_dem,
-                       nc.varname=argv$iff_dem.varname,
-                       topdown=argv$iff_dem.topdown,
-                       out.dim=list(ndim=argv$iff_dem.ndim,
-                                    tpos=argv$iff_dem.tpos,
-                                    epos=argv$iff_dem.epos,
-                                    names=argv$iff_dem.names),
-                       proj4=argv$iff_dem.proj4,
-                       nc.proj4=list(var=NULL,
-                                     att=NULL),
-                       selection=list(t=argv$iff_dem.t,
-                                      format=argv$iff_dem.tfmt,
-                                      e=argv$iff_dem.e)))
-  if (is.null(raux)) 
-    boom("error reading the digital elevation model file")
-  if (argv$iff_dem.adjfact!=1 | argv$iff_dem.adjval!=0) 
-    raux$stack[]<-getValues(raux$stack)*argv$iff_dem.adjfact+argv$iff_dem.adjval
-  rdem<-raux$stack; rm(raux)
-  dem<-getValues(rdem)
-  if (!rasters_match(rdem,rmaster)) {
-    if (argv$iff_dem.varname_lat=="none") {
-      rdem<-projectRaster(rdem,rmaster)
-      dem<-getValues(rdem)
-    } else {
-      raux<-try(read_dotnc(nc.file=argv$iff_dem,
-                           nc.varname=argv$iff_dem.varname_lat,
-                           topdown=argv$iff_dem.topdown,
-                           out.dim=list(ndim=argv$iff_dem.ndim,
-                                        tpos=argv$iff_dem.tpos,
-                                        epos=argv$iff_dem.epos,
-                                        names=argv$iff_dem.names),
-                           proj4=argv$iff_dem.proj4,
-                           nc.proj4=list(var=NULL,
-                                         att=NULL),
-                           selection=list(t=argv$iff_dem.t,
-                                          format=argv$iff_dem.tfmt,
-                                          e=argv$iff_dem.e)))
-      if (is.null(raux)) 
-        boom("error reading digital elevation model (lat)")
-      lat<-raux$data; rm(raux)
-      raux<-try(read_dotnc(nc.file=argv$iff_dem,
-                           nc.varname=argv$iff_dem.varname_lon,
-                           topdown=argv$iff_dem.topdown,
-                           out.dim=list(ndim=argv$iff_dem.ndim,
-                                        tpos=argv$iff_dem.tpos,
-                                        epos=argv$iff_dem.epos,
-                                        names=argv$iff_dem.names),
-                           proj4=argv$iff_dem.proj4,
-                           nc.proj4=list(var=NULL,
-                                         att=NULL),
-                           selection=list(t=argv$iff_dem.t,
-                                          format=argv$iff_dem.tfmt,
-                                          e=argv$iff_dem.e)))
-      if (is.null(raux)) 
-        boom("error reading digital elevation model (lon)")
-      lon<-raux$data; rm(raux)
-      coord.new<-spTransform(SpatialPoints(cbind(lon,lat),
-                                           proj4string=argv$iff_dem.proj4),
-                             CRS(argv$grid_master.proj4))
-      #
-      dem<-getValues(rdem)
-      rdemagg<-rasterize(coord.new,
-                        aggregate(rmaster,fact=4),
-                        dem)
-      rdem<-mask( crop( disaggregate(rdemagg,fact=4,method="bilinear"),
-                       rmaster),
-                 rmaster)
-      dem<-getValues(rdem)
-    }
-  }
+  res <- read_and_regrid_nc( 
+    nc.file    = argv$iff_dem,
+    nc.varname = argv$iff_dem.varname,
+    topdown    = argv$iff_dem.topdown,
+    out.dim    = list( ndim=argv$iff_dem.ndim,
+                       tpos=argv$iff_dem.tpos,
+                       epos=argv$iff_dem.epos,
+                       names=argv$iff_dem.names),
+    proj4      = argv$iff_dem.proj4,
+    nc.proj4   = list( var=NULL,
+                       att=NULL),
+    selection  = list( t=argv$iff_dem.t,
+                       format=argv$iff_dem.tfmt,
+                       e=argv$iff_dem.e),
+    adjfact    = argv$iff_dem.adjfact,
+    adjval     = argv$iff_dem.adjval,
+    rmaster    = rmaster,
+    grid_master.proj4 = argv$grid_master.proj4 ,
+    nc.varname_lat = "none",
+    nc.varname_lon = "none",
+    out.dim_ll     = list(ndim=argv$iff_dem.ndim_ll,
+                          tpos=argv$iff_dem.tpos_ll,
+                          epos=NULL,
+                          names=argv$iff_dem.names_ll)) 
+  rdem <- res$raster
+  dem  <- res$values
+  rm( res)
 }
 #
 #------------------------------------------------------------------------------
-# read first guess
+# -~- read first guess -~-
+# output data structures:
+# - xb, deterministic (vector) or ensemble (array = dim( ngrid,nens) field(s)
+#    xb values are stored only for not NAs points, masked using rmaster
+#    xb values less than min_plaus_val are set to min_plaus_val
+# - aix, vector. indices of background-valid gridpoints wrt the original grid 
+#    note: ngrid = length(aix)
+# - rfg, raster file with the masked background field 
+#        (if ensemble, then is the last one)
+# - valens, index to the valid ensemble members 
+# - iff_is_ens. is iff_fg an ensemble? used when writing output
+#
 if (file.exists(argv$iff_fg)) {
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    print(paste("+ first guess ",argv$iff_fg))
+    cat("+---------------------------------------------------------------+\n")
+    cat(paste("+ first guess ",argv$iff_fg,"\n"))
   }
   iff_is_ens<-F
-  argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
-  argv$iff_fg.tpos<-set_NAs_to_NULL(argv$iff_fg.tpos)
-  argv$iff_fg.e<-set_NAs_to_NULL(argv$iff_fg.e)
-  if (argv$iff_fg.t=="none") argv$iff_fg.t<-nc4.getTime(argv$iff_fg)[1]
   # First-guess is not an ensemble
   if (is.null(argv$iff_fg.epos)) {
-    raux<-try(read_dotnc(nc.file=argv$iff_fg,
-                         nc.varname=argv$iff_fg.varname,
-                         topdown=argv$iff_fg.topdown,
-                         out.dim=list(ndim=argv$iff_fg.ndim,
-                                      tpos=argv$iff_fg.tpos,
-                                      epos=argv$iff_fg.epos,
-                                      names=argv$iff_fg.names),
-                         proj4=argv$iff_fg.proj4,
-                         nc.proj4=list(var=NULL,
-                                       att=NULL),
-                         selection=list(t=argv$iff_fg.t,
-                                        format=argv$iff_fg.tfmt,
-                                        e=NULL)))
-    if (is.null(raux)) 
-      boom("error reading the first-guess file")
-    if (argv$iff_fg.adjfact!=1 | argv$iff_fg.adjval!=0) 
-      raux$stack[]<-getValues(raux$stack)*argv$iff_fg.adjfact+argv$iff_fg.adjval
-    rfg<-raux$stack; rm(raux)
-    if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster,method="bilinear")
-    rfg<-mask(rfg,rmaster)
-    xb0<-getValues(rfg)
-    if (!is.na(argv$min_plaus_val)) xb0[which(xb0<argv$min_plaus_val)]<-argv$min_plaus_val
-    rfg[]<-xb0
-    aix<-which(!is.na(xb0))
-    xb<-xb0[aix]
-    rm(xb0)
+    res <- read_and_regrid_nc( 
+      nc.file    = argv$iff_fg,
+      nc.varname = argv$iff_fg.varname,
+      topdown    = argv$iff_fg.topdown,
+      out.dim    = list( ndim=argv$iff_fg.ndim,
+                         tpos=argv$iff_fg.tpos,
+                         epos=argv$iff_fg.epos,
+                         names=argv$iff_fg.names),
+      proj4      = argv$iff_fg.proj4,
+      nc.proj4   = list( var=NULL,
+                         att=NULL),
+      selection  = list( t=argv$iff_fg.t,
+                         format=argv$iff_fg.tfmt,
+                         e=NULL),
+      adjfact    = argv$iff_fg.adjfact,
+      adjval     = argv$iff_fg.adjval,
+      rmaster    = rmaster,
+      grid_master.proj4 = argv$grid_master.proj4 ,
+      nc.varname_lat = "none",
+      nc.varname_lon = "none",
+      out.dim_ll     = list(ndim=argv$iff_fg.ndim_ll,
+                            tpos=argv$iff_fg.tpos_ll,
+                            epos=NULL,
+                            names=argv$iff_fg.names_ll),
+      upscale = argv$fg_upscale) 
+    rfg <- mask( res$raster, rmaster)
+    rm( res)
+    xb_tmp <- getValues(rfg)
+    if ( !is.na( argv$min_plaus_val)) 
+      xb_tmp[ which( xb_tmp < argv$min_plaus_val)] <- argv$min_plaus_val
+    rfg[] <- xb_tmp
+    aix <- which(!is.na(xb_tmp))
+    xb  <- xb_tmp[aix]
+    rm( xb_tmp)
   # First-guess is an ensemble
   } else {
     iff_is_ens<-T
     nens<-0 # number of ensemble members having at least one value different from NA
     for (e in 1:length(argv$iff_fg.e)) {
-      raux<-try(read_dotnc(nc.file=argv$iff_fg,
-                           nc.varname=argv$iff_fg.varname,
-                           topdown=argv$iff_fg.topdown,
-                           out.dim=list(ndim=argv$iff_fg.ndim,
-                                        tpos=argv$iff_fg.tpos,
-                                        epos=argv$iff_fg.epos,
-                                        names=argv$iff_fg.names),
-                           proj4=argv$iff_fg.proj4,
-                           nc.proj4=list(var=NULL,
-                                         att=NULL),
-                           selection=list(t=argv$iff_fg.t,
-                                          format=argv$iff_fg.tfmt,
-                                          e=argv$iff_fg.e[e])))
-      if (is.null(raux)) 
-        boom("error reading the first-guess file")
-      if (argv$iff_fg.adjfact!=1 | argv$iff_fg.adjval!=0) 
-        raux$stack[]<-getValues(raux$stack)*argv$iff_fg.adjfact+argv$iff_fg.adjval
-      rfg<-raux$stack; rm(raux)
-      if (!rasters_match(rfg,rmaster)) rfg<-projectRaster(rfg,rmaster,method="bilinear")
-      rfg<-mask(rfg,rmaster)
-      xb0<-getValues(rfg)
-      aix<-which(!is.na(xb0))
-      if (length(aix)>0) {
-        if (!exists("xb1")) xb1<-array(data=NA,
-                                       dim=c(length(aix),length(argv$iff_fg.e)))
-        if (length(aix)!=dim(xb1)[1]) boom("ERROR while reading the background file")
-        xb1[,e]<-xb0[aix]
-        nens<-nens+1
-        if (!exists("valens")) valens<-integer(0)
-        valens<-c(valens,argv$iff_fg.e[e])
+      res <- read_and_regrid_nc( 
+        nc.file    = argv$iff_fg,
+        nc.varname = argv$iff_fg.varname,
+        topdown    = argv$iff_fg.topdown,
+        out.dim    = list( ndim=argv$iff_fg.ndim,
+                           tpos=argv$iff_fg.tpos,
+                           epos=argv$iff_fg.epos,
+                           names=argv$iff_fg.names),
+        proj4      = argv$iff_fg.proj4,
+        nc.proj4   = list( var=NULL,
+                           att=NULL),
+        selection  = list( t=argv$iff_fg.t,
+                           format=argv$iff_fg.tfmt,
+                           e=argv$iff_fg.e[e]),
+        adjfact    = argv$iff_fg.adjfact,
+        adjval     = argv$iff_fg.adjval,
+        rmaster    = rmaster,
+        grid_master.proj4 = argv$grid_master.proj4 ,
+        nc.varname_lat = "none",
+        nc.varname_lon = "none",
+        out.dim_ll     = list(ndim=argv$iff_fg.ndim_ll,
+                              tpos=argv$iff_fg.tpos_ll,
+                              epos=NULL,
+                              names=argv$iff_fg.names_ll),
+        upscale = argv$fg_upscale) 
+      rfg <- mask( res$raster, rmaster)
+      rm( res)
+      xb_tmp <- getValues(rfg)
+      aix <- which(!is.na(xb_tmp))
+      if ( length( aix)>0) {
+        if ( !exists("xb_ens_tmp")) xb_ens_tmp <- array(data=NA,
+                                          dim=c( length(aix),length(argv$iff_fg.e)))
+        if ( length(aix) != dim(xb_ens_tmp)[1]) boom("ERROR while reading the background file")
+        xb_ens_tmp[,e] <- xb_tmp[aix]
+        nens <- nens+1
+        if (!exists("valens")) valens <- integer(0)
+        valens <- c( valens, argv$iff_fg.e[e])
       }
-      rm(xb0)
+      rm(xb_tmp)
     }
-    if (nens==0) boom("ERROR while reading the background file")
-    xb<-array(data=NA,dim=c(dim(xb1)[1],nens))
-    e<-0
+    if ( nens==0) boom("ERROR while reading the background file")
+    xb <- array( data=NA, dim=c(dim(xb_ens_tmp)[1], nens))
+    e  <- 0
     for (i in 1:length(argv$iff_fg.e)) {
-      if (any(!is.na(xb1[,i]))) {
-        e<-e+1
-        xb[,e]<-xb1[,i]
+      if ( any( !is.na( xb_ens_tmp[,i]))) {
+        e <- e+1
+        xb[,e] <- xb_ens_tmp[,i]
       }
     }
-    rm(xb1)
-    if (!is.na(argv$min_plaus_val)) xb[which(xb<argv$min_plaus_val)]<-argv$min_plaus_val
-    if (nens==1) { xb<-drop(xb); iff_is_ens<-F }
+    rm( xb_ens_tmp)
+    if ( !is.na( argv$min_plaus_val)) 
+      xb[ which( xb < argv$min_plaus_val)] <- argv$min_plaus_val
+    if ( nens == 1) { xb <- drop(xb); iff_is_ens<-F }
   }
   if (argv$verbose) {
-    print(paste("# grid points (not NAs)=",length(aix)))
-    print("+...............................................................+")
+    cat(paste("# grid points (not NAs)=",length(aix),"\n"))
+    cat("+...............................................................+\n")
   }
 }
 #
@@ -4978,7 +4852,7 @@ if (argv$mode=="rasterize") {
   source(file.path(argv$path2src,"obsop_precip.r"))
   # NOTE: apparently I feel better with changing all the variable names from time to time...
   # prepare stuff 
-  small_const<-0.0001
+  small_const<-10**(-10)
   # backup of the original data
   Xb_bak <- xb
   yo_bak <- yo
@@ -5016,19 +4890,19 @@ if (argv$mode=="rasterize") {
   # points(qgamma(seq(0,1,by=0.001),rate=0.1,shape=0.1),seq(0,1,by=0.001),cex=0.5,col="red")
   # points(qgamma(seq(0,1,by=0.001),rate=gammapar_obs[2],shape=gammapar_obs[1]),seq(0,1,by=0.001),cex=0.5,col="gold")
   if ( !argv$ensip.no_data_transf ) {
-    if (!is.na(argv$ensip.shape) & !is.na(argv$ensip.rate)) {
-      shape<-argv$ensip.shape
-      rate<-argv$ensip.rate
+    if ( !is.na( argv$ensip.shape) & !is.na( argv$ensip.rate)) {
+      shape <- argv$ensip.shape
+      rate  <- argv$ensip.rate
     } else {
-      gammapar_back<-array(data=NA,dim=c(2,nens))
+      gammapar_back <- array( data=NA, dim=c(2,nens))
       for (e in 1:nens) {
-        aux<-gamma_get_shape_rate_from_dataset(Xb[,e])
-        gammapar_back[1,e]<-aux$shape; gammapar_back[2,e]<-aux$rate
+        res <- gamma_get_shape_rate_from_dataset_constrOptim( Xb[,e], small_const=small_const)
+        gammapar_back[1,e] <- res$shape; gammapar_back[2,e] <- res$rate
       }
-      ix<-which(gammapar_back[1,]>0 & gammapar_back[2,]>0)
-      shape<-mean(gammapar_back[1,ix])
-      rate<-mean(gammapar_back[2,ix])
-      rm(aux,ix,gammapar_back)
+      ix <- which( gammapar_back[1,]>0 & gammapar_back[2,]>0)
+      shape <- mean( gammapar_back[1,ix])
+      rate  <- mean( gammapar_back[2,ix])
+      rm( res, ix, gammapar_back)
     }
     yo <- gamma_anamorphosis( yo, shape=shape, rate=rate, small_const=small_const)
     for (e in 1:nens) {
@@ -5129,20 +5003,41 @@ if (argv$mode=="rasterize") {
     if ( !argv$ensip.no_data_transf ) {
       if ( length(isp) > 0 ) {
         # Gamma, expected values
-        xa_xpv[isp] <- inv_gamma_anamorphosis( xa_henoi_mean[isp],
-                                               sigma = xa_henoi_var[isp],
-                                               shape = shape,
-                                               rate  = rate,
-                                               small_const = small_const)
-        # Gamma, variances
-        xa_var[isp] <- inv_gamma_anamorphosis_var( xa_henoi_mean[isp],
-                                                   sigma = xa_henoi_var[isp],
-                                                   shape = shape,
-                                                   rate  = rate,
-                                                   xstar = xa_henoi_mean[isp])
-      
-        xa_pdf_par[isp,1] <- xa_xpv[isp]**2 / xa_var[isp] # shape
-        xa_pdf_par[isp,2] <- xa_xpv[isp]    / xa_var[isp] # rate
+#        xa_xpv[isp] <- inv_gamma_anamorphosis( xa_henoi_mean[isp],
+#                                               sigma = xa_henoi_var[isp],
+#                                               shape = shape,
+#                                               rate  = rate,
+#                                               small_const = small_const)
+#        # Gamma, variances
+#        xa_var[isp] <- inv_gamma_anamorphosis_var( xa_henoi_mean[isp],
+#                                                   sigma = xa_henoi_var[isp],
+#                                                   shape = shape,
+#                                                   rate  = rate,
+#                                                   xstar = xa_henoi_mean[isp])
+#      
+#        xa_pdf_par[isp,1] <- xa_xpv[isp]**2 / xa_var[isp] # shape
+#        xa_pdf_par[isp,2] <- xa_xpv[isp]    / xa_var[isp] # rate
+        if (argv$verbose) { t0<-Sys.time(); cat("inv gamma ... ") }
+        if ( length(shape) != ngrid) { shape<-rep(shape[1],ngrid); rate<-rep(rate[1],ngrid) }
+        if (!is.na(argv$cores)) {
+          res <- t( mcmapply( inv_gamma_anamorphosis_constrOptim, 
+                              isp,
+                              SIMPLIFY = T,
+                              mc.cores = argv$cores))
+        } else {
+          res <- t( mapply( inv_gamma_anamorphosis_constrOptim,
+                            isp,
+                            SIMPLIFY = T))
+        }
+        xa_pdf_par[isp,1] <- res[,1]
+        xa_pdf_par[isp,2] <- res[,2]
+        xa_xpv[isp] <- xa_pdf_par[isp,1] / xa_pdf_par[isp,2] 
+        xa_var[isp] <- xa_pdf_par[isp,1] / xa_pdf_par[isp,2]**2
+        rm( res)
+        if (argv$verbose) {
+          t1<-Sys.time()
+          cat(paste("time",round(t1-t0,1),attr(t1-t0,"unit"),"\n"))
+        }
       }
     # no back-transformation
     } else {
@@ -5223,21 +5118,44 @@ if (argv$mode=="rasterize") {
     # Gaussian anamorphosis
     if ( !argv$ensip.no_data_transf ) {
       if ( length(isp) > 0 ) {
-        # Gamma, expected values
-        yav_xpv[isp] <- inv_gamma_anamorphosis( yav_henoi_mean[isp],
-                                                sigma = yav_henoi_var[isp],
-                                                shape = shape,
-                                                rate  = rate,
-                                                small_const = small_const)
-        # Gamma, variances
-        yav_var[isp] <- inv_gamma_anamorphosis_var( yav_henoi_mean[isp],
-                                                    sigma = yav_henoi_var[isp],
-                                                    shape = shape,
-                                                    rate  = rate,
-                                                    xstar = yav_henoi_mean[isp])
-      
-        yav_pdf_par[isp,1] <- yav_xpv[isp]**2 / yav_var[isp] # shape
-        yav_pdf_par[isp,2] <- yav_xpv[isp]    / yav_var[isp] # rate
+#        # Gamma, expected values
+#        yav_xpv[isp] <- inv_gamma_anamorphosis( yav_henoi_mean[isp],
+#                                                sigma = yav_henoi_var[isp],
+#                                                shape = shape,
+#                                                rate  = rate,
+#                                                small_const = small_const)
+#        # Gamma, variances
+#        yav_var[isp] <- inv_gamma_anamorphosis_var( yav_henoi_mean[isp],
+#                                                    sigma = yav_henoi_var[isp],
+#                                                    shape = shape,
+#                                                    rate  = rate,
+#                                                    xstar = yav_henoi_mean[isp])
+#      
+#        yav_pdf_par[isp,1] <- yav_xpv[isp]**2 / yav_var[isp] # shape
+#        yav_pdf_par[isp,2] <- yav_xpv[isp]    / yav_var[isp] # rate
+        if (argv$verbose) { t0<-Sys.time(); cat("inv gamma ... ") }
+        if ( length(shape) != ngrid) { shape<-rep(shape[1],ngrid); rate<-rep(rate[1],ngrid) }
+        if (!is.na(argv$cores)) {
+          res <- t( mcmapply( inv_gamma_anamorphosis_constrOptim, 
+                              isp,
+                              SIMPLIFY = T,
+                              mc.cores = argv$cores,
+                              cv_mode  = T))
+        } else {
+          res <- t( mapply( inv_gamma_anamorphosis_constrOptim,
+                            isp,
+                            SIMPLIFY = T,
+                            cv_mode  = T))
+        }
+        yav_pdf_par[isp,1] <- res[,1]
+        yav_pdf_par[isp,2] <- res[,2]
+        yav_xpv[isp] <- yav_pdf_par[isp,1] / yav_pdf_par[isp,2] 
+        yav_var[isp] <- yav_pdf_par[isp,1] / yav_pdf_par[isp,2]**2
+        rm( res)
+        if (argv$verbose) {
+          t1<-Sys.time()
+          cat(paste("time",round(t1-t0,1),attr(t1-t0,"unit"),"\n"))
+        }
       }
     # no back-transformation
     } else {
