@@ -84,7 +84,7 @@ fun_list <- c( "oi_var_gridpoint_by_gridpoint.r",
                "read_and_regrid_nc.r",
                "debug_util.r")
 for (fun in fun_list) {
-  if ( !file.exists(file.path( bliss_fun_path, "main_constants.r")))
+  if ( !file.exists(file.path( bliss_fun_path, fun)))
     boom( file.path( bliss_fun_path, fun), code=1)
   source( file.path( bliss_fun_path, fun))
 }
@@ -93,7 +93,7 @@ rm( fun_list, fun)
 #-----------------------------------------------------------------------------
 # check all main modules exists
 mod_list <- c( "main_constants.r", "main_argparser.r", "main_checkargs.r",
-               "main_mastergrid.r", "main_emptygrid.r", "main_iff_r.r",
+               "main_mastergrid.r", "main_emptygrid.r", "main_iff_rf.r",
                "main_laf.r", "main_dem.r", "main_iff_fg.r", "main_iff_obs.r",
                "main_oi_multiscale.r", "main_oi_multicale_setpar.r",
                "main_rasterize.r",
@@ -148,7 +148,7 @@ if ( argv$empty_grid & !is.na( argv$off_x) ) {
 #
 #------------------------------------------------------------------------------
 # read rescaling factor
-if (file.exists(argv$iff_rf)) source( file.path( bliss_mod_path, "main_iff_r.r"))
+if (file.exists(argv$iff_rf)) source( file.path( bliss_mod_path, "main_iff_rf.r"))
 #
 #------------------------------------------------------------------------------
 # read land area fraction

@@ -22,8 +22,8 @@ if (argv$mode=="OI_multiscale") {
   print("chosen mode is Local Ensemble Transform Kalman Filter")
 } else if ( argv$mode=="OI_Bratseth") {
   print("chosen mode is OI_Bratseth")
-} else if ( argv$mode=="ensip") {
-  print("chosen mode is ensip")
+} else if ( argv$mode=="ensigap") {
+  print("chosen mode is ensigap")
 } else if ( argv$mode=="rasterize") {
   print("chosen mode is rasterize")
 } else {

@@ -108,41 +108,88 @@ inv_gamma_anamorphosis_var<-function(values,
 inv_gamma_anamorphosis_constrOptim <- function( i,
                                                 mean_ga=0,
                                                 sd_ga=1,
+#                                                prob_min=0.0001,
+#                                                prob_max=0.9999,
+#                                                prob_length=400,
                                                 prob_min=0.001,
                                                 prob_max=0.999,
                                                 prob_length=100,
+                                                rr_inf = 0.1,
                                                 cv_mode=F ) {
 #
 #------------------------------------------------------------------------------
+  # initialization
   if (cv_mode) {
     mean     <- yav_henoi_mean[i]
-    sd       <- sqrt(yav_henoi_var[i])
+    sd       <- sqrt( yav_henoi_var[i])
     shape_ga <- shape[i]
     rate_ga  <- rate[i]
   } else {
     mean     <- xa_henoi_mean[i]
-    sd       <- sqrt(xa_henoi_var[i])
+    sd       <- sqrt( xa_henoi_var[i])
     shape_ga <- shape[i]
     rate_ga  <- rate[i]
   }
-  #
-  qseq   <- seq( prob_min, prob_max, length=prob_length)
-  qnorm  <- qnorm( qseq, mean = mean, sd = sd)
-  qgamma <- qgamma( pnorm( qnorm, mean=mean_ga, sd=sd_ga), 
-                    shape=shape_ga, rate=rate_ga)
-  xpv <- mean( qgamma)
-  var <- mean( qgamma**2) - xpv**2
-  shape_start <- xpv**2 / var
-  rate_start  <- xpv    / var
-  #
-  res <- constrOptim( theta = c( shape_start, rate_start), 
-                      f     = function(x,q,qseq)
-                       { log( sum( ( qgamma( qseq, shape=x[1], rate=x[2]) - q)**2)) },
-                      grad  = NULL, 
-                      ui    = rbind( c(1,0),    # shape > 0
-                                     c(0,1) ),  # rate  > 0
-                      ci    = c(0,0),            # the thresholds
-                      q     = qgamma,
-                      qseq  = qseq ) 
-  return(c(res$par[1],res$par[2],mean,sd,shape_ga,rate_ga))
+  # inverse transformation
+  # the scalar one
+  if ( is.na( sd)) {
+    xpv <- qgamma( pnorm( mean, mean=mean_ga, sd=sd_ga), 
+                   shape=shape_ga, rate=rate_ga)
+    var <- NA
+    shape_final <- NA
+    rate_final  <- NA
+  } else {
+    # the pdf one
+    #  transform from normal to gamma
+    qseq0   <- seq( prob_min, prob_max, length=prob_length)
+    qnorm0  <- qnorm( qseq0, mean = mean, sd = sd)
+    qgamma0 <- qgamma( pnorm( qnorm0, mean=mean_ga, sd=sd_ga), 
+                       shape=shape_ga, rate=rate_ga)
+    ix <- which( is.finite( qgamma0))
+    qgamma <- qgamma0[ix]
+    qseq   <- qseq0[ix]
+    #  first guesses
+    xpv <- mean( qgamma)
+    var <- mean( qgamma**2) - xpv**2
+    sdev <- ifelse( var<0, 0, sqrt(var) )
+    #
+    if ( xpv < rr_inf & sdev < (rr_inf/2) ) {
+#    if ( xpv < rr_inf & sdev < rr_inf ) {
+      xpv <- 0
+      var <- NA
+      shape_final <- NA
+      rate_final  <- NA
+    } else if ( sdev < (rr_inf/2) ) {
+#    } else if ( sdev < rr_inf ) {
+      xpv <- xpv 
+      var <- NA
+      shape_final <- NA
+      rate_final  <- NA
+    } else {
+      shape_start <- xpv**2 / var
+      rate_start  <- xpv    / var
+      res <- try( constrOptim( theta = c( shape_start, rate_start), 
+              f = function(x,q,qseq) {
+                qgammafun <- qgamma( qseq, shape=x[1], rate=x[2])
+                ix <- which( is.finite(qgammafun) )
+                log( sum( ( qgammafun[ix] - q[ix])**2)) 
+                },
+                               grad  = NULL, 
+                               ui    = rbind( c(1,0),    # shape > 0
+                                              c(0,1) ),  # rate  > 0
+                               ci    = c(0,0),            # the thresholds
+                               q     = qgamma,
+                               qseq  = qseq ), silent=T)
+      if ( class(res) == "try-error") {
+        shape_final <- shape_start 
+        rate_final  <- rate_start
+      } else {
+        shape_final <- res$par[1]
+        rate_final  <- res$par[2]
+        xpv <- shape_final / rate_final
+        var <- shape_final / rate_final**2
+      }
+    }
+  }
+  return( c( shape_final, rate_final, xpv, var)) 
 }

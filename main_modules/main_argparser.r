@@ -305,6 +305,10 @@ p <- add_argument(p, "--ensip.henoi_eps2",
                   help="eps2",
                   type="numeric",
                   default=0.1)
+p <- add_argument(p, "--ensip.henoi_alpha",
+                  help="alpha",
+                  type="numeric",
+                  default=0.5)
 p <- add_argument(p, "--ensip.var_o_coeff",
                   help="coefficient(s) for the observation error variance",
                   type="numeric",
@@ -340,6 +344,10 @@ p <- add_argument(p, "--ensip.henoi_statcov_backg",
                   help="HEnOI static error covariance matrix function (exp or gauss)",
                   type="character",
                   default="gauss")
+p <- add_argument(p, "--ensip.backg_best",
+                  help="strategy to get the best background",
+                  type="character",
+                  default="mean")
 #------------------------------------------------------------------------------
 # paths
 p <- add_argument(p, "--path2src",

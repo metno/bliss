@@ -22,9 +22,9 @@
     } else if (argv$off_x.variables[i]=="gamma_rate") {
       if (!exists("a_gamma_rate")) {a_gamma_rate<-aix;a_gamma_rate[]<-NA}
       xout<-xa_pdf_par[,2]
-    } else if (argv$off_x.variables[i]=="alpha") {
-      if (!exists("xalpha")) {xalpha<-aix;xalpha[]<-NA}
-      xout<-xalpha
+    } else if (argv$off_x.variables[i]=="varu") {
+      if (!exists("xb_henoi_varu")) {xb_henoi_varu<-aix;xb_henoi_varu[]<-NA}
+      xout<-xb_henoi_varu
     } else if (argv$off_x.variables[i]=="observations") {
       xout<-getValues(rasterize(x=cbind(VecX,VecY),y=rmaster,field=yo,fun=mean,na.rm=T))
     } else if (argv$off_x.variables[i]=="mean_raster") { 
