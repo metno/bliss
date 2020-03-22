@@ -213,6 +213,7 @@
         xa_pdf_par[ix,2] <- NA
       }
     }
+    save.image("tmp1.rdata")
     rm( xa_henoi_mean, xa_henoi_var)
   } # end henoi on the grid
   # -~- CV statistics -~-
@@ -222,7 +223,7 @@
     grid_y_avbak <- grid_y
     ngrid_avbak  <- ngrid
     # set background at CV locations (Xb is transformed)
-    res <- obsop_precip( r=rmaster, xcoord=VecX_cv, ycoord=VecY_cv)
+    res <- obsop_precip( r=rmaster, xcoord=VecX_cv, ycoord=VecY_cv, inf=-1000)
     if ( ( ngrid <- length( res$ix)) == 0 ) { boom( "found no valid Xb at cv points!") }
     ix_cv <- res$ix
     Xb <- res$yb
@@ -349,8 +350,10 @@
     yidi_cv[ix_cv]   <- yidiv
     ya_cv_henoi_varu[ix_cv]    <- yav_henoi_varu
     ya_cv_pdf_par[ix_cv,] <- yav_pdf_par
-    yb_cv[ix_cv]     <- xb
-    Yb_cv[ix_cv,]    <- Xb
+    Xb <- Xb_bak 
+    Yb_cv <- obsop_precip( r=rmaster, xcoord=VecX_cv, ycoord=VecY_cv)$yb
+    yb_cv <- rowMeans( Yb_cv)
+    save.image("tmp2.rdata")
     rm(ix_cv, yav_xpv, yav_var, yidiv, yav_henoi_varu, yav_pdf_par)
     # restore old grid variables 
     grid_x <- grid_x_avbak
