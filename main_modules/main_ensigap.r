@@ -438,7 +438,7 @@
     xidi <- xidi_res
     if ( length( ix <- which( xidi < 0))) 
       cat(paste("@@ Warning: negative IDI found for ",length(ix),"points.\n"))
-    xdh  <- henoi_Dh_loc
+    xdh  <- henoi_Dh
     rm(list = ls()[grep("_bak$", ls())])
     rm( xa_xpv, xa_var, henoi_Dh_loc, xidi_res)
   }
