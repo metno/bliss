@@ -4,6 +4,7 @@ henoi <- function( i,
                    pmax = 200,
                    rloc_min = 0,
                    nens = 10,
+                   do_idi = F,
                    statcov_backg = "gauss") { 
 #------------------------------------------------------------------------------
 # remember (wtf!) ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
@@ -46,7 +47,7 @@ henoi <- function( i,
   # no observations in the surroundings
   if ( p_i == 0 ) {
     xa    <- xb_best[i]
-    xidi  <- 0
+    xidi  <- ifelse(do_idi,0,NA)
     var_a <- Pfdiag[i]
     var_u <- 0
   # found something ...
@@ -72,7 +73,6 @@ henoi <- function( i,
 #    if ( (var_ob_emp <=  (henoi_eps2[i] * var_f)) & (var_f == 0) ) { 
     if ( ( (var_ob_emp/(1+henoi_eps2[i])) <=  var_f) & (var_f == 0) ) { 
       xa    <- xb_best[i]
-      xidi  <- NA
       var_a <- NA
       var_u <- NA
     } else {
@@ -103,8 +103,25 @@ henoi <- function( i,
       K.i   <- tcrossprod( Gb.i, SbRinv.i) # 1 x p_i 
       xa    <- xb_best[i]
       if ( any( d.i != 0)) xa <- xa + tcrossprod( K.i, d.i)
-      xidi  <- rowSums( K.i)
       var_a <- Pfdiag[i] + var_u - tcrossprod( K.i, Gb.i)
+    }
+    # compute idi
+    if (do_idi) {
+      if ( statcov_backg == "gauss" ) {
+        S.i <- exp( -0.5 *  dist2_obs / henoi_Dh[i]**2)            # p_i x p_i
+        G.i <- exp( -0.5 * dist2[sel] / henoi_Dh[i]**2)            # p_i
+      } else if ( statcov_backg == "exp" ) {
+        S.i <- exp( -sqrt(  dist2_obs) / henoi_Dh[i])              # p_i x p_i
+        G.i <- exp( -sqrt( dist2[sel]) / henoi_Dh[i])              # p_i
+      }
+      diag_R.i <- henoi_eps2[i] * var_o_coeff.i
+      SRinv.i <- try( chol2inv( chol( (S.i + diag( diag_R.i, nrow=p_i, ncol=p_i)))))
+      if ( !is.null( attr( SRinv.i, "class"))) 
+        SRinv.i <- solve( S.i + diag( diag_R.i, nrow=p_i, ncol=p_i))
+      K.i   <- tcrossprod( G.i, SRinv.i) # 1 x p_i 
+      xidi  <- rowSums( K.i)
+    } else {
+      xidi <- NA
     }
   } 
   if ( mode == "analysis" | mode == "cvanalysis" ) {

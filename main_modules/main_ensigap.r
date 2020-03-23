@@ -139,6 +139,7 @@
                         pmax     = argv$ensip.pmax,
                         rloc_min = argv$ensip.rloc_min,
                         statcov_backg   = argv$ensip.henoi_statcov_backg,
+                        do_idi   = T,
                         nens     = nens))
     } else {
       res<-t( mapply( henoi,
@@ -147,6 +148,7 @@
                       pmax     = argv$ensip.pmax,
                       rloc_min = argv$ensip.rloc_min,
                       statcov_backg   = argv$ensip.henoi_statcov_backg,
+                      do_idi   = T,
                       nens     = nens))
     }
     if (argv$verbose) {
@@ -213,7 +215,6 @@
         xa_pdf_par[ix,2] <- NA
       }
     }
-    save.image("tmp1.rdata")
     rm( xa_henoi_mean, xa_henoi_var)
   } # end henoi on the grid
   # -~- CV statistics -~-
@@ -246,9 +247,24 @@
     r[aix]       <- henoi_alpha
     henoi_alpha   <- extract( r, cbind( grid_x, grid_y))
     rm(r)
+    # -~- best estimate of the truth from the background -~-
+    backg_best <- suppressWarnings( as.integer( argv$ensip.backg_best))
+    if ( is.na( backg_best)) {
+      if ( argv$ensip.backg_best == "mean" ) {
+        xb_best <- xb
+        cat("background is the ensemble mean\n")
+      } else if ( argv$ensip.backg_best == "best" ) {
+        cost <- vector( mode="numeric", length=nens)
+        xb_best <- Xb[,e_best]
+        cat(paste("background is the ensemble member",argv$iff_fg.e[e_best],"\n"))
+      }
+    } else {
+      xb_best <- Xb[,e_best]
+      cat(paste("background is the ensemble member",backg_best,"\n"))
+    }
     # spatial analysis
-    HAf <- Yb - yb
-    Af <- HAf
+    Af     <- Xb - xb
+    HAf    <- Yb - yb
     Pfdiag <- apply(  Af, MAR=1, FUN=var)
     if (argv$verbose) { t0<-Sys.time(); cat("cv henoi ... ") }
     if (!is.na(argv$cores)) {
@@ -259,6 +275,7 @@
                           pmax     = argv$ensip.pmax,
                           rloc_min = argv$ensip.rloc_min,
                           statcov_backg   = argv$ensip.henoi_statcov_backg,
+                          do_idi   = T,
                           nens     = nens))
     } else {
       res <- t( mapply( henoi,
@@ -267,6 +284,7 @@
                         pmax     = argv$ensip.pmax,
                         rloc_min = argv$ensip.rloc_min,
                         statcov_backg   = argv$ensip.henoi_statcov_backg,
+                        do_idi   = T,
                         nens     = nens))
     }
     if (argv$verbose) {
@@ -343,17 +361,18 @@
     yb_cv       <- ya_cv # NAs
     yidi_cv     <- ya_cv # NAs
     ya_cv_henoi_varu <- ya_cv # NAs
+    ya_cv_henoi_Dh   <- ya_cv # NAs
     ya_cv_pdf_par <- array( data=NA, dim=c(ncv,2))
     Yb_cv         <- array( data=NA, dim=c(ncv,nens))
     ya_cv[ix_cv]     <- yav_xpv
     ya_cv_var[ix_cv] <- yav_var
     yidi_cv[ix_cv]   <- yidiv
-    ya_cv_henoi_varu[ix_cv]    <- yav_henoi_varu
-    ya_cv_pdf_par[ix_cv,] <- yav_pdf_par
+    ya_cv_henoi_varu[ix_cv] <- yav_henoi_varu
+    ya_cv_henoi_Dh[ix_cv]   <- henoi_Dh
+    ya_cv_pdf_par[ix_cv,]   <- yav_pdf_par
     Xb <- Xb_bak 
     Yb_cv <- obsop_precip( r=rmaster, xcoord=VecX_cv, ycoord=VecY_cv)$yb
     yb_cv <- rowMeans( Yb_cv)
-    save.image("tmp2.rdata")
     rm(ix_cv, yav_xpv, yav_var, yidiv, yav_henoi_varu, yav_pdf_par)
     # restore old grid variables 
     grid_x <- grid_x_avbak
