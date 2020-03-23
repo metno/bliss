@@ -90,6 +90,13 @@
   henoi_eps2[]   <- argv$ensip.henoi_eps2
   henoi_alpha[]  <- argv$ensip.henoi_alpha
   var_o_coeff[]  <- argv$ensip.var_o_coeff
+  if ( any( !is.na( argv$ensip.var_o_coeff_special))) {
+    for (i in 1:length(argv$ensip.var_o_coeff_special)) {
+      ixx<-which( prId == argv$ensip.var_o_coeff_special_prId )
+      if (length(ixx)>0) var_o_coeff[ixx]<-argv$ensip.var_o_coeff_special[i]
+      rm(ixx)
+    }
+  }
   if (!argv$ensip.henoi_par_notadaptive) {
     rmaster_agg <- aggregate( rmaster, fact=argv$ensip.henoi_reflen_aggfact)
     xy_agg <- xyFromCell( rmaster_agg, 1:ncell(rmaster_agg))

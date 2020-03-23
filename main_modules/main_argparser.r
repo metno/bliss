@@ -310,9 +310,19 @@ p <- add_argument(p, "--ensip.henoi_alpha",
                   type="numeric",
                   default=0.5)
 p <- add_argument(p, "--ensip.var_o_coeff",
-                  help="coefficient(s) for the observation error variance",
+                  help="coefficient(s) for the observation error variance (default)",
                   type="numeric",
                   default=1)
+p <- add_argument(p, "--ensip.var_o_coeff_special",
+                  help="coefficient(s) for the observation error variance (special)",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--ensip.var_o_coeff_special_prId",
+                  help="coefficient(s) for the observation error variance (special, Id)",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NA)
 p <- add_argument(p, "--ensip.henoi_reflen_min",
                   help="HEnOI adaptive parameter estimation (Dh and Dh_loc are set to the same value). Minimum value for the reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
                   type="numeric",
