@@ -4,7 +4,8 @@
     save( file= argv$off_rdata,
           # cv
           yo_cv, ya_cv, ya_cv_var, yb_cv, yidi_cv, ya_cv_henoi_varu, 
-          ya_cv_pdf_par, Yb_cv, ya_cv_henoi_Dh
+          ya_cv_pdf_par, Yb_cv, ya_cv_henoi_Dh, 
+          VecS_cv, VecZ_cv,VecX_cv, VecY_cv, VecXorig_cv, VecYorig_cv
           )
   }
   print(paste("output saved on file",argv$off_rdata))

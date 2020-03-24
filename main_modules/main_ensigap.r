@@ -41,13 +41,21 @@
     } else {
       gammapar_back <- array( data=NA, dim=c(2,nens))
       for (e in 1:nens) {
-        res <- gamma_get_shape_rate_from_dataset_constrOptim( Xb[,e], small_const=small_const)
-        gammapar_back[1,e] <- res$shape; gammapar_back[2,e] <- res$rate
+        frac_wet <- length( which( !is.na(Xb[,e]) & Xb[,e]>=argv$rrinf)) / length( which( !is.na(Xb[,e])))
+        if (frac_wet>0.10) {
+          res <- gamma_get_shape_rate_from_dataset_constrOptim( Xb[,e], small_const=small_const)
+          gammapar_back[1,e] <- res$shape; gammapar_back[2,e] <- res$rate
+        }
       }
-      ix <- which( gammapar_back[1,]>0 & gammapar_back[2,]>0)
-      shape <- mean( gammapar_back[1,ix])
-      rate  <- mean( gammapar_back[2,ix])
-      rm( res, ix, gammapar_back)
+      if ( any( is.na(gammapar_back))) {
+        shape <- 0.083427839041317 
+        rate  <- 0.194376928973384
+      } else {
+        ix <- which( gammapar_back[1,]>0 & gammapar_back[2,]>0)
+        shape <- mean( gammapar_back[1,ix])
+        rate  <- mean( gammapar_back[2,ix])
+        rm( res, ix, gammapar_back)
+      }
     }
     yo <- gamma_anamorphosis( yo, shape=shape, rate=rate, small_const=small_const)
     for (e in 1:nens) {
