@@ -950,7 +950,8 @@ p <- add_argument(p, "--off_x.comment",
 p <- add_argument(p, "--off_x.cell_methods",
                   help="title",
                   type="character",
-                  default="none")
+                  nargs=Inf,
+                  default=NA)
 #------------------------------------------------------------------------------
 # gaussian anamorphosis
 p <- add_argument(p, "--transf",
