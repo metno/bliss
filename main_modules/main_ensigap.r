@@ -57,7 +57,14 @@
         rm( res, ix, gammapar_back)
       }
     }
+    yo_tmp <- yo
     yo <- gamma_anamorphosis( yo, shape=shape, rate=rate, small_const=small_const)
+    if ( any(is.na(yo)) | any(is.nan(yo)) | any(!is.finite(yo))) {
+      shape <- 0.083427839041317 
+      rate  <- 0.194376928973384
+      yo <- gamma_anamorphosis( yo_tmp, shape=shape, rate=rate, small_const=small_const)
+    }
+    rm(yo_tmp)
     for (e in 1:nens) {
       Xb[,e] <- gamma_anamorphosis( Xb[,e], shape=shape, rate=rate, small_const=small_const)
       Yb[,e] <- gamma_anamorphosis( Yb[,e], shape=shape, rate=rate, small_const=small_const)
