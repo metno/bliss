@@ -104,6 +104,7 @@ mod_list <- c( "main_constants.r", "main_argparser.r", "main_checkargs.r",
 #               "main_hyletkf.r",
                "main_ensi.r",
                "main_ensigap.r",
+               "main_wise.r",
                "main_off_y_table.r", "main_off_yt_table.r",
                "main_off_cv_table.r", "main_off_cvt_table.r",
                "main_off_lcv_table.r", "main_off_lcvt_table.r",
@@ -231,6 +232,10 @@ if (argv$mode=="rasterize") {
 # ===>  EnSI with Gaussian Anamorphosis for Precipitation  <===
 } else if (argv$mode=="ensigap") {
   source( file.path( bliss_mod_path, "main_ensigap.r"))
+#..............................................................................
+# ===>  Wavelet statistical interpolation  <===
+} else if (argv$mode=="wise") {
+  source( file.path( bliss_mod_path, "main_wise.r"))
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

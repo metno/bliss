@@ -48,7 +48,7 @@ p <- add_argument(p, "--twostep_nogrid",
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
 #                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"ensip\")",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"wise\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------

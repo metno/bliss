@@ -24,6 +24,8 @@ if (argv$mode=="OI_multiscale") {
   print("chosen mode is OI_Bratseth")
 } else if ( argv$mode=="ensigap") {
   print("chosen mode is ensigap")
+} else if ( argv$mode=="wise") {
+  print("chosen mode is wise")
 } else if ( argv$mode=="rasterize") {
   print("chosen mode is rasterize")
 } else {
