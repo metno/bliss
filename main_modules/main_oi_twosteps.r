@@ -235,6 +235,9 @@
           r.list[[i]]<-matrix(data=getValues(ra),
                               ncol=length(y),
                               nrow=length(x))
+          xa  <- getValues(ra)
+          ng  <- length(getValues(ra))
+          aix <- 1:length(getValues(ra))
         } else if (argv$off_x.variables[i]=="background") {
           r<-rmaster
           r[]<-NA
@@ -242,6 +245,9 @@
           r.list[[i]]<-matrix(data=getValues(r),
                               ncol=length(y),
                               nrow=length(x))
+          xb  <- getValues(r)
+          ng  <- length(getValues(r))
+          aix <- 1:length(getValues(r))
           rm(r)
         } else if (argv$off_x.variables[i]=="idi") {
           r<-rmaster
@@ -250,6 +256,9 @@
           r.list[[i]]<-matrix(data=getValues(r),
                               ncol=length(y),
                               nrow=length(x))
+          xidi <- getValues(r)
+          ng  <- length(getValues(r))
+          aix  <- 1:length(getValues(r))
           rm(r)
         } else if (argv$off_x.variables[i]=="dh") {
           r<-rmaster
@@ -258,6 +267,9 @@
           r.list[[i]]<-matrix(data=getValues(r),
                               ncol=length(y),
                               nrow=length(x))
+          xdh <- getValues(r)
+          ng  <- length(getValues(r))
+          aix <- 1:length(getValues(r))
           rm(r)
         }
       }

@@ -1,3 +1,5 @@
+  if (!exists("yidi"))  yidi  <- rep( -999, length(yo))
+  if (!exists("yidiv")) yidiv <- rep( -999, length(yo))
   if (argv$mode=="ensigap") {
     cat("date;sourceId;prid;x;y;z;yo;yb;ya;ya_var;yav;yav_var;yidi;yidiv;dqc;ya_gamma_shape;ya_gamma_rate;ya_henoi_varu;yav_gamma_shape;yav_gamma_rate;yav_henoi_varu;\n",
         file=argv$off_y_table,append=F)
