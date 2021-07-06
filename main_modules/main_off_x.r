@@ -10,10 +10,14 @@
     } else if (argv$off_x.variables[i]=="background") {
       if (!exists("xb")) {xb<-aix;xb[]<-NA}
       xout<-xb
+    } else if (argv$off_x.variables[i]=="rel_an") {
+      if (!exists("xrela")) {xrela<-aix;xrela[]<-NA}
+      xout<-xrela
     } else if (argv$off_x.variables[i]=="idi") {
       if (!exists("xidi")) {xidi<-aix;xidi[]<-NA}
       xout<-xidi
-    } else if (argv$off_x.variables[i]=="dh") {
+    } else if (argv$off_x.variables[i]=="dh" | 
+               argv$off_x.variables[i]=="scale") {
       if (!exists("xdh")) {xdh<-aix;xdh[]<-NA}
       xout<-xdh
     } else if (argv$off_x.variables[i]=="gamma_shape") {

@@ -168,6 +168,9 @@
         r.list[[i]]<-matrix(data=getValues(ra),
                             ncol=length(y),
                             nrow=length(x))
+        xa  <- getValues(ra)
+        ng  <- length(getValues(ra))
+        aix <- 1:length(getValues(ra))
       } else if (argv$off_x.variables[i]=="background") {
         print("Warning: no background for OI_multiscale")
       } else if (argv$off_x.variables[i]=="idi") {
@@ -177,16 +180,25 @@
         r.list[[i]]<-matrix(data=getValues(r),
                             ncol=length(y),
                             nrow=length(x))
+        xidi <- getValues(r)
+        ng  <- length(getValues(r))
+        aix  <- 1:length(getValues(r))
         rm(r)
       } else if (argv$off_x.variables[i]=="scale") {
         r.list[[i]]<-matrix(data=getValues(rl),
                             ncol=length(y),
                             nrow=length(x))
+        xdh <- getValues(rl)
+        ng  <- length(getValues(rl))
+        aix <- 1:length(getValues(rl))
         rm(rl)
       } else if (argv$off_x.variables[i]=="rel_an") {
         r.list[[i]]<-matrix(data=getValues(ra)/rf,
                             ncol=length(y),
                             nrow=length(x))
+        xrela <- getValues(ra)/rf
+        ng    <- length(getValues(ra))
+        aix   <- 1:length(getValues(ra))
       }
     }
   }
