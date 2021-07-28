@@ -116,14 +116,32 @@ for (mod in mod_list) {
     boom( file.path( bliss_mod_path, mod), code=1)
 }
 rm( mod_list, mod)               
+source( file.path( bliss_mod_path, "main_iff_fg_wise.r"))
+source( file.path( bliss_mod_path, "main_wise_align.r"))
+source( file.path( bliss_mod_path, "main_wise.r"))
+
 #
 #-----------------------------------------------------------------------------
 # define constants
 source( file.path( bliss_mod_path, "main_constants.r"))
+
 #
 #-----------------------------------------------------------------------------
 # read command line arguments and/or configuration file
+
+env <- new.env( parent = emptyenv())
+
+fg_env    <- new.env( parent=emptyenv())
+fg_env$fg <- list()
+
+u_env    <- new.env( parent=emptyenv())
+u_env$uo <- list()
+
+y_env    <- new.env( parent=emptyenv())
+y_env$yo <- list()
+
 source( file.path( bliss_mod_path, "main_argparser.r"))
+
 #
 #-----------------------------------------------------------------------------
 # Multi-cores run
@@ -132,13 +150,17 @@ if ( !is.na( argv$cores)) {
   if ( argv$cores==0) argv$cores <- detectCores()
   cat( paste( "--> multi-core run, cores=", argv$cores, "\n"))
 }
+
 #-----------------------------------------------------------------------------
 # checks on input arguments
 source( file.path( bliss_mod_path, "main_checkargs.r"))
+
 #
 #------------------------------------------------------------------------------
 # Create master grid
 source( file.path( bliss_mod_path, "main_mastergrid.r"))
+env$rmaster <- rmaster
+
 #
 #------------------------------------------------------------------------------
 # Empty grid on a gridded output
@@ -173,10 +195,18 @@ if (file.exists(argv$iff_dem)) source( file.path( bliss_mod_path, "main_dem.r"))
 # - iff_is_ens. is iff_fg an ensemble? used when writing output
 #
 if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
+if (argv$mode=="wise") {
+#  res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+}
 #
 #------------------------------------------------------------------------------
 # Read observations
 source( file.path( bliss_mod_path, "main_iff_obs.r"))
+if (argv$mode=="wise") {
+  y_env$yo$x <- VecX
+  y_env$yo$y <- VecY
+  y_env$yo$value <- yo
+}
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
@@ -235,7 +265,14 @@ if (argv$mode=="rasterize") {
 #..............................................................................
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {
-  source( file.path( bliss_mod_path, "main_wise.r"))
+#  res <- main_wise_align( argv, fg_env, u_env, env, 
+#                          plot=T, dir_plot="/home/cristianl/data/wise")
+#save(file="/home/cristianl/data/wise/tmp.rdata", argv, y_env, fg_env, u_env, env)
+#q()
+load("/home/cristianl/data/wise/tmp.rdata")
+  res <- main_wise( argv, y_env, fg_env, env, seed=1, obs_k_dim=15, 
+                    plot=T, dir_plot="/home/cristianl/data/wise")
+q()
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

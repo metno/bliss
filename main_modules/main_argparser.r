@@ -13,6 +13,28 @@ p <- add_argument(p, "--rrinf",
                   help="precipitation yes/no threshold",
                   type="numeric",
                   default=0.1)
+#.............................................................................. 
+#
+# first-guess configuration files
+p <- add_argument(p, "--fg.files",
+                  help="information used to read first-guess nc-file(s) (use conf <- list( var1=..., var2=..., ... )",
+                  type="character",
+                  default=NULL,
+                  nargs=Inf)
+p <- add_argument(p, "--fg.filenames",
+                  help="file names of the first-guess nc-files. It is an optional argument, if specified: i) must have the same length of --fg.files ii) override the main.file arguments in the fg.files",
+                  type="character",
+                  default=NULL,
+                  nargs=Inf)
+#------------------------------------------------------------------------------
+p <- add_argument(p, "--uo.file",
+                  help="information used to read observation file used for alignment (use conf <- list( var1=..., var2=..., ... )",
+                  type="character",
+                  default=NA)
+p <- add_argument(p, "--uo.filename",
+                  help="file names of the observation nc-file used for alignment. It is an optional argument, if specified it overrides the main.file argument in the uo.file",
+                  type="character",
+                  default=NA)
 #------------------------------------------------------------------------------
 # cross-validation mode
 p <- add_argument(p, "--cv_mode",
@@ -1002,6 +1024,41 @@ p <- add_argument(p, "--off_obspp",
                   type="character",
                   default=NA)
 #------------------------------------------------------------------------------
+# gaussian anamorphosis
+p <- add_argument(p, "--wise_rain_uo",
+                  help="rain yes/no threshold for alignment (mm)",
+                  type="numeric",
+                  default=1)
+p <- add_argument(p, "--wise_rain_yo",
+                  help="rain yes/no threshold for interpolation (mm)",
+                  type="numeric",
+                  default=1)
+p <- add_argument(p, "--wise_k_dim",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--wise_n_dim",
+                  help="number of analysis ensemble members",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--wise_wf",
+                  help="wavelet type",
+                  type="character",
+                  default="bl20")
+p <- add_argument(p, "--wise_boundary",
+                  help="strategy adopted to avoid boundary effects (\"periodic\", \"reflection\"",
+                  type="character",
+                  default="periodic")
+p <- add_argument(p, "--wise_n_levs_mx",
+                  help="number of coarsest level to consider",
+                  type="integer",
+                  default=8)
+p <- add_argument(p, "--wise_n_levs_mn",
+                  help="number of finest level to consider",
+                  type="integer",
+                  default=1)
+
+#------------------------------------------------------------------------------
 #
 argv <- parse_args(p)
 #
@@ -1033,3 +1090,68 @@ if (!is.na(argv$config.file)) {
   }
 }
 
+
+#
+#-----------------------------------------------------------------------------
+# read fg config files
+if ( any( !is.na( argv$fg.files))) {
+  for (f in 1:length(argv$fg.files)) {
+    if ( file.exists( argv$fg.files[f])) {
+      source( argv$fg.files[f], local=T)
+      fg_env$fg[[f]] <- conf
+      rm( conf)
+    } else {
+      print( "WARNING: config file not found")
+      print( argv$fg.files[f])
+    }
+  }
+}
+
+# one can specify file names outside the fg config files
+if ( any( !is.na( argv$fg.filenames))) {
+  if ( length( argv$fg.files) != length( argv$fg.filenames))
+    boom( "since --fg.files and --fg.filenames are both defined, they must have the same length")
+  for (f in 1:length(argv$fg.files)) {
+    if ( file.exists( argv$fg.filenames[f])) {
+      fg_env$fg[[f]]$main.file <- argv$fg.filenames[f]
+    } else {
+      boom( paste( "ERROR: file not foud", argv$fg.filenames[f]))
+    }
+  }
+}
+
+#
+#-----------------------------------------------------------------------------
+# read uo config file
+if ( !is.na( argv$uo.file)) {
+  if ( file.exists( argv$uo.file)) {
+    source( argv$uo.file, local=T)
+    u_env$uo[[1]] <- conf
+    rm( conf)
+  } else {
+    print( "WARNING: config file not found")
+    print( argv$uo.file)
+  }
+}
+
+# one can specify file names outside the uo config file
+if ( !is.na( argv$uo.filename)) {
+  if ( file.exists( argv$uo.filename)) {
+    u_env$uo[[1]]$main.file <- argv$uo.filename
+  } else {
+    boom( paste( "ERROR: file not foud", argv$uo.filename))
+  }
+}
+
+#
+#-----------------------------------------------------------------------------
+# set variables of the env environment
+
+env$k_dim <- argv$wise_k_dim
+env$n_dim <- argv$wise_n_dim
+env$wf <- argv$wise_wf
+env$boundary <- argv$wise_boundary
+env$n_levs_mx <- argv$wise_n_levs_mx
+env$n_levs_mn <- argv$wise_n_levs_mn
+u_env$rain <- argv$wise_rain_uo
+y_env$rain <- argv$wise_rain_yo

@@ -46,16 +46,16 @@ argv$iff_fg.adjval<-as.numeric(gsub("_","-",argv$iff_fg.adjval))
 # parameter used in output session, select between deterministic/ensemble
 argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
 # load external C functions
-dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
-dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
-dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
-dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
-dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
-if (!is.na(argv$cores)) {
-  suppressPackageStartupMessages(library("parallel"))
-  if (argv$cores==0) argv$cores <- detectCores()
-  print(paste("--> multi-core run, cores=",argv$cores))
-}
+#dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
+#dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
+#dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
+#dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
+#dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))
+#if (!is.na(argv$cores)) {
+#  suppressPackageStartupMessages(library("parallel"))
+#  if (argv$cores==0) argv$cores <- detectCores()
+#  print(paste("--> multi-core run, cores=",argv$cores))
+#}
 #if ( !file.exists( file.path( argv$path2src, "read_and_regrid_nc.r")))
 #  boom( paste( "file not found", file.path(argv$path2src, "read_and_regrid_nc.r")))
 #source( file.path( argv$path2src, "read_and_regrid_nc.r"))
