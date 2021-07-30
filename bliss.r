@@ -104,7 +104,7 @@ mod_list <- c( "main_constants.r", "main_argparser.r", "main_checkargs.r",
 #               "main_hyletkf.r",
                "main_ensi.r",
                "main_ensigap.r",
-               "main_wise.r",
+#               "main_wise.r",
                "main_off_y_table.r", "main_off_yt_table.r",
                "main_off_cv_table.r", "main_off_cvt_table.r",
                "main_off_lcv_table.r", "main_off_lcvt_table.r",
@@ -118,7 +118,9 @@ for (mod in mod_list) {
 rm( mod_list, mod)               
 source( file.path( bliss_mod_path, "main_iff_fg_wise.r"))
 source( file.path( bliss_mod_path, "main_wise_align.r"))
-source( file.path( bliss_mod_path, "main_wise.r"))
+source( file.path( bliss_mod_path, "main_wise_analysis.r"))
+source( file.path( bliss_mod_path, "main_wise_sampling_postpdf.r"))
+source( file.path( bliss_mod_path, "main_argparser.r"))
 
 #
 #-----------------------------------------------------------------------------
@@ -127,20 +129,27 @@ source( file.path( bliss_mod_path, "main_constants.r"))
 
 #
 #-----------------------------------------------------------------------------
-# read command line arguments and/or configuration file
+# define environments
 
+# main environment
 env <- new.env( parent = emptyenv())
 
+# first guess (background) environment
 fg_env    <- new.env( parent=emptyenv())
 fg_env$fg <- list()
 
-u_env    <- new.env( parent=emptyenv())
-u_env$uo <- list()
-
+# observation enviroment
 y_env    <- new.env( parent=emptyenv())
 y_env$yo <- list()
 
-source( file.path( bliss_mod_path, "main_argparser.r"))
+# observation environment (alignment)
+u_env    <- new.env( parent=emptyenv())
+u_env$uo <- list()
+
+#
+#-----------------------------------------------------------------------------
+# read command line arguments and/or configuration file
+argv <- argparser( env, fg_env, y_env, u_env)
 
 #
 #-----------------------------------------------------------------------------
@@ -196,7 +205,15 @@ if (file.exists(argv$iff_dem)) source( file.path( bliss_mod_path, "main_dem.r"))
 #
 if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
 if (argv$mode=="wise") {
-#  res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+  dir_plot<-"/home/cristianl/data/wise"
+  load_if_present <- T
+  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+    save(file=ffff,argv, fg_env, u_env, env)
+  }
 }
 #
 #------------------------------------------------------------------------------
@@ -206,6 +223,12 @@ if (argv$mode=="wise") {
   y_env$yo$x <- VecX
   y_env$yo$y <- VecY
   y_env$yo$value <- yo
+  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
 }
 #
 #------------------------------------------------------------------------------
@@ -265,13 +288,32 @@ if (argv$mode=="rasterize") {
 #..............................................................................
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {
-#  res <- main_wise_align( argv, fg_env, u_env, env, 
-#                          plot=T, dir_plot="/home/cristianl/data/wise")
-#save(file="/home/cristianl/data/wise/tmp.rdata", argv, y_env, fg_env, u_env, env)
-#q()
-load("/home/cristianl/data/wise/tmp.rdata")
-  res <- main_wise( argv, y_env, fg_env, env, seed=1, obs_k_dim=15, 
-                    plot=T, dir_plot="/home/cristianl/data/wise")
+  ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
+  load_if_present<-T
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    res <- main_wise_align( argv, fg_env, u_env, env, plot=T, dir_plot=dir_plot)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
+
+  ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
+  load_if_present<-F
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    res <- main_wise_analysis( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=T, dir_plot=dir_plot)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
+q()
+  ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
+  load_if_present<-T
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    res <- main_wise_sampling_postpdf( argv, y_env, fg_env, env, seed=100, plot=T, dir_plot=dir_plot)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
 q()
 } # end if selection among spatial analysis methods
 #

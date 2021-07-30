@@ -1,3 +1,5 @@
+#+
+argparser<-function( env, fg_env, y_env, u_env) {
 # create parser object
 p <- arg_parser("bliss")
 #------------------------------------------------------------------------------
@@ -1155,3 +1157,7 @@ env$n_levs_mx <- argv$wise_n_levs_mx
 env$n_levs_mn <- argv$wise_n_levs_mn
 u_env$rain <- argv$wise_rain_uo
 y_env$rain <- argv$wise_rain_yo
+
+#
+return(argv)
+}

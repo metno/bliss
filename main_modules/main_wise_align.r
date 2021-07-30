@@ -86,10 +86,11 @@ main_wise_align <- function( argv, fg_env, u_env, env,
 
   # diagnostics
   if (plot) {
+    cat( "diagnostics ")
     j <- 0
     for (i in ixs) {
       j <- j + 1
-      print(j)
+      cat(".")
       r <- subset( fg_env$fg[[ixf[i]]]$r_main, subset=ixe[i])
       fout<-file.path(dir_plot,paste0("wise_align_sel_e",formatC(j,width=2,flag="0"),".png"))
       ra <- u_env$uo[[1]]$r_main
@@ -107,6 +108,7 @@ main_wise_align <- function( argv, fg_env, u_env, env,
       system( paste0("rm ",f1," ",f2))
       rm(ra,rb)
     }
+    cat( "\n")
   }
 
   return( TRUE)

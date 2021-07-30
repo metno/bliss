@@ -469,7 +469,7 @@ if (any(!is.na(argv$ovarc.prId))) {
       ovarc[which(prId==argv$ovarc.prId[i])]<-argv$ovarc[i]
   }
 }
-if (argv$verbose) { 
+if (argv$verbose) {
   print("+---------------------------------------------------------------+")
   if (!is.na(argv$rrinf)) {
     print(paste("#observations (wet/dry) =",n0,"(",nwet,"/",ndry,")"))
