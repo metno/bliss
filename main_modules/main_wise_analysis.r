@@ -67,23 +67,34 @@ main_wise_analysis <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   # yo1 <- as.vector( unlist( dwt.2d( as.matrix(q), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)))
   so <- rdyad
   so[c_xy] <- y_env$yo$value
+  sidi <- rdyad
+  sidi[c_xy] <- 1
 
   # transformation operator
   dwt <- dwt.2d( as.matrix(so), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
+  dwt_idi <- dwt.2d( as.matrix(sidi), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
 
   # unlist the result and compute squared energies
   yo1 <- vector( mode="numeric", length=env$m_dim); yo1[]<-NA
+  yidi1 <- vector( mode="numeric", length=env$m_dim); yidi1[]<-NA
+  env$En2idi <- vector( mode="numeric", length=env$m_dim); env$En2idi[]<-NA
   jj <- 0; ii <- 0
   for (l in 1:env$n_levs_mx) {
     lh <- dwt[[1+3*(l-1)]]; hl <- dwt[[2+3*(l-1)]]; hh <- dwt[[3+3*(l-1)]]
+    lh_idi <- dwt_idi[[1+3*(l-1)]]; hl_idi <- dwt_idi[[2+3*(l-1)]]; hh_idi <- dwt_idi[[3+3*(l-1)]]
     ii <- jj + 1
     jj <- ii + length(lh) + length(hl) + length(hh) - 1
     yo1[ii:jj] <- c( lh, hl, hh)
+    yidi1[ii:jj] <- c( lh_idi, hl_idi, hh_idi)
+    env$En2idi[l] <- mean( (lh_idi / 2**l)**2) + mean( (hl_idi / 2**l)**2) + mean( (hh_idi / 2**l)**2)
   }
   ll <- dwt[[4+3*(env$n_levs_mx-1)]] 
   yo1[(jj+1):env$m_dim] <- ll
+  ll_idi <- dwt_idi[[4+3*(env$n_levs_mx-1)]] 
+  yidi1[(jj+1):env$m_dim] <- ll_idi
+  env$En2idi[env$n_levs_mx+1] <- mean( (ll_idi/2**env$n_levs_mx)**2)
   rm( lh, hl, hh, ll)
-
+  rm( lh_idi, hl_idi, hh_idi, ll_idi)
 #  if (plot) {
 #    yo_check <- extract( q, c_xy)
 #    fout<-file.path(dir_plot,paste0("wise_checkobs.png"))
@@ -128,6 +139,7 @@ main_wise_analysis <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   cat("Transform background")
   Xb1 <- array( data=NA, dim=c( env$m_dim, env$k_dim))
   Yb1 <- array( data=NA, dim=c( env$m_dim, env$k_dim))
+  Yd1 <- array( data=NA, dim=c( env$m_dim, env$k_dim))
   j <- 0
   env$En2b <- array( data=NA, dim=c(env$n_levs_mx+1,nfg))
   env$En2i <- array( data=NA, dim=c(env$n_levs_mx+1,nfg))
@@ -178,8 +190,10 @@ main_wise_analysis <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
 
     # rasterize
     # s  <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=rdyad, field=yb, fun=mean)
+    sb  <- s
     s[] <- 0
-    s[c_xy] <- extract( s, c_xy)
+    s[c_xy] <- extract( sb, c_xy)
+    rm(sb)
 
     # transformation
     dwt  <- dwt.2d( as.matrix(s), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
@@ -193,10 +207,12 @@ main_wise_analysis <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       env$En2i[l,j] <- mean( (lhi / 2**l)**2) + mean( (hli / 2**l)**2) + mean( (hhi / 2**l)**2)
       ii <- jj + 1
       jj <- ii + length(lh) + length(hl) + length(hh) - 1
-      Yb1[ii:jj,j] <- c( lh, hl, hh)
+      Yb1[ii:jj,j] <- c(  lh,  hl, hh)
+      Yd1[ii:jj,j] <- c( lhi, hli, hhi)
     }
     lli <- dwti[[4+3*(env$n_levs_mx-1)]] 
     env$En2i[env$n_levs_mx+1,j] <- mean( (lli/2**env$n_levs_mx)**2)
+    Yd1[(jj+1):env$m_dim,j] <- lli
     ll  <-  dwt[[4+3*(env$n_levs_mx-1)]] 
     Yb1[(jj+1):env$m_dim,j] <- ll
     rm( lh, hl, hh, ll, dwt, dwti, ii, jj)
@@ -209,16 +225,30 @@ main_wise_analysis <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   # Background error covariance matrices
   Ab <- Xb1 - rowMeans(Xb1)
   Db <- Yb1 - rowMeans(Yb1)
-  var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) * 1/dwt_res**2 
-  var_b1_yy <- 1/(env$k_dim-1) * rowSums( Db*Db) * 1/dwt_res**2
-  rm(Ab,Db)
-return()
+  D  <- Yd1 - rowMeans(Yd1)
+  var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) #* 1/dwt_res**2 
+  var_b1_yy <- 1/(env$k_dim-1) * rowSums( Db*Db) #* 1/dwt_res**2
+  var_bd1_xy <- 1/(env$k_dim-1) * rowSums( Ab*D) #* 1/dwt_res**2 
+  var_d1_yy  <- 1/(env$k_dim-1) * rowSums( D *D) #* 1/dwt_res**2
+  rm(Ab,Db,D)
 
   # Analysis
   cat("Analysis on the transformed space ")
-  var_o1 <- 0.1 * var_b1_yy
+#  var_o1 <- 0.1 * var_b1_yy
+  var_o1 <- 0
   coeff <- var_b1_xy / ( var_b1_yy + var_o1)
   coeff[!is.finite(coeff)] <- 0
+#  coeff_res <- (sqrt(env$En2i[,1]) / sqrt(env$En2b[,1])) / max(sqrt(env$En2i[,1]) / sqrt(env$En2b[,1]))
+#  coeff <- vector( mode="numeric", length=env$m_dim)
+#  for (l in 1:env$n_levs_mx) {
+#    ix <- which( dwt_res == (2**l))
+#    coeff[ix] <- coeff_res[l]
+#  }
+  coeff_res <- vector( mode="numeric", length=env$n_levs_mx)
+  for (l in 1:env$n_levs_mx) {
+    ix <- which( dwt_res == (2**l))
+    coeff_res[l] <- mean(coeff[ix])
+  }
   Xa1     <- array( data=NA, dim=c(     env$m_dim, env$k_dim))
   env$Xa  <- array( data=NA, dim=c( length(rdyad), env$k_dim))
   for (e in 1:env$k_dim) {
@@ -238,62 +268,61 @@ return()
     env$Xa[,e] <- idwt.2d( dwt_aux)
     rm(dwt_aux)
     env$Xa[,e][env$Xa[,e]<y_env$rain]<-0
-
-    if (plot) {
-      q<-rdyad
-      q[]<-array(data=env$Xa[,e],dim=c(sqrt(length(env$Xa[,e])),sqrt(length(env$Xa[,e]))))
-      fout<-file.path(dir_plot,paste0("wise_main_xcombo_e",formatC(e,width=2,flag="0"),".png"))
-      fb<-file.path(dir_plot,paste0("wise_main_xb_e",formatC(e,width=2,flag="0"),".png"))
-      fa<-file.path(dir_plot,paste0("wise_main_xa_e",formatC(e,width=2,flag="0"),".png"))
-      png(file=fa,width=1200,height=1200)
-      image(q,breaks=br,col=col,main="analysis")
-      plot(b,add=T)
-      for (i in 1:length(col)) {
-        ix <- which(yo_check>=br[i] & yo_check<br[i+1])
-        cex<-1; col_i <- col[i]
-        if (i==1) { cex<-0.5; col_i<-"beige" }
-        points(y_env$yo$x[ix],y_env$yo$y[ix],pch=21,bg=col_i,col=col_i,cex=cex)
-      }
-      dev.off()
-      system( paste0("convert +append ",fb," ",fa," ",fout))
-      system( paste0("rm ",fa," ",fb))
-
-      ya <- extract( q, c_xy)
-      i<-fg_env$ixs[e]
-      s <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
-      yb <- extract( s, c_xy) 
-      yo <- yo_check  
-      fout<-file.path(dir_plot,paste0("wise_main_ycombo_e",formatC(e,width=2,flag="0"),".png"))
-      fb<-file.path(dir_plot,paste0("wise_yb_e",formatC(e,width=2,flag="0"),".png"))
-      fa<-file.path(dir_plot,paste0("wise_ya_e",formatC(e,width=2,flag="0"),".png"))
-      png(file=fb,width=1200,height=1200)
-      plot(yo,yb,ylim=range(c(yo,ya,yb)),xlim=range(c(yo,ya,yb)),main="background vs observations",pch=21,bg="cornflowerblue",col="blue")
-      lines(-10000:10000,-10000:10000)
-      seq<-c(0,0.1,seq(0.5,100,by=0.5))
-      for (ii in 1:(length(seq)-1)) {
-        ix <- which( yo>=seq[ii] & yo<seq[ii+1])
-        if (length(ix)<10) next
-        points( (seq[ii]+seq[ii+1])/2, median(yb[ix]), cex=2, pch=21,bg="black")
-        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(yb[ix],probs=0.25)), cex=1, pch=21,bg="black")
-        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(yb[ix],probs=0.75)), cex=1, pch=21,bg="black")
-      }
-      dev.off()
-      png(file=fa,width=1200,height=1200)
-      plot(yo,ya,ylim=range(c(yo,ya,yb)),xlim=range(c(yo,ya,yb)),main="analysis vs observations",pch=21,bg="pink",col="red")
-      lines(-10000:10000,-10000:10000)
-      for (ii in 1:(length(seq)-1)) {
-        ix <- which( yo>=seq[ii] & yo<seq[ii+1])
-        if (length(ix)<10) next
-        points( (seq[ii]+seq[ii+1])/2, median(ya[ix]), cex=2, pch=21,bg="black")
-        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(ya[ix],probs=0.25)), cex=1, pch=21,bg="black")
-        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(ya[ix],probs=0.75)), cex=1, pch=21,bg="black")
-      }
-      dev.off()
-      system( paste0("convert +append ",fb," ",fa," ",fout))
-      system( paste0("rm ",fa," ",fb))
-
-      rm(q)
-    }
+#    if (plot) {
+#      q<-rdyad
+#      q[]<-array(data=env$Xa[,e],dim=c(sqrt(length(env$Xa[,e])),sqrt(length(env$Xa[,e]))))
+#      fout<-file.path(dir_plot,paste0("wise_main_xcombo_e",formatC(e,width=2,flag="0"),".png"))
+#      fb<-file.path(dir_plot,paste0("wise_main_xb_e",formatC(e,width=2,flag="0"),".png"))
+#      fa<-file.path(dir_plot,paste0("wise_main_xa_e",formatC(e,width=2,flag="0"),".png"))
+#      png(file=fa,width=1200,height=1200)
+#      image(q,breaks=br,col=col,main="analysis")
+#      plot(b,add=T)
+#      for (i in 1:length(col)) {
+#        ix <- which(yo_check>=br[i] & yo_check<br[i+1])
+#        cex<-1; col_i <- col[i]
+#        if (i==1) { cex<-0.5; col_i<-"beige" }
+#        points(y_env$yo$x[ix],y_env$yo$y[ix],pch=21,bg=col_i,col=col_i,cex=cex)
+#      }
+#      dev.off()
+#      system( paste0("convert +append ",fb," ",fa," ",fout))
+#      system( paste0("rm ",fa," ",fb))
+#
+#      ya <- extract( q, c_xy)
+#      i<-fg_env$ixs[e]
+#      s <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
+#      yb <- extract( s, c_xy) 
+#      yo <- yo_check  
+#      fout<-file.path(dir_plot,paste0("wise_main_ycombo_e",formatC(e,width=2,flag="0"),".png"))
+#      fb<-file.path(dir_plot,paste0("wise_yb_e",formatC(e,width=2,flag="0"),".png"))
+#      fa<-file.path(dir_plot,paste0("wise_ya_e",formatC(e,width=2,flag="0"),".png"))
+#      png(file=fb,width=1200,height=1200)
+#      plot(yo,yb,ylim=range(c(yo,ya,yb)),xlim=range(c(yo,ya,yb)),main="background vs observations",pch=21,bg="cornflowerblue",col="blue")
+#      lines(-10000:10000,-10000:10000)
+#      seq<-c(0,0.1,seq(0.5,100,by=0.5))
+#      for (ii in 1:(length(seq)-1)) {
+#        ix <- which( yo>=seq[ii] & yo<seq[ii+1])
+#        if (length(ix)<10) next
+#        points( (seq[ii]+seq[ii+1])/2, median(yb[ix]), cex=2, pch=21,bg="black")
+#        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(yb[ix],probs=0.25)), cex=1, pch=21,bg="black")
+#        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(yb[ix],probs=0.75)), cex=1, pch=21,bg="black")
+#      }
+#      dev.off()
+#      png(file=fa,width=1200,height=1200)
+#      plot(yo,ya,ylim=range(c(yo,ya,yb)),xlim=range(c(yo,ya,yb)),main="analysis vs observations",pch=21,bg="pink",col="red")
+#      lines(-10000:10000,-10000:10000)
+#      for (ii in 1:(length(seq)-1)) {
+#        ix <- which( yo>=seq[ii] & yo<seq[ii+1])
+#        if (length(ix)<10) next
+#        points( (seq[ii]+seq[ii+1])/2, median(ya[ix]), cex=2, pch=21,bg="black")
+#        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(ya[ix],probs=0.25)), cex=1, pch=21,bg="black")
+#        points( (seq[ii]+seq[ii+1])/2, as.numeric(quantile(ya[ix],probs=0.75)), cex=1, pch=21,bg="black")
+#      }
+#      dev.off()
+#      system( paste0("convert +append ",fb," ",fa," ",fout))
+#      system( paste0("rm ",fa," ",fb))
+#
+#      rm(q)
+#    }
 
   }
   cat("\n")

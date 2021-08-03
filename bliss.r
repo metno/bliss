@@ -119,7 +119,9 @@ rm( mod_list, mod)
 source( file.path( bliss_mod_path, "main_iff_fg_wise.r"))
 source( file.path( bliss_mod_path, "main_wise_align.r"))
 source( file.path( bliss_mod_path, "main_wise_analysis.r"))
+source( file.path( bliss_mod_path, "main_wise_analysis_loop.r"))
 source( file.path( bliss_mod_path, "main_wise_sampling_postpdf.r"))
+source( file.path( bliss_mod_path, "main_wise_plot.r"))
 source( file.path( bliss_mod_path, "main_argparser.r"))
 
 #
@@ -206,6 +208,7 @@ if (file.exists(argv$iff_dem)) source( file.path( bliss_mod_path, "main_dem.r"))
 if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
 if (argv$mode=="wise") {
   dir_plot<-"/home/cristianl/data/wise"
+  dir_plot <- file.path(dir_plot,paste0("case_",argv$date_out))
   load_if_present <- T
   ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
   if (file.exists(ffff) & load_if_present) {
@@ -298,14 +301,13 @@ if (argv$mode=="rasterize") {
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
-  load_if_present<-F
+  load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_analysis( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=T, dir_plot=dir_plot)
+    res <- main_wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=T, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
-q()
   ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
@@ -314,6 +316,7 @@ q()
     res <- main_wise_sampling_postpdf( argv, y_env, fg_env, env, seed=100, plot=T, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
+  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
 q()
 } # end if selection among spatial analysis methods
 #
