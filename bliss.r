@@ -299,7 +299,6 @@ if (argv$mode=="rasterize") {
     res <- main_wise_align( argv, fg_env, u_env, env, plot=T, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
-
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
@@ -313,7 +312,7 @@ if (argv$mode=="rasterize") {
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_sampling_postpdf( argv, y_env, fg_env, env, seed=100, plot=T, dir_plot=dir_plot)
+    res <- main_wise_sampling_postpdf( argv, y_env, fg_env, u_env, env, seed=100, plot=T, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
   res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)

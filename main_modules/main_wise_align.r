@@ -74,9 +74,13 @@ main_wise_align <- function( argv, fg_env, u_env, env,
     }
     cat( "\n")
   } 
-  
-  # select only the k fileds with the highest ETSs
-  ixs <- order( ets, decreasing=T)[1:env$k_dim]
+
+# select all fields with ets > 0
+  ixs <- which( ets > 0)
+  env$k_dim <- length( ixs)
+  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(ets),")"))
+#  # select only the k fields with the highest ETSs
+#  ixs <- order( ets, decreasing=T)[1:env$k_dim]
 
   # output
   fg_env$ets <- ets

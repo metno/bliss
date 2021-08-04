@@ -53,9 +53,6 @@ main_wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env, seed=NA
 
   # 
   ixs <- which( ets > 0)
-  env$k1_dim <- length( ixs)
-  cat( paste(" number of ensemble members (tot) =", env$k1_dim,"(",length(ets),")"))
-  ets1 <- ets[ixs]
 
   
   # Initialization of the wavelet structures
@@ -80,10 +77,10 @@ main_wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env, seed=NA
   cat( paste( "state variable, dim >", env$m_dim, "\n"))
 
   cat("Reconstruct analysis ensemble members on the state vector \n")
-  Xa1     <- array( data=NA, dim=c(     env$m_dim, env$k1_dim))
-  for (e in 1:env$k1_dim) {
+  Xa1     <- array( data=NA, dim=c(     env$m_dim, env$k_dim))
+  for (e in 1:env$k_dim) {
     q<-rdyad
-    q[]<-array(data=env$Xa[,ixs[e]],dim=c(sqrt(length(env$Xa[,ixs[e]])),sqrt(length(env$Xa[,ixs[e]]))))
+    q[]<-array(data=env$Xa[,e],dim=c(sqrt(length(env$Xa[,e])),sqrt(length(env$Xa[,e]))))
 
 #    Xa1[,e] <- as.vector( unlist( dwt.2d( as.matrix(q), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)))
     dwt <- dwt.2d( as.matrix(q), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
@@ -105,14 +102,9 @@ main_wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env, seed=NA
 
   #
   cat("Sample realizations from the posterior distribution ")
-  v1 <- sum(ets1)
-  aux <- Xa1[,1]; aux[] <- 0; for (e in 1:env$k1_dim) aux <- aux + ets1[e] * Xa1[,e]
-  xa1 <- aux / v1
-#  xa1        <- rowMeans(Xa1)
+  xa1        <- rowMeans(Xa1)
   Aa         <- Xa1 - xa1
-  aux <- Xa1[,1]; aux[] <- 0; for (e in 1:env$k1_dim) aux <- aux + ets1[e] * Aa[,e] * Aa[,e]
-  var_a1 <- aux / v1
-#  var_a1     <- 1/(env$k_dim-1) * rowSums( Aa*Aa) #* 1/dwt_res**2
+  var_a1     <- 1/(env$k_dim-1) * rowSums( Aa*Aa) #* 1/dwt_res**2
   env$Xa_large <- array( data=NA, dim=c( env$m_dim, env$n_dim))
   ya <- array( data=NA, dim=c( env$p_dim, env$n_dim))
   if (!is.na(seed)) set.seed(seed)
