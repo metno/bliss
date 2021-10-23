@@ -120,6 +120,7 @@ source( file.path( bliss_mod_path, "main_iff_fg_wise.r"))
 source( file.path( bliss_mod_path, "main_wise_align.r"))
 source( file.path( bliss_mod_path, "main_wise_analysis.r"))
 source( file.path( bliss_mod_path, "main_wise_analysis_loop.r"))
+source( file.path( bliss_mod_path, "main_wise_analysis_loop_alignment.r"))
 source( file.path( bliss_mod_path, "main_wise_sampling_postpdf.r"))
 source( file.path( bliss_mod_path, "main_wise_plot.r"))
 source( file.path( bliss_mod_path, "main_argparser.r"))
@@ -296,11 +297,11 @@ if (argv$mode=="rasterize") {
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_align( argv, fg_env, u_env, env, plot=T, dir_plot=dir_plot)
+    res <- main_wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
@@ -308,6 +309,7 @@ if (argv$mode=="rasterize") {
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
   ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
+q()
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
