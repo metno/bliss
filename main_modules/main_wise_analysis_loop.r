@@ -67,30 +67,23 @@ ijFromLev <- function( n, lev, fw=F) {
 #  y_env$yo$value <- c( y_env$yo$value, radarval[ixrad])
 
 #  c_xy <- cellFromXY( rdyad, cbind(y_env$yo$x,y_env$yo$y))
-  c_xy <- fourCellsFromXY( rdyad, cbind(y_env$yo$x,y_env$yo$y))
+  c_xy <- fourCellsFromXY( rdyad, cbind( y_env$yo$x, y_env$yo$y))
   
   # Initialization of the wavelet structures
   #  dwt_out. dwt.2d class.
-  #  dwt_ix. vector.
-  #  dwt_res. vector.
-env$n_levs_mx<-10
+  #    for the i-th level (i=1,...,env$n_levs_mx) 
+  #      dwt_out[[3*(i-1)+1]] LHi - wavelet coefficients
+  #      dwt_out[[3*(i-1)+2]] HLi - wavelet coefficients
+  #      dwt_out[[3*(i-1)+3]] HHi - wavelet coefficients
+  #  resolution of the dyadic tree. coefficients = 2**i; base = 2**(i-1)
+  #  resolution is the number of original grid points (in each direction) within the box a dydadic tree at level i
+  # then i=1 is the finest resolution and i=n_levs_mx the coarser
   dwt_out <- dwt.2d( as.matrix(rdyad), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-  for (i in 1:env$n_levs_mx) {
-    dwt_out[[3*(i-1)+1]][] <- i*10 + 1 # LHi - wavelet coefficients
-    dwt_out[[3*(i-1)+2]][] <- i*10 + 2 # HLi - wavelet coefficients
-    dwt_out[[3*(i-1)+3]][] <- i*10 + 3 # HHi - wavelet coefficients
-  }
-  # scaling function coefficients (father wavelet)
-  dwt_out[[3*(env$n_levs_mx-1)+4]][] <- env$n_levs_mx*10 + 4 # LL env$n_levs_mx
-  dwt_ix <- as.vector( unlist( dwt_out))
   for (i in 1:length(dwt_out)) dwt_out[[i]][] <- 0
-  dwt_res <- 2**as.numeric(floor(dwt_ix/10))
-  dwt_ix[dwt_ix<(env$n_levs_mn*10)] <- 0
-  dwt_res[dwt_ix==(env$n_levs_mx+1)] <- 2**env$n_levs_mx
 
   # define constants
   # total number of coefficients used. Dimension of the state variable
-  env$n_dim <- length(dwt_ix)
+  env$n_dim <- length( as.vector( unlist( dwt_out)))
   # total number of coefficients used. Dimension of the state variable
   env$m_dim <- length( getValues(rdyad))
   # number of observations
@@ -99,21 +92,11 @@ env$n_levs_mx<-10
   cat( paste( " number of grid points, m dim >", env$m_dim, "\n"))
   cat( paste( "number of observations, p dim >", env$p_dim, "\n"))
 
-  # total number of coefficients used. Dimension of the state variable
-  env$m_dim <- length(dwt_ix)
-  # number of observations
-  env$p_dim <- length(y_env$yo$x)
-  cat( paste( "state variable, dim >", env$m_dim, "\n"))
-
   # ---~--------------
   # -- Observations --
 
   cat("Transform observations and compute error covariance matrix ")
  
-  rasterize_with_buffer <- function( xy, r, l) {
-    
-  }
-
   # rasterize
   rfobs <- rdyad
   for (c in 1:4) rfobs[c_xy[,c]] <- y_env$yo$value
@@ -126,8 +109,8 @@ env$n_levs_mx<-10
 
   # unlist the result and compute squared energies
   yo1   <- vector( mode="numeric", length=env$n_dim); yo1[]<-NA
-  yidi1 <- vector( mode="numeric", length=env$n_dim); yidi1[]<-NA
-  env$En2idi <- vector( mode="numeric", length=env$n_dim); env$En2idi[]<-NA
+#  yidi1 <- vector( mode="numeric", length=env$n_dim); yidi1[]<-NA
+#  env$En2idi <- vector( mode="numeric", length=env$n_dim); env$En2idi[]<-NA
   env$En2obs <- vector( mode="numeric", length=(env$n_levs_mx+1)); env$En2obs[]<-NA
   jj <- 0; ii <- 0
   for (l in 1:env$n_levs_mx) {
@@ -136,16 +119,16 @@ env$n_levs_mx<-10
     ii <- jj + 1
     jj <- ii + length(lh) + length(hl) + length(hh) - 1
     yo1[ii:jj] <- c( lh, hl, hh)
-    yidi1[ii:jj] <- c( lh_idi, hl_idi, hh_idi)
-    env$En2idi[l] <- mean( (lh_idi / 2**l)**2) + mean( (hl_idi / 2**l)**2) + mean( (hh_idi / 2**l)**2)
+#    yidi1[ii:jj] <- c( lh_idi, hl_idi, hh_idi)
+#    env$En2idi[l] <- mean( (lh_idi / 2**l)**2) + mean( (hl_idi / 2**l)**2) + mean( (hh_idi / 2**l)**2)
     env$En2obs[l] <- mean( ( lh / 2**l)**2)     + mean( ( hl / 2**l)**2)     + mean( ( hh / 2**l)**2)
   }
   ll <- dwt[[4+3*(env$n_levs_mx-1)]] 
   yo1[(jj+1):env$n_dim] <- ll
   env$En2obs[env$n_levs_mx+1] <- mean( ( ll / 2**l)**2)
   ll_idi <- dwt_idi[[4+3*(env$n_levs_mx-1)]] 
-  yidi1[(jj+1):env$n_dim] <- ll_idi
-  env$En2idi[env$n_levs_mx+1] <- mean( (ll_idi/2**env$n_levs_mx)**2)
+#  yidi1[(jj+1):env$n_dim] <- ll_idi
+#  env$En2idi[env$n_levs_mx+1] <- mean( (ll_idi/2**env$n_levs_mx)**2)
   rm( lh, hl, hh, ll)
   rm( lh_idi, hl_idi, hh_idi, ll_idi)
   cat("\n")
@@ -235,8 +218,8 @@ if (plot) {
     plot(1:env$n_levs_mx,env$En2in[1:env$n_levs_mx],col="gold",axes=F,type="l",lty=1,lwd=2)
     points(env$n_levs_mx,env$En2in[env$n_levs_mx+1],pch=21,bg="gold",cex=2)
     axis(4)
-    par(new=T)
-    plot(1:env$n_levs_mx,env$En2idi[1:env$n_levs_mx],col="black",axes=F,type="l",lty=2)
+#    par(new=T)
+#    plot(1:env$n_levs_mx,env$En2idi[1:env$n_levs_mx],col="black",axes=F,type="l",lty=2)
     dev.off()
     print(paste("written file",fout))
   }
@@ -247,6 +230,15 @@ if (plot) {
 
   costf <- vector()
   ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
+
+  En2 <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
+  En2_prev <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
+  rho <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
+
+  En2_prev <- env$En2xb
+  aux <- En2_prev - rowMeans(En2_prev) 
+  var_En2_prev <- 1/(env$k_dim-1) * rowSums( aux * aux)
+  rm(aux)
 
   for (loop in 1:20) {
     t0 <- Sys.time()
@@ -275,25 +267,49 @@ if (plot) {
     for (e in 1:env$k_dim) {
       cat(".")
       Xa1[,e] <- Xb1[,e] + coeff * ( yo1 - Yb1[,e])
-      dwt_aux <- dwt_out
+#      dwt_aux <- dwt_out
       for (i in env$n_levs_mn:env$n_levs_mx) {
         ij <- ijFromLev( env$n_levs_mx, i, F)
-#        ix <- which( dwt_ix == (i*10 + 1))
-        dwt_aux[[3*(i-1)+1]][] <- Xa1[ij[1,1]:ij[1,2],e]
-#        ix <- which( dwt_ix == (i*10 + 2))
-        dwt_aux[[3*(i-1)+2]][] <- Xa1[ij[2,1]:ij[2,2],e]
-#        ix <- which( dwt_ix == (i*10 + 3))
-        dwt_aux[[3*(i-1)+3]][] <- Xa1[ij[3,1]:ij[3,2],e]
+#        dwt_aux[[3*(i-1)+1]][] <- Xa1[ij[1,1]:ij[1,2],e]
+#        dwt_aux[[3*(i-1)+2]][] <- Xa1[ij[2,1]:ij[2,2],e]
+#        dwt_aux[[3*(i-1)+3]][] <- Xa1[ij[3,1]:ij[3,2],e]
+        En2[i,e] <- mean( ( Xa1[ij[1,1]:ij[1,2],e] / 2**i)**2) + 
+                    mean( ( Xa1[ij[2,1]:ij[2,2],e] / 2**i)**2) +
+                    mean( ( Xa1[ij[3,1]:ij[3,2],e] / 2**i)**2)
       }
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
-#      ix <- which( dwt_ix == (env$n_levs_mx*10 + 4))
-      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Xa1[ij[1]:ij[2],e]
-      env$Xa[,e] <- idwt.2d( dwt_aux)
-      rm(dwt_aux)
+#      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Xa1[ij[1]:ij[2],e]
+      En2[env$n_levs_mx+1,e] <- mean( ( Xa1[ij[1]:ij[2],e] / 2**i)**2)
+#      env$Xa[,e] <- idwt.2d( dwt_aux)
+#      rm(dwt_aux)
       env$Xa[,e][env$Xa[,e]<y_env$rain]<-0
     }
     t1 <- Sys.time()
     cat( paste0("time=",round(t1-t0,1), attr(t1-t0,"unit"),"\\"))
+
+    #
+    for (e in 1:env$k_dim) {
+      rho[,e] <- exp( -0.5 * (En2[,e] - En2_prev[,e])**2 / var_En2_prev)
+      dwt_aux <- dwt_out
+      for (i in env$n_levs_mn:env$n_levs_mx) {
+        ij <- ijFromLev( env$n_levs_mx, i, F)
+        dwt_aux[[3*(i-1)+1]][] <- rho[i,e] * Xa1[ij[1,1]:ij[1,2],e]
+        dwt_aux[[3*(i-1)+2]][] <- rho[i,e] * Xa1[ij[2,1]:ij[2,2],e]
+        dwt_aux[[3*(i-1)+3]][] <- rho[i,e] * Xa1[ij[3,1]:ij[3,2],e]
+        En2[i,e] <- mean( ( rho[i,e] * Xa1[ij[1,1]:ij[1,2],e] / 2**i)**2) + 
+                    mean( ( rho[i,e] * Xa1[ij[2,1]:ij[2,2],e] / 2**i)**2) +
+                    mean( ( rho[i,e] * Xa1[ij[3,1]:ij[3,2],e] / 2**i)**2)
+      }
+      ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
+      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- rho[env$n_levs_mx+1,e] * Xa1[ij[1]:ij[2],e]
+      En2[env$n_levs_mx+1,e] <- mean( ( rho[env$n_levs_mx+1,e] * Xa1[ij[1]:ij[2],e] / 2**i)**2)
+      env$Xa[,e] <- idwt.2d( dwt_aux)
+    }
+ 
+    En2_prev <- En2
+    aux <- En2_prev - rowMeans(En2_prev) 
+    var_En2_prev <- 1/(env$k_dim-1) * rowSums( aux * aux)
+    rm(aux)
 
     Xb1 <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     Yb1 <- array( data=NA, dim=c( env$n_dim, env$k_dim))
