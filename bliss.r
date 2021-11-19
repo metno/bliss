@@ -82,7 +82,8 @@ fun_list <- c( "oi_var_gridpoint_by_gridpoint.r",
                "superobs.r",
                "misc_util.r",
                "read_and_regrid_nc.r",
-               "debug_util.r")
+               "debug_util.r",
+               "ijFromLev.r")
 for (fun in fun_list) {
   if ( !file.exists(file.path( bliss_fun_path, fun)))
     boom( file.path( bliss_fun_path, fun), code=1)
@@ -292,6 +293,8 @@ if (argv$mode=="rasterize") {
 #..............................................................................
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {
+
+  library(waveslim)
   ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
@@ -300,16 +303,21 @@ if (argv$mode=="rasterize") {
     res <- main_wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
+
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
   load_if_present<-F
+  dir_plot <- "/home/cristianl/data/wise/pngs"
+  plot<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=T, dir_plot=dir_plot)
+    res <- main_wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=plot, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
-  ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
+
 q()
+
+  ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
@@ -318,6 +326,7 @@ q()
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
   res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
+
 q()
 } # end if selection among spatial analysis methods
 #
