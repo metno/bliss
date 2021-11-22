@@ -4,8 +4,6 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
 #
 #------------------------------------------------------------------------------
 
-env$k_dim <- 5 
-
   # number of background ensemble members
   if ( ( nfg <- length( fg_env$ixs)) == 0) return( FALSE)
 
@@ -42,7 +40,6 @@ env$k_dim <- 5
 #  y_env$yo$value <- c( y_env$yo$value, radarval[ixrad])
 
   t0 <- Sys.time()
-  library(RANN)
   rfobs<-rdyad
   nn2 <- nn2( cbind(y_env$yo$x, y_env$yo$y), 
               query = xyFromCell( rdyad, 1:ncell(rdyad)), 
@@ -109,100 +106,7 @@ env$k_dim <- 5
   rm( lh, hl, hh, ll)
   cat("\n")
 
-###  # ---~------------
-###  # -- Background --
-###
-###  t0 <- Sys.time()
-###  cat("Transform background")
-###  Ub    <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###  Ubalt <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###  Vb    <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###  vo_Vb <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###  En2Ub <- array( data=NA, dim=c(env$n_levs_mx+1,nfg))
-###  En2Vb <- array( data=NA, dim=c(env$n_levs_mx+1,nfg))
-###  En2in <- array( data=NA, dim=c(env$n_levs_mx+1,nfg))
-###
-###  if (plot) fxb <- vector()
-###
-###  j <- 0
-###  for (i in fg_env$ixs) {
-###    cat(".")
-###    j <- j + 1
-###
-###    # interpolate onto the dyadic grid
-###    # background at grid  points
-###    rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
-###    rfxb[rfxb<0] <- 0
-###    # background at observation points
-###    rfyb <- rfxb; rfyb[] <- 0; for (c in 1:4) rfyb[c_xy[,c]] <- extract( rfxb, c_xy[,c])
-###    # innovation 
-###    rfin <- rfxb; rfin[] <- 0; for (c in 1:4) rfin[c_xy[,c]] <- extract( rfobs, c_xy[,c]) - extract( rfxb, c_xy[,c])
-###
-###    if (plot) {
-###        fxb[j] <- file.path(dir_plot,paste0("rfxb_",formatC(j,flag="0",width=2),".png"))
-###        br<-c(0,1,2,4,8,16,32,64,128)
-###        col<-c("lightgray",rev(rainbow(7)))
-###        png(file=fxb[j],width=1200,height=1200)
-###        image(rfxb,breaks=br,col=col,main="background")
-###        dev.off()
-###    }
-###
-###    # transformation operator
-###    dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###    dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###    dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###    # unlist the result and compute squared energies
-###    jj <- 0; ii <- 0
-###    for (l in 1:env$n_levs_mx) {
-###      lh <- dwtxb[[1+3*(l-1)]]; hl <- dwtxb[[2+3*(l-1)]]; hh <- dwtxb[[3+3*(l-1)]]
-###      En2Ub[l,j] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###      ii <- jj + 1
-###      jj <- ii + length(lh) + length(hl) + length(hh) - 1
-###      Ub[ii:jj,j] <- c( lh, hl, hh)
-###      lh <- dwtyb[[1+3*(l-1)]]; hl  <-  dwtyb[[2+3*(l-1)]];  hh <-  dwtyb[[3+3*(l-1)]]
-###      En2Vb[l,j] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###      Vb[ii:jj,j] <- c( lh, hl, hh)
-###      lh <- dwtin[[1+3*(l-1)]]; hl  <-  dwtin[[2+3*(l-1)]];  hh <-  dwtin[[3+3*(l-1)]]
-###      En2in[l,j] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###      vo_Vb[ii:jj,j] <- c( lh, hl, hh)
-###    }
-###    ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
-###    En2Ub[env$n_levs_mx+1,j] <- mean( (ll/2**env$n_levs_mx)**2)
-###    Ub[(jj+1):env$n_dim,j] <- ll
-###    ll <- dwtyb[[4+3*(env$n_levs_mx-1)]] 
-###    En2Vb[env$n_levs_mx+1,j] <- mean( (ll/2**env$n_levs_mx)**2)
-###    Vb[(jj+1):env$n_dim,j] <- ll
-###    ll <- dwtin[[4+3*(env$n_levs_mx-1)]] 
-###    En2in[env$n_levs_mx+1,j] <- mean( (ll/2**env$n_levs_mx)**2)
-###    vo_Vb[(jj+1):env$n_dim,j] <- ll
-###    rm( dwtxb, dwtyb, dwtin, lh, hl, hh, ll, ii, jj)
-###
-###  } # end loop over background fields
-###  t1 <- Sys.time()
-###  cat( paste0("time=",round(t1-t0,1), attr(t1-t0,"unit"),"\n"))
-###
-###  if (plot) {
-###    for (j in 1:env$k_dim) {
-###      ylim<-range(c(En2Ub[,j],En2vo,En2Vb[,j]))
-###      yylim<-range(c(En2vo,En2Vb[,j]))
-###      fout<-file.path(dir_plot,paste0("en2_",formatC(0,width=2,flag="0"),"_",formatC(j,width=2,flag="0"),".png"))
-###      png(file=fout,width=800,height=800)
-###      plot(1:env$n_levs_mx,En2Ub[1:env$n_levs_mx,j],type="l",col="red",ylim=ylim)
-###      points(env$n_levs_mx,En2Ub[env$n_levs_mx+1,j],pch=21,bg="red",cex=2)
-###      lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
-###      lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
-###      lines(1:env$n_levs_mx,En2Vb[1:env$n_levs_mx,j],col="pink4")
-###      points(env$n_levs_mx,En2vo[env$n_levs_mx+1],pch=21,bg="blue",cex=2)
-###      points(env$n_levs_mx,En2Vb[env$n_levs_mx+1,j],pch=21,bg="pink4",cex=2)
-###      par(new=T)
-###      plot(1:env$n_levs_mx,En2in[1:env$n_levs_mx],col="gold",axes=F,type="l",lty=1,lwd=2)
-###      points(env$n_levs_mx,En2in[env$n_levs_mx+1],pch=21,bg="gold",cex=2)
-###      axis(4)
-###      dev.off()
-###      print(paste("written file",fout))
-###    }
-###  }
-
+  #--------------------------------------------------------    
   # Analysis
   cat("Analysis on the transformed space \n")
 
@@ -418,60 +322,21 @@ env$k_dim <- 5
       Xa[,e][Xa[,e]<y_env$rain]<-0
     }
  
-###    Ub <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###    Vb <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###    vo_Vb <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-###    for (e in 1:env$k_dim) {
-###      cat(".")
-###
-###      # -- background at grid  points --
-####      rfxb_to_plot[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
-###      rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
-###      rfxb[rfxb<0] <- 0
-###      ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
-###      # background at observation points
-###      rfyb  <- rfxb; rfyb[] <- 0; for (c in 1:4) rfyb[c_xy[,c]] <- extract( rfxb, c_xy[,c])
-###      # innovation 
-###      rfin  <- rfxb; rfin[] <- 0; for (c in 1:4) rfin[c_xy[,c]] <- extract( rfobs, c_xy[,c]) - extract( rfxb, c_xy[,c])
-###
-###      # transformation operator
-###      dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###      dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###      dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-###      # unlist the result and compute squared energies
-###      jj <- 0; ii <- 0
-###      for (l in 1:env$n_levs_mx) {
-###        lh <- dwtxb[[1+3*(l-1)]]; hl <- dwtxb[[2+3*(l-1)]]; hh <- dwtxb[[3+3*(l-1)]]
-###        En2Ub[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###        ii <- jj + 1
-###        jj <- ii + length(lh) + length(hl) + length(hh) - 1
-###        Ub[ii:jj,e] <- c( lh, hl, hh)
-###        lh  <-  dwtyb[[1+3*(l-1)]]; hl  <-  dwtyb[[2+3*(l-1)]];  hh <-  dwtyb[[3+3*(l-1)]]
-###        En2Vb[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###        Vb[ii:jj,e] <- c( lh, hl, hh)
-###       lh  <-  dwtin[[1+3*(l-1)]]; hl  <-  dwtin[[2+3*(l-1)]];  hh <-  dwtin[[3+3*(l-1)]]
-###       En2in[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-###        vo_Vb[ii:jj,e] <- c( lh, hl, hh)
-###      }
-###      ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
-###      En2Ub[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
-###      Ub[(jj+1):env$n_dim,e] <- ll
-###      ll <- dwtyb[[4+3*(env$n_levs_mx-1)]] 
-###      En2Vb[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
-###      Vb[(jj+1):env$n_dim,e] <- ll
-###      ll <- dwtin[[4+3*(env$n_levs_mx-1)]] 
-###      En2in[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
-###      vo_Vb[(jj+1):env$n_dim,e] <- ll
-###      rm( dwtxb, dwtyb, dwtin, lh, hl, hh, ll, ii, jj)
-
     if (plot) {
+save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev)
       for (e in 1:env$k_dim) {
         rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
         if (loop==1) ylim<-range(En2Ub)
         fout<-file.path(dir_plot,paste0("en2_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
         png(file=fout,width=800,height=800)
-        plot(1:env$n_levs_mx,En2Ub[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
-        points(env$n_levs_mx,En2Ub[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
+#        plot(1:env$n_levs_mx,En2Ub[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
+        plot(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
+        points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
+        lines(1:env$n_levs_mx,En2_prev[1:env$n_levs_mx,e],col="pink")
+        points(env$n_levs_mx,En2_prev[env$n_levs_mx+1,e],pch=21,bg="pink",cex=2)
+        polygon(c(1:env$n_levs_mx,env$n_levs_mx:1),c(En2_prev[1:env$n_levs_mx,e]-var_En2_prev[1:env$n_levs_mx],En2_prev[env$n_levs_mx:1,e]+var_En2_prev[env$n_levs_mx:1]),col="pink")
+        lines(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
+        points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
         lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
         lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
         lines(1:env$n_levs_mx,En2Vb[1:env$n_levs_mx,e],col="pink4")

@@ -294,7 +294,9 @@ if (argv$mode=="rasterize") {
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {
 
-  library(waveslim)
+  suppressPackageStartupMessages( library( "waveslim"))
+  suppressPackageStartupMessages( library( "RANN"))
+
   ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
   load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
