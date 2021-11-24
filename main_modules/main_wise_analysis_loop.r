@@ -176,6 +176,7 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
         col<-c("lightgray",rev(rainbow(7)))
         png(file=fxb[e],width=1200,height=1200)
         image(rfxb,breaks=br,col=col,main="background")
+        abline(h=seq(-1000000,10000000,by=100000),v=seq(-1000000,10000000,by=100000),lty=2)
         dev.off()
       }
 
@@ -323,19 +324,28 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
     }
  
     if (plot) {
-save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev)
       for (e in 1:env$k_dim) {
         rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
-        if (loop==1) ylim<-range(En2Ub)
+        if (loop==1) ylim<-range(c(En2,En2_prev+var_En2_prev))
+
+        # En2
         fout<-file.path(dir_plot,paste0("en2_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
         png(file=fout,width=800,height=800)
+        par(mar=c(5,5,1,3))
 #        plot(1:env$n_levs_mx,En2Ub[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
-        plot(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
+        plot(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim,xlab="level",ylab="Energy^2")
         points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
-        lines(1:env$n_levs_mx,En2_prev[1:env$n_levs_mx,e],col="pink")
-        points(env$n_levs_mx,En2_prev[env$n_levs_mx+1,e],pch=21,bg="pink",cex=2)
-        polygon(c(1:env$n_levs_mx,env$n_levs_mx:1),c(En2_prev[1:env$n_levs_mx,e]-var_En2_prev[1:env$n_levs_mx],En2_prev[env$n_levs_mx:1,e]+var_En2_prev[env$n_levs_mx:1]),col="pink")
-        lines(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
+        polygon( c(1:env$n_levs_mx,env$n_levs_mx:1),
+                 c(En2_prev[1:env$n_levs_mx,e]-2*var_En2_prev[1:env$n_levs_mx],
+                   En2_prev[env$n_levs_mx:1,e]+2*var_En2_prev[env$n_levs_mx:1]),
+                 density=10,border="pink", col="pink")
+        polygon( c(1:env$n_levs_mx,env$n_levs_mx:1),
+                 c(En2_prev[1:env$n_levs_mx,e]-var_En2_prev[1:env$n_levs_mx],
+                   En2_prev[env$n_levs_mx:1,e]+var_En2_prev[env$n_levs_mx:1]),
+                 border="pink", col="pink")
+        lines(1:env$n_levs_mx,En2_prev[1:env$n_levs_mx,e],col="pink4",lwd=4)
+        points(env$n_levs_mx,En2_prev[env$n_levs_mx+1,e],pch=21,bg="pink4",cex=2)
+        lines(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",lwd=4)
         points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
         lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
         lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
@@ -343,50 +353,59 @@ save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev)
         points(env$n_levs_mx,En2vo[env$n_levs_mx+1],pch=21,bg="blue",cex=2)
         points(env$n_levs_mx,En2Vb[env$n_levs_mx+1,e],pch=21,bg="pink4",cex=2)
         par(new=T)
-        plot(1:env$n_levs_mx,rho[1:env$n_levs_mx,e],col="gold",axes=F,type="l",lty=1,lwd=2)
+        plot(1:env$n_levs_mx,rho[1:env$n_levs_mx,e],ylim=c(0,1),col="gold",axes=F,type="l",lty=1,lwd=4,xlab="",ylab="")
         axis(4)
         dev.off()
         print(paste("written file",fout))
 
+        # rr1 map
+save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev,rfxb,rfobs,c_xy)
         br<-c(0,1,2,4,8,16,32,64,128)
         col<-c("lightgray",rev(rainbow(7)))
         fouta<-file.path(dir_plot,paste0("rr1a.png"))
         png(file=fouta,width=1200,height=1200)
         image(rfxb,breaks=br,col=col,main="analysis")
+        abline(h=seq(-1000000,10000000,by=100000),v=seq(-1000000,10000000,by=100000),lty=2)
         dev.off()
+        xy<-xyFromCell( rfobs, c_xy)
+        yso_x <- xy[,1]
+        yso_y <- xy[,2]
+        yso_val <- getValues( rfobs)[c_xy]
         foutb<-file.path(dir_plot,paste0("rr1b.png"))
         png(file=foutb,width=1200,height=1200)
-        image(rfxb,breaks=br,col=col,main="analysis")
+        image(rfxb,breaks=c(0,1),col="white",main="observations")
         for (i in 1:length(col)) {
-          ix <- which(y_env$yo$value>=br[i] & y_env$yo$value<br[i+1])
-          points(y_env$yo$x[ix],y_env$yo$y[ix],cex=0.8,pch=21,bg=col[i],col="darkgray")
+          ix <- which(yso_val>=br[i] & yso_val<br[i+1])
+          points(yso_x[ix],yso_y[ix],cex=0.8,pch=21,bg=col[i],col=col[i])
         }
+        abline(h=seq(-1000000,10000000,by=100000),v=seq(-1000000,10000000,by=100000),lty=2)
         dev.off()
         fout<-file.path(dir_plot,paste0("rr1_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
         system(paste0("convert +append ",fouta," ",foutb," ",fxb[e]," ",fout))
         system(paste0("rm -f ",fouta," ",foutb))
         print(paste("written file",fout))
 
-#        aux <- getValues(rfxb,c_xy)
-#        ylim=range(c(0,aux,y_env$yo$value))
-#        fouta<-file.path(dir_plot,paste0("rr1x.png"))
-#        png(file=fouta,width=1200,height=1200)
-#        plot(y_env$yo$x,aux,pch=21,bg="lightgray",col="gray")
-#        points(y_env$yo$x,y_env$yo$value,pch=21,bg="black")
-#        dev.off()
-#        foutb<-file.path(dir_plot,paste0("rr1y.png"))
-#        png(file=foutb,width=1200,height=1200)
-#        plot(y_env$yo$y,aux,pch=21,bg="lightgray",col="gray")
-#        points(y_env$yo$y,y_env$yo$value,pch=21,bg="black")
-#        dev.off()
-#        foutc<-file.path(dir_plot,paste0("rr1scatt.png"))
-#        png(file=foutc,width=1200,height=1200)
-#        plot(y_env$yo$value,aux,pch=21,bg="lightgray",col="gray",xlim=ylim,ylim=ylim)
-#        dev.off()
-#        fout<-file.path(dir_plot,paste0("rr1xy_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
-#        system(paste0("convert +append ",fouta," ",foutb," ",foutc," ",fout))
-#        system(paste0("rm -f ",fouta," ",foutb," ",foutc))
-#        print(paste("written file",fout))
+        # rr1 graph 
+        aux <- extract( rfxb, cbind(yso_x,yso_y))
+        ylim <- range(c(0,yso_val))
+        fouta<-file.path(dir_plot,paste0("rr1x.png"))
+        png(file=fouta,width=1200,height=1200)
+        plot(yso_x,aux,pch=21,bg="lightgray",col="gray")
+        points(yso_x,yso_val,pch=21,bg="black")
+        dev.off()
+        foutb<-file.path(dir_plot,paste0("rr1y.png"))
+        png(file=foutb,width=1200,height=1200)
+        plot(yso_y,aux,pch=21,bg="lightgray",col="gray")
+        points(yso_y,yso_val,pch=21,bg="black")
+        dev.off()
+        foutc<-file.path(dir_plot,paste0("rr1scatt.png"))
+        png(file=foutc,width=1200,height=1200)
+        plot(yso_val,aux,pch=21,bg="lightgray",col="gray",xlim=ylim,ylim=ylim)
+        dev.off()
+        fout<-file.path(dir_plot,paste0("rr1xy_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
+        system(paste0("convert +append ",fouta," ",foutb," ",foutc," ",fout))
+        system(paste0("rm -f ",fouta," ",foutb," ",foutc))
+        print(paste("written file",fout))
       }
     }
 
