@@ -1,8 +1,15 @@
+#+ Check input arguments and set some flags for elaborations
+main_checkargs <- function( argv, env) {
+
+#------------------------------------------------------------------------------
+
 #
 #------------------------------------------------------------------------------
 # check input arguments
 #
+
 if (!(file.exists(argv$iff_obs))) boom(paste0("file not found ",argv$iff_obs))
+
 if (argv$mode=="OI_multiscale") {
   if (argv$verbose) {
     if (!(file.exists(argv$iff_rf))) 
@@ -31,20 +38,24 @@ if (argv$mode=="OI_multiscale") {
 } else {
   boom("error statistical interpolation scheme undefined")
 }
+
 # define/check paths and load external functions
 #if ( !(file.exists(argv$path2src)) ) 
 #  ext<-boom("path not found")
 #
-argv$iff_rf.adjfact<-as.numeric(gsub("_","-",argv$iff_rf.adjfact))
-argv$iff_rf.adjval<-as.numeric(gsub("_","-",argv$iff_rf.adjval))
-argv$iff_laf.adjfact<-as.numeric(gsub("_","-",argv$iff_laf.adjfact))
-argv$iff_laf.adjval<-as.numeric(gsub("_","-",argv$iff_laf.adjval))
-argv$iff_dem.adjfact<-as.numeric(gsub("_","-",argv$iff_dem.adjfact))
-argv$iff_dem.adjval<-as.numeric(gsub("_","-",argv$iff_dem.adjval))
-argv$iff_fg.adjfact<-as.numeric(gsub("_","-",argv$iff_fg.adjfact))
-argv$iff_fg.adjval<-as.numeric(gsub("_","-",argv$iff_fg.adjval))
+argv$iff_rf.adjfact  <- as.numeric( gsub( "_", "-", argv$iff_rf.adjfact))
+argv$iff_rf.adjval   <- as.numeric( gsub( "_", "-", argv$iff_rf.adjval))
+argv$iff_laf.adjfact <- as.numeric( gsub( "_", "-", argv$iff_laf.adjfact))
+argv$iff_laf.adjval  <- as.numeric( gsub( "_", "-", argv$iff_laf.adjval))
+argv$iff_dem.adjfact <- as.numeric( gsub( "_", "-", argv$iff_dem.adjfact))
+argv$iff_dem.adjval  <- as.numeric( gsub( "_", "-", argv$iff_dem.adjval))
+argv$iff_fg.adjfact  <- as.numeric( gsub( "_", "-", argv$iff_fg.adjfact))
+argv$iff_fg.adjval   <- as.numeric( gsub( "_", "-", argv$iff_fg.adjval))
+
 # parameter used in output session, select between deterministic/ensemble
-argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
+argv$iff_fg.epos     <- set_NAs_to_NULL( argv$iff_fg.epos)
+
+#
 # load external C functions
 #dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
 #dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
@@ -59,39 +70,63 @@ argv$iff_fg.epos<-set_NAs_to_NULL(argv$iff_fg.epos)
 #if ( !file.exists( file.path( argv$path2src, "read_and_regrid_nc.r")))
 #  boom( paste( "file not found", file.path(argv$path2src, "read_and_regrid_nc.r")))
 #source( file.path( argv$path2src, "read_and_regrid_nc.r"))
-# define elaboration mode
+
+#
+# define elaboration modes
 if (!is.na(argv$off_x)) {
-  x_elab<-T
+  assign( "x_elab",  TRUE, envir = .GlobalEnv)
+  env$x_elab <- T
 } else {
-  x_elab<-F
+  assign( "x_elab", FALSE, envir = .GlobalEnv)
+  env$x_elab <- F
 }
+
 if (!is.na(argv$off_y_table)   | !is.na(argv$off_yt_table)   |
     !is.na(argv$off_y_verif_a) | !is.na(argv$off_yt_verif_a) |
     !is.na(argv$off_y_verif_b) | !is.na(argv$off_yt_verif_b) ) {
-  y_elab<-T
+  assign( "y_elab",  TRUE, envir = .GlobalEnv)
+  env$y_elab <- T
 } else {
-  y_elab<-F
+  assign( "y_elab", FALSE, envir = .GlobalEnv)
+  env$y_elab <- F
 }
-cv_mode_random<-F
-cv_mode<-F
+
+assign( "cv_mode_random", FALSE, envir = .GlobalEnv)
+env$cv_mode_random <- F
+
+assign( "cv_mode", FALSE, envir = .GlobalEnv)
+env$cv_mode <- F
+
 if ( argv$cv_mode | 
      !is.na( argv$off_cv_table)   | !is.na( argv$off_cvt_table)   |
      !is.na( argv$off_cv_verif_a) | !is.na( argv$off_cvt_verif_a) |
      !is.na( argv$off_cv_verif_b) | !is.na( argv$off_cvt_verif_b)) {
-  cv_elab <- T
+  assign( "cv_elab", TRUE, envir = .GlobalEnv)
+  env$cv_elab <- T
   if ( any( !is.na( argv$prId.cv))) {
-    cv_mode <- T
+    assign( "cv_mode", TRUE, envir = .GlobalEnv)
+    env$cv_mode <- T
   } else {
-    cv_mode_random <- T
+    assign( "cv_mode_random", TRUE, envir = .GlobalEnv)
+    env$cv_mode_random <- T
   }
 } else {
-  cv_elab <- F
+  assign( "cv_elab", FALSE, envir = .GlobalEnv)
+  env$cv_elab <- F
 }
+
 if (!is.na(argv$off_lcv_table)   | !is.na(argv$off_lcvt_table)   |
     !is.na(argv$off_lcv_verif_a) | !is.na(argv$off_lcvt_verif_a) |
     !is.na(argv$off_lcv_verif_b) | !is.na(argv$off_lcvt_verif_b) ) {
-  loocv_elab<-T
+  assign( "loocv_elab", TRUE, envir = .GlobalEnv)
+  env$loocv_elab <- T
 } else {
-  loocv_elab<-F
+  assign( "loocv_elab", FALSE, envir = .GlobalEnv)
+  env$loocv_elab <- F
 }
 
+#
+
+return(argv)
+
+}

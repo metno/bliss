@@ -166,13 +166,12 @@ if ( !is.na( argv$cores)) {
 
 #-----------------------------------------------------------------------------
 # checks on input arguments
-source( file.path( bliss_mod_path, "main_checkargs.r"))
+argv <- main_checkargs( argv, env)
 
 #
 #------------------------------------------------------------------------------
 # Create master grid
-source( file.path( bliss_mod_path, "main_mastergrid.r"))
-env$rmaster <- rmaster
+res <- main_mastergrid( argv, env)
 
 #
 #------------------------------------------------------------------------------
@@ -244,7 +243,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( argv$mode != "hyletkf" & n0 < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "hyletkf", "wise")) & n0 < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=n0, nrow=n0, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.

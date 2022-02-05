@@ -1,3 +1,8 @@
+#+ Define master grid
+main_mastergrid <- function( argv, env) {
+
+#------------------------------------------------------------------------------
+
 xmn<-as.numeric(argv$grid_master.x1)-as.numeric(argv$grid_master.resx)/2
 xmx<-as.numeric(argv$grid_master.xn)+as.numeric(argv$grid_master.resx)/2
 ymn<-as.numeric(argv$grid_master.y1)-as.numeric(argv$grid_master.resy)/2
@@ -40,6 +45,7 @@ xmn<-xmin(rmaster)
 xmx<-xmax(rmaster)
 ymn<-ymin(rmaster)
 ymx<-ymax(rmaster)
+
 #
 # extract all the cell values: zvalues[1] contains the rmaster[1,1] value
 # Raster: cell numbers start at 1 in the upper left corner,
@@ -54,8 +60,10 @@ ygrid<-xy[,2]
 mask<-which(!is.na(zvalues))
 ng<-length(xgrid)
 ngrid<-length(mask)
+
 # clean memory
 rm(zvalues,xy)
+
 # debug info
 if (argv$verbose) {
   print("+---------------------------------------------------------------+")
@@ -74,3 +82,24 @@ if (argv$verbose) {
   print(paste("# unmasked grid points=",as.integer(ngrid)))
 }
 
+assign( "rmaster", rmaster, envir = .GlobalEnv)
+assign( "nx", nx, envir = .GlobalEnv)
+assign( "ny", ny, envir = .GlobalEnv)
+assign( "xmn", xmn, envir = .GlobalEnv)
+assign( "xmx", xmx, envir = .GlobalEnv)
+assign( "ymn", ymn, envir = .GlobalEnv)
+assign( "ymx", ymx, envir = .GlobalEnv)
+assign( "ng", ng, envir = .GlobalEnv)
+assign( "ngrid", ngrid, envir = .GlobalEnv)
+
+env$rmaster <- rmaster
+env$nx <- nx
+env$ny <- ny
+env$xmn <- xmn
+env$xmx <- xmx
+env$ymn <- ymn
+env$ymx <- ymx
+env$ng <- ymx
+env$ngrid <- ymx
+
+}
