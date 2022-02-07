@@ -129,8 +129,7 @@ source( file.path( bliss_mod_path, "main_argparser.r"))
 #
 #-----------------------------------------------------------------------------
 # define constants
-source( file.path( bliss_mod_path, "main_constants.r"))
-
+res <- main_constants( env)
 #
 #-----------------------------------------------------------------------------
 # define environments
@@ -144,7 +143,8 @@ fg_env$fg <- list()
 
 # observation enviroment
 y_env    <- new.env( parent=emptyenv())
-y_env$yo <- list()
+y_env$yo  <- list()
+y_env$yov <- list() # list for cv
 
 # observation environment (alignment)
 u_env    <- new.env( parent=emptyenv())
@@ -180,18 +180,24 @@ if ( argv$empty_grid & !is.na( argv$off_x) ) {
   source( file.path( bliss_mod_path, "main_emptygrid.r"))
   rip( code=0, t0=t0)
 }
+
 #
 #------------------------------------------------------------------------------
 # read rescaling factor
 if (file.exists(argv$iff_rf)) source( file.path( bliss_mod_path, "main_iff_rf.r"))
+
 #
 #------------------------------------------------------------------------------
 # read land area fraction
-if (file.exists(argv$iff_laf)) source( file.path( bliss_mod_path, "main_laf.r"))
+# output: env$rlaf_exists, env$rlaf
+res <- main_laf( argv, env)
+
 #
 #------------------------------------------------------------------------------
 # read digital elevation model 
-if (file.exists(argv$iff_dem)) source( file.path( bliss_mod_path, "main_dem.r"))
+# output: env$rlaf_exists, env$rlaf
+res <- main_laf( argv, env)
+
 #
 #------------------------------------------------------------------------------
 # -~- read first guess -~-
@@ -206,34 +212,27 @@ if (file.exists(argv$iff_dem)) source( file.path( bliss_mod_path, "main_dem.r"))
 # - valens, index to the valid ensemble members 
 # - iff_is_ens. is iff_fg an ensemble? used when writing output
 #
-if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
-if (argv$mode=="wise") {
-  dir_plot<-"/home/cristianl/data/wise"
-  dir_plot <- file.path(dir_plot,paste0("case_",argv$date_out))
-  load_if_present <- T
-  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    res <- main_iff_fg_wise( argv, fg_env, u_env, env)
-    save(file=ffff,argv, fg_env, u_env, env)
-  }
-}
+#if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
+#if (argv$mode=="wise") {
+#  dir_plot<-"/home/cristianl/data/wise"
+#  dir_plot <- file.path(dir_plot,paste0("case_",argv$date_out))
+#  load_if_present <- T
+#  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
+#  if (file.exists(ffff) & load_if_present) {
+#    load(ffff)
+#  } else {
+#    res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+#    save(file=ffff,argv, fg_env, u_env, env)
+#  }
+#}
+
+res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+
 #
 #------------------------------------------------------------------------------
 # Read observations
-source( file.path( bliss_mod_path, "main_iff_obs.r"))
-if (argv$mode=="wise") {
-  y_env$yo$x <- VecX
-  y_env$yo$y <- VecY
-  y_env$yo$value <- yo
-  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-}
+res <- main_iff_obs( argv, env, y_env)
+
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
