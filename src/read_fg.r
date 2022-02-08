@@ -1,17 +1,17 @@
 #+ Read first-guess fields 
-main_iff_fg_wise <- function( argv, fg_env, u_env, env) {
+read_fg <- function( argv, fg_env, u_env, env) {
 #==============================================================================
 
   t0a<-Sys.time()
 
-  if ( ( nfg <- length( fg_env$fg)) == 0) return( FALSE)
+  if ( ( fg_env$nfg <- length( fg_env$fg)) == 0) return( FALSE)
 
   if (argv$verbose) cat("+----------------------------------------------------+\n")
 
   #
   #----------------------------------------------------------------------------
 
-  if ( ( nuo <- length( u_env$uo)) == 1) {
+  if ( ( u_env$nuo <- length( u_env$uo)) == 1) {
 
     if (argv$verbose) cat("Read observations for alignment ...")
  
@@ -97,7 +97,7 @@ main_iff_fg_wise <- function( argv, fg_env, u_env, env) {
               u_env$uo[[1]]$r_main <- u_env$uo[[1]]$main.offset + res$raster * u_env$uo[[1]]$main.cfact 
             } else {
               u_env$uo[[1]]$r_main <- stack( u_env$uo[[1]]$r_main,
-                                              u_env$uo[[1]]$main.offset + res$raster * u_env$uo[[1]]$main.cfact)
+                                             u_env$uo[[1]]$main.offset + res$raster * u_env$uo[[1]]$main.cfact)
             }
             first <- F
           }
@@ -114,7 +114,7 @@ main_iff_fg_wise <- function( argv, fg_env, u_env, env) {
   #----------------------------------------------------------------------------
   if (argv$verbose) cat("Read background\n")
 
-  for (f in 1:nfg) {
+  for (f in 1:fg_env$nfg) {
     if (argv$verbose) cat(paste("file",f,"ensembles "))
 
     # initializations
@@ -216,7 +216,7 @@ main_iff_fg_wise <- function( argv, fg_env, u_env, env) {
   if (argv$verbose) {
     t1a<-Sys.time()
 
-    for (f in 1:nfg) {
+    for (f in 1:fg_env$nfg) {
       if (!is.null( fg_env$fg[[f]]$r_main)) {
         for (ens in 1:nlayers(fg_env$fg[[f]]$r_main)) {
           if ( class( fg_env$fg[[f]]$r_main) == "RasterLayer") {

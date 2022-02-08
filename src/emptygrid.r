@@ -1,9 +1,12 @@
+#+ write a file with an empty grid 
+emptygrid <- function( argv, env) {
+
   if (!exists("r.list")) r.list<-list()
-  r<-rmaster; r[]<-NA
+  r<-env$rmaster; r[]<-NA
   for (i in 1:length(argv$off_x.variables)) {
     r.list[[i]]<-matrix(data=getValues(r),
-                        ncol=length(y),
-                        nrow=length(x))
+                        ncol=length(env$y),
+                        nrow=length(env$x))
   }
   # define time for output
   tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
@@ -36,4 +39,4 @@
                    time_bnds=time_bnds,
                    cf_1.7=T)
   print(paste("output saved on file",argv$off_x))
-
+}

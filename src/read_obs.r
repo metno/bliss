@@ -1,5 +1,5 @@
 #+ Read input observations
-main_iff_obs <- function( argv, env, y_env) {
+read_obs <- function( argv, env, y_env) {
 #
 #==============================================================================
 
@@ -147,28 +147,59 @@ main_iff_obs <- function( argv, env, y_env) {
   #
   # extract aux info from u_env
   flag_in_uo <- rep( T, ndata)
-  if ( ( nuo <- length( u_env$uo)) > 0) {
-    data$value_uo <- array( data=NA, dim=c( ndata, nuo))
-    for (i in 1:nuo) {
-      data$value_uo[,i] <- extract( u_env$uo[[i]]$r_main, cbind( data$x, data$y))
-      flag_in_uo <- flag_in_uo & !is.na(data$value_uo[,i])
+  if ( u_env$nuo > 0) {
+    k <- 0 
+    for (i in 1:u_env$nuo) {
+      for (j in 1:nlayers(u_env$uo[[i]]$r_main)) {
+        if ( class(u_env$uo[[i]]$r_main)[1] == "RasterStack") {
+          r <- raster(u_env$uo[[i]]$r_main, layer=j)
+        } else if ( class(u_env$uo[[i]]$r_main)[1] == "RasterLayer") {
+          r <- u_env$uo[[i]]$r_main
+        } else {
+          return(FALSE)
+        }
+        if ( k == 0) {
+          data$value_uo <- array( data=NA, dim=c(ndata, 1))
+          data$value_uo[,1] <- extract( r, cbind( data$x, data$y)) }
+        else {
+          data$value_uo <- cbind(  data$value_uo, extract( r, cbind( data$x, data$y)))
+        }
+        k <- k + 1
+        flag_in_uo <- flag_in_uo & !is.na(data$value_uo[,k])
+      }
     }
   }
 
   #
   # extract aux info from fg_env
   flag_in_fg <- rep( T, ndata)
-  if ( ( nfg <- length( fg_env$fg)) > 0) {
-    data$value_fg <- array( data=NA, dim=c( ndata, nfg))
-    for (i in 1:nfg) {
-      data$value_fg[,i] <- extract( fg_env$fg[[i]]$r_main, cbind( data$x, data$y))
-      flag_in_fg <- flag_in_fg & !is.na(data$value_fg[,i])
+  if ( fg_env$nfg > 0) {
+    k <- 0 
+    for (i in 1:fg_env$nfg) {
+      for (j in 1:nlayers(fg_env$fg[[i]]$r_main)) {
+        if ( class(fg_env$fg[[i]]$r_main)[1] == "RasterStack") {
+          r <- raster(fg_env$fg[[i]]$r_main, layer=j)
+        } else if ( class(fg_env$fg[[i]]$r_main)[1] == "RasterLayer") {
+          r <- fg_env$fg[[i]]$r_main
+        } else {
+          return(FALSE)
+        }
+        if ( k == 0) {
+          data$value_fg <- array( data=NA, dim=c(ndata, 1))
+          data$value_fg[,1] <- extract( r, cbind( data$x, data$y)) }
+        else {
+          data$value_fg <- cbind(  data$value_fg, extract( r, cbind( data$x, data$y)))
+        }
+        k <- k + 1
+        flag_in_fg <- flag_in_fg & !is.na(data$value_fg[,k])
+        print(paste(i,j,k))
+      }
     }
   }
-  
+
   #
   # select only observation within the master grid
-  flag_in_master <- !is.na( extract( rmaster, cbind( data$x, data$y)))
+  flag_in_master <- !is.na( extract( env$rmaster, cbind( data$x, data$y)))
 
   # on-the-fly dqc, used for testing
   #  flag_in_fg<-!is.na(extract(rfg,cbind(data$x,data$y))) &
@@ -176,42 +207,48 @@ main_iff_obs <- function( argv, env, y_env) {
 
   #
   # CVmode based on data provider
-  if (cv_mode) {
-    # prId=1 MET-WMO stations
-    ixcv <- which( data$dqc == 0               & 
-                   data$prId %in% argv$prId.cv & 
-                   !is.na( data$value)         &
-                   flag_in_master              &
-                   flag_in_fg )
-  # CVmode based random selection of stations (predefined distance between them)
-  } else if (cv_mode_random) {
-    # define the set of indices for the cv stations
-    stmp <- vector()
-    xtmp <- vector()
-    ytmp <- vector()
-    j  <- 0
-    randomize <- sample( ndata, replace=FALSE)
-    for (i in randomize) {
-      if ( is.na(data$value[i]) | data$dqc[i]!=0 | !flag_in_master[i] | !flag_in_fg[i] ) next
-      if ( j == 0) {
-        j <- j + 1
-        stmp[j] <- data$sourceId[i]
-        xtmp[j] <- data$x[i]
-        ytmp[j] <- data$y[i]
-      } else {
-        dtmp <- sqrt( (data$x[i]-xtmp[1:j])**2 + (data$y[i]-ytmp[1:j])**2 ) / 1000
-        if ( !any( dtmp < argv$d.cv)) {
+  if (env$cv_mode | env$cv_mode_random) {
+
+    auxflag <- rep( T, ndata)
+    if ( any( !is.na( argv$prId.exclude)))
+      auxflag <- !(data$prId %in% argv$prId.exclude)  
+
+    if (env$cv_mode) {
+      # prId=1 MET-WMO stations
+      ixcv <- which( auxflag &
+                     data$dqc == 0               & 
+                     data$prId %in% argv$prId.cv & 
+                     !is.na( data$value)         &
+                     flag_in_master              &
+                     flag_in_fg )
+    # CVmode based random selection of stations (predefined distance between them)
+    } else if (env$cv_mode_random) {
+      # define the set of indices for the cv stations
+      stmp <- vector()
+      xtmp <- vector()
+      ytmp <- vector()
+      j  <- 0
+      randomize <- sample( ndata, replace=FALSE)
+      for (i in randomize) {
+        if ( !(auxflag[i]) | is.na(data$value[i]) | data$dqc[i]!=0 | !flag_in_master[i] | !flag_in_fg[i] ) next
+        if ( j == 0) {
           j <- j + 1
           stmp[j] <- data$sourceId[i]
           xtmp[j] <- data$x[i]
           ytmp[j] <- data$y[i]
+        } else {
+          dtmp <- sqrt( (data$x[i]-xtmp[1:j])**2 + (data$y[i]-ytmp[1:j])**2 )
+          if ( !any( dtmp < argv$d.cv)) {
+            j <- j + 1
+            stmp[j] <- data$sourceId[i]
+            xtmp[j] <- data$x[i]
+            ytmp[j] <- data$y[i]
+          }
         }
       }
+      ixcv <- which( data$sourceId %in% stmp[1:j])
     }
-    ixcv <- which( data$sourceId %in% stmp[1:j])
-  }
 
-  if (cv_mode_random | cv_mode_random) {
     if ( ( y_env$yov$ncv <- length(ixcv)) == 0) boom("ERROR \"cv_mode\" running without CV-observations ")
     y_env$yov$x      <- data$x[ixcv] 
     y_env$yov$y      <- data$y[ixcv] 
@@ -230,15 +267,15 @@ main_iff_obs <- function( argv, env, y_env) {
       y_env$yov$nwet  <- length( y_env$yov$ixwet)
       y_env$yov$ndry  <- length( y_env$yov$ixdry)
     }
-    y_env$yov$nuo  <- nuo 
-    if (nuo > 0) {
-      y_env$yov$value_uo  <- array( data=NA, dim=c( y_env$yov$ncv, nuo))
-      for (i in 1:nuo) y_env$yov$value_uo[,i]  <- data$value_uo[ixcv,i]
+    y_env$yov$nuo  <- u_env$nuo 
+    if (u_env$nuo > 0) {
+      y_env$yov$value_uo  <- array( data=NA, dim=c( y_env$yov$ncv, u_env$nuo))
+      for (i in 1:u_env$nuo) y_env$yov$value_uo[,i]  <- data$value_uo[ixcv,i]
     }
-    y_env$yov$nfg  <- nfg 
-    if (nfg > 0) {
-      y_env$yov$value_fg  <- array( data=NA, dim=c( y_env$yov$ncv, nfg))
-      for (i in 1:nfg) y_env$yov$value_fg[,i]  <- data$value_fg[ixcv,i]
+    y_env$yov$nfg  <- fg_env$nfg 
+    if (fg_env$nfg > 0) {
+      y_env$yov$value_fg  <- array( data=NA, dim=c( y_env$yov$ncv, fg_env$nfg))
+      for (i in 1:fg_env$nfg) y_env$yov$value_fg[,i]  <- data$value_fg[ixcv,i]
     }
     data$value[ixcv] <- NA
     data$dqc[ixcv]   <- 999
@@ -246,7 +283,7 @@ main_iff_obs <- function( argv, env, y_env) {
 
   #
   # Select stations to be used as input (exclude some stations if required)
-  if (any(!is.na(argv$prId.exclude))) {
+  if ( any( !is.na( argv$prId.exclude))) {
     ix0 <- which( data$dqc == 0                       &  
                   !(data$prId %in% argv$prId.exclude) &
                   flag_in_master                      &
@@ -282,15 +319,15 @@ main_iff_obs <- function( argv, env, y_env) {
     y_env$yo$nwet  <- length( y_env$yo$ixwet)
     y_env$yo$ndry  <- length( y_env$yo$ixdry)
   }
-  y_env$yo$nuo  <- nuo 
-  if (nuo > 0) {
-    y_env$yo$value_uo  <- array( data=NA, dim=c( y_env$yo$ncv, nuo))
-    for (i in 1:nuo) y_env$yo$value_uo  <- data$value_uo[ix0,i]
+  y_env$yo$nuo  <- u_env$nuo 
+  if (u_env$nuo > 0) {
+    y_env$yo$value_uo  <- array( data=NA, dim=c( y_env$yo$ncv, u_env$nuo))
+    for (i in 1:u_env$nuo) y_env$yo$value_uo  <- data$value_uo[ix0,i]
   }
-  y_env$yo$nfg  <- nfg 
-  if (nfg > 0) {
-    y_env$yo$value_fg  <- array( data=NA, dim=c( y_env$yo$ncv, nfg))
-    for (i in 1:nfg) y_env$yo$value_fg  <- data$value_fg[ix0,i]
+  y_env$yo$nfg  <- fg_env$nfg 
+  if (fg_env$nfg > 0) {
+    y_env$yo$value_fg  <- array( data=NA, dim=c( y_env$yo$ncv, fg_env$nfg))
+    for (i in 1:fg_env$nfg) y_env$yo$value_fg  <- data$value_fg[ix0,i]
   }
   rm(data)
 
@@ -387,11 +424,11 @@ main_iff_obs <- function( argv, env, y_env) {
 #    }
 #
 #    if ( y_env$yo$nuo > 0) 
-#      for (i in 1:nuo)
+#      for (i in 1:u_env$nuo)
 #        y_env$yo$value_uo[,i] <- extract( u_env$uo[[i]]$r_main, cbind( y_env$yo$x, y_env$yo$y))
 #
 #    if ( y_env$yo$nfg > 0) 
-#      for (i in 1:nfg)
+#      for (i in 1:fg_env$nfg)
 #        y_env$yo$value_fg[,i] <- extract( fg_env$fg[[i]]$r_main, cbind( y_env$yo$x, y_env$yo$y))
 #
 #  } # end observation aggregation
@@ -410,8 +447,8 @@ main_iff_obs <- function( argv, env, y_env) {
     print("+---------------------------------------------------------------+")
     if (!is.na(argv$rrinf)) {
       print(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")"))
-      if (cv_mode | cv_mode_random) {
-        print(paste("#cv-observations (wet/dry) =",y_env$yov$ncv,"(",y_env$yov$nwet,"/",y_env$yov$ndry_cv,")"))
+      if (env$cv_mode | env$cv_mode_random) {
+        print(paste("#cv-observations (wet/dry) =",y_env$yov$ncv,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")"))
       }
     } else {
       print(paste("#observations =",y_env$yo$n))
@@ -440,5 +477,7 @@ main_iff_obs <- function( argv, env, y_env) {
     print(paste("output saved on file",argv$off_obspp))
     quit(status=0)
   }
+
+ return (TRUE)
 
 }

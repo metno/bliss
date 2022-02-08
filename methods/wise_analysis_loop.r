@@ -1,5 +1,5 @@
 #+
-main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=1000, 
+wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=1000, 
                                 plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
@@ -111,6 +111,7 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
   cat("Analysis on the transformed space \n")
 
   costf <- vector()
+  costf_En2 <- vector()
 #  ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
 
   En2 <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
@@ -250,7 +251,7 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
     #--------------------------------------------------------    
     #   
     costf[loop] <- mean( sqrt( var_d1_yy))
-    print( paste("rmse", costf[loop]))
+    print( paste("rmse", round(costf[loop],5)))
 
     #--------------------------------------------------------    
     # Analysis
@@ -322,6 +323,8 @@ main_wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_di
       Xa[,e] <- idwt.2d( dwt_aux)
       Xa[,e][Xa[,e]<y_env$rain]<-0
     }
+    costf_En2[loop] <- mean(rho)
+    print( paste("en2 var", round(costf_En2[loop],5)))
  
     if (plot) {
       for (e in 1:env$k_dim) {

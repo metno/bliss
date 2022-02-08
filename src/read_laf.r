@@ -1,5 +1,5 @@
 #+ Read Land-Area Fraction
-main_laf <- function( argv, env) {
+read_laf <- function( argv, env) {
 #==============================================================================
 
   if ( file.exists( argv$iff_laf)) {

@@ -1,5 +1,5 @@
 #+ Check input arguments and set some flags for elaborations
-main_checkargs <- function( argv, env) {
+checkargs <- function( argv, env) {
 
 #------------------------------------------------------------------------------
 

@@ -1,6 +1,5 @@
 #+ Select the background fields using an observed field as the reference
-main_wise_align <- function( argv, fg_env, u_env, env,
-                             plot=F, dir_plot=NA) {
+wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
 #
 # output
 #  fg_env$ets ETS for each potential background field
@@ -13,7 +12,7 @@ main_wise_align <- function( argv, fg_env, u_env, env,
 
   cat( "-- main_wise_align --\n")
 
-  if ( ( nfg <- length( fg_env$fg)) == 0) return( FALSE)
+  if ( fg_env$nfg == 0) return( FALSE)
 
   # compute ETS for each potential background field
   cat (" compute ETS for each potential background field \n")
@@ -25,7 +24,7 @@ main_wise_align <- function( argv, fg_env, u_env, env,
   ixf <- integer(0)
   ixe <- integer(0)
   j <- 0
-  for (f in 1:nfg) {
+  for (f in 1:fg_env$nfg) {
     cat( paste("  data source",f,"ensembles"))
     ef <- nlayers( fg_env$fg[[f]]$r_main)
     for (e in 1:ef) {
@@ -78,7 +77,7 @@ main_wise_align <- function( argv, fg_env, u_env, env,
 # select all fields with ets > 0
 #  ixs <- which( ets > 0)
 #  env$k_dim <- length( ixs)
-  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(ets),")"))
+  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(ets),")\n"))
 #  # select only the k fields with the highest ETSs
   ixs <- order( ets, decreasing=T)[1:env$k_dim]
 

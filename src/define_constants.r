@@ -1,5 +1,5 @@
 #+ define constants
-main_constants <- function( env) {
+define_constants <- function( env) {
 #==============================================================================
   # define constants
 

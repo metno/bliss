@@ -1,5 +1,5 @@
 #+ Read Land-Area Fraction
-main_dem <- function( argv, env) {
+read_dem <- function( argv, env) {
 #==============================================================================
 
   if ( file.exists( argv$iff_dem)) {

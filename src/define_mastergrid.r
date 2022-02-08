@@ -1,5 +1,5 @@
 #+ Define master grid
-main_mastergrid <- function( argv, env) {
+define_mastergrid <- function( argv, env) {
 
 #------------------------------------------------------------------------------
 
@@ -82,24 +82,19 @@ if (argv$verbose) {
   print(paste("# unmasked grid points=",as.integer(ngrid)))
 }
 
-assign( "rmaster", rmaster, envir = .GlobalEnv)
-assign( "nx", nx, envir = .GlobalEnv)
-assign( "ny", ny, envir = .GlobalEnv)
-assign( "xmn", xmn, envir = .GlobalEnv)
-assign( "xmx", xmx, envir = .GlobalEnv)
-assign( "ymn", ymn, envir = .GlobalEnv)
-assign( "ymx", ymx, envir = .GlobalEnv)
-assign( "ng", ng, envir = .GlobalEnv)
-assign( "ngrid", ngrid, envir = .GlobalEnv)
-
 env$rmaster <- rmaster
+env$x <- x
+env$y <- y
+env$xgrid <- xgrid
+env$ygrid <- ygrid
+env$mask <- mask
+env$ng <- ng
+env$ngrid <- ngrid
 env$nx <- nx
 env$ny <- ny
 env$xmn <- xmn
 env$xmx <- xmx
 env$ymn <- ymn
 env$ymx <- ymx
-env$ng <- ymx
-env$ngrid <- ymx
 
 }

@@ -60,76 +60,15 @@ rip <- function( str=NA, code=NA, t0=NA) {
 # MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN - MAIN -
 #==============================================================================
 t0 <- Sys.time() # ladies and gentlemen, start your engines
-#
-#-----------------------------------------------------------------------------
-# path to the titan functions is stored in the enviroment var BLISS_PATH 
-bliss_fun_path <- file.path( Sys.getenv( "BLISS_PATH"), "src")
-bliss_mod_path <- file.path( Sys.getenv( "BLISS_PATH"), "main_modules")
-#
-#-----------------------------------------------------------------------------
-# load functions
-fun_list <- c( "oi_var_gridpoint_by_gridpoint.r",
-               "oi_bratseth_gridpoint_by_gridpoint.r",
-               "oivar.r",
-               "gamma_anamorphosis.r",
-               "gamma_get_shape_rate_from_dataset.r",
-               "oi_rr_fast.r",
-               "henoi.r",
-               "henoi_alt.r",
-               "obsop_precip.r",
-               "boxcox.r",
-               "oi_temperature_util.r",
-               "superobs.r",
-               "misc_util.r",
-               "read_and_regrid_nc.r",
-               "debug_util.r",
-               "ijFromLev.r")
-for (fun in fun_list) {
-  if ( !file.exists(file.path( bliss_fun_path, fun)))
-    boom( file.path( bliss_fun_path, fun), code=1)
-  source( file.path( bliss_fun_path, fun))
-}
-rm( fun_list, fun)               
-#
-#-----------------------------------------------------------------------------
-# check all main modules exists
-mod_list <- c( "main_constants.r", "main_argparser.r", "main_checkargs.r",
-               "main_mastergrid.r", "main_emptygrid.r", "main_iff_rf.r",
-               "main_laf.r", "main_dem.r", "main_iff_fg.r", "main_iff_obs.r",
-               "main_oi_multiscale.r", "main_oi_multicale_setpar.r",
-               "main_rasterize.r",
-               "main_oi_fg.r",
-               "main_oi_twosteps.r",
-               "main_oi_bratseth.r",
-               "main_sc_barnes.r",
-#               "main_hyletkf.r",
-               "main_ensi.r",
-               "main_ensigap.r",
-#               "main_wise.r",
-               "main_off_y_table.r", "main_off_yt_table.r",
-               "main_off_cv_table.r", "main_off_cvt_table.r",
-               "main_off_lcv_table.r", "main_off_lcvt_table.r",
-               "main_off_verif.r",
-               "main_off_rdata.r",
-               "main_off_x.r")
-for (mod in mod_list) {
-  if ( !file.exists(file.path( bliss_mod_path, mod)))
-    boom( file.path( bliss_mod_path, mod), code=1)
-}
-rm( mod_list, mod)               
-source( file.path( bliss_mod_path, "main_iff_fg_wise.r"))
-source( file.path( bliss_mod_path, "main_wise_align.r"))
-source( file.path( bliss_mod_path, "main_wise_analysis.r"))
-source( file.path( bliss_mod_path, "main_wise_analysis_loop.r"))
-#source( file.path( bliss_mod_path, "main_wise_analysis_loop_alignment.r"))
-source( file.path( bliss_mod_path, "main_wise_sampling_postpdf.r"))
-source( file.path( bliss_mod_path, "main_wise_plot.r"))
-source( file.path( bliss_mod_path, "main_argparser.r"))
 
 #
 #-----------------------------------------------------------------------------
-# define constants
-res <- main_constants( env)
+# get path from system environment
+bliss_path <- Sys.getenv( "BLISS_PATH")
+
+# load the function we need to read the command line arguments
+source( file.path( bliss_path, "main_modules", "main_argparser.r"))
+
 #
 #-----------------------------------------------------------------------------
 # define environments
@@ -156,6 +95,20 @@ u_env$uo <- list()
 argv <- argparser( env, fg_env, y_env, u_env)
 
 #
+#------------------------------------------------------------------------------
+# Load functions
+for (file in list.files(path = file.path( bliss_path, "src"), pattern = ".r$", full.names=T)) 
+  source(file)
+for (file in list.files(path = file.path( bliss_path, "methods"), pattern = ".r$", full.names=T)) 
+  source(file)
+rm(file)
+
+#
+#-----------------------------------------------------------------------------
+# define constants
+define_constants( env)
+
+#
 #-----------------------------------------------------------------------------
 # Multi-cores run
 if ( !is.na( argv$cores)) {
@@ -166,72 +119,73 @@ if ( !is.na( argv$cores)) {
 
 #-----------------------------------------------------------------------------
 # checks on input arguments
-argv <- main_checkargs( argv, env)
+argv <- checkargs( argv, env)
 
 #
 #------------------------------------------------------------------------------
-# Create master grid
-res <- main_mastergrid( argv, env)
+# Create master grid (output env$rmaster)
+define_mastergrid( argv, env)
 
 #
 #------------------------------------------------------------------------------
-# Empty grid on a gridded output
+# Just write an empty grid and exit
 if ( argv$empty_grid & !is.na( argv$off_x) ) {
-  source( file.path( bliss_mod_path, "main_emptygrid.r"))
+  main_emptygrid( argv, env)
   rip( code=0, t0=t0)
 }
 
 #
 #------------------------------------------------------------------------------
 # read rescaling factor
-if (file.exists(argv$iff_rf)) source( file.path( bliss_mod_path, "main_iff_rf.r"))
+read_rescaling_factor( argv, env)
 
 #
 #------------------------------------------------------------------------------
 # read land area fraction
 # output: env$rlaf_exists, env$rlaf
-res <- main_laf( argv, env)
+read_laf( argv, env)
 
 #
 #------------------------------------------------------------------------------
 # read digital elevation model 
 # output: env$rlaf_exists, env$rlaf
-res <- main_laf( argv, env)
+read_dem( argv, env)
 
 #
 #------------------------------------------------------------------------------
-# -~- read first guess -~-
-# output data structures:
-# - xb, deterministic (vector) or ensemble (array = dim( ngrid,nens) field(s)
-#    xb values are stored only for not NAs points, masked using rmaster
-#    xb values less than min_plaus_val are set to min_plaus_val
-# - aix, vector. indices of background-valid gridpoints wrt the original grid 
-#    note: ngrid = length(aix)
-# - rfg, raster file with the masked background field 
-#        (if ensemble, then is the last one)
-# - valens, index to the valid ensemble members 
-# - iff_is_ens. is iff_fg an ensemble? used when writing output
-#
-#if (file.exists(argv$iff_fg)) source( file.path( bliss_mod_path, "main_iff_fg.r")) 
-#if (argv$mode=="wise") {
-#  dir_plot<-"/home/cristianl/data/wise"
-#  dir_plot <- file.path(dir_plot,paste0("case_",argv$date_out))
-#  load_if_present <- T
-#  ffff<- file.path(dir_plot,paste0("tmp_wise_input_",argv$date_out,".rdata"))
-#  if (file.exists(ffff) & load_if_present) {
-#    load(ffff)
-#  } else {
-#    res <- main_iff_fg_wise( argv, fg_env, u_env, env)
-#    save(file=ffff,argv, fg_env, u_env, env)
-#  }
-#}
+# Read background fields
+# fg_env$nfg = number of files where the background fields are stored
+# fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
+#                  where the background data and metadata are stored
 
-res <- main_iff_fg_wise( argv, fg_env, u_env, env)
+dir_plot <- "/home/cristianl/data/wise/pngs"
+ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
+load_if_present<-T
+if (file.exists(ffff) & load_if_present) {
+  load(ffff)
+} else {
+  res <- read_fg( argv, fg_env, u_env, env)
+  if (!res) boom( code=1, str="ERROR problems while reading the background")
+  save(file=ffff, argv, fg_env, u_env, env, y_env)
+}
 
 #
 #------------------------------------------------------------------------------
 # Read observations
-res <- main_iff_obs( argv, env, y_env)
+
+ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
+load_if_present<-T
+if (file.exists(ffff) & load_if_present) {
+  load(ffff)
+} else {
+  res <- read_obs( argv, env, y_env)
+  if (!res) boom( code=1, str="ERROR problems while reading the observations")
+  png(file="tmp_obs.png",width=1200,height=1200)
+  plot(y_env$yo$x,y_env$yo$y,pch=21,bg="gray",col="darkgray")
+  points(y_env$yov$x,y_env$yov$y,pch=21,bg="red",col="darkred")
+  dev.off()
+  save(file=ffff, argv, fg_env, u_env, env, y_env)
+}
 
 #
 #------------------------------------------------------------------------------
@@ -242,8 +196,8 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "hyletkf", "wise")) & n0 < argv$maxobs_for_matrixInv ) {
-  Disth <- matrix( ncol=n0, nrow=n0, data=0.)
+if ( !(argv$mode %in% c( "hyletkf", "wise")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+  Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
 }
@@ -300,18 +254,17 @@ if (argv$mode=="rasterize") {
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
+    res <- wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
   load_if_present<-F
-  dir_plot <- "/home/cristianl/data/wise/pngs"
   plot<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=plot, dir_plot=dir_plot)
+    res <- wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=plot, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
