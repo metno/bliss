@@ -67,7 +67,7 @@ t0 <- Sys.time() # ladies and gentlemen, start your engines
 bliss_path <- Sys.getenv( "BLISS_PATH")
 
 # load the function we need to read the command line arguments
-source( file.path( bliss_path, "main_modules", "main_argparser.r"))
+source( file.path( bliss_path, "src", "argparser.r"))
 
 #
 #-----------------------------------------------------------------------------
@@ -160,7 +160,7 @@ read_dem( argv, env)
 
 dir_plot <- "/home/cristianl/data/wise/pngs"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -174,7 +174,7 @@ if (file.exists(ffff) & load_if_present) {
 # Read observations
 
 ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -250,7 +250,7 @@ if (argv$mode=="rasterize") {
   suppressPackageStartupMessages( library( "RANN"))
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
@@ -260,11 +260,17 @@ if (argv$mode=="rasterize") {
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
   load_if_present<-F
-  plot<-T
+  plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- wise_analysis_loop( argv, y_env, fg_env, env, seed=1, obs_k_dim=30, plot=plot, dir_plot=dir_plot)
+    res <- wise_analysis_loop( argv, y_env, fg_env, env, 
+                               supob_nobs=argv$wise_supob_nobs,
+                               supob_radius=argv$wise_supob_radius,
+                               supob_q=argv$wise_supob_q,
+                               max_it=argv$wise_opt_maxit,
+                               opttol=argv$wise_opt_opttol,
+                               plot=plot, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 

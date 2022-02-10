@@ -228,6 +228,7 @@ read_obs <- function( argv, env, y_env) {
       xtmp <- vector()
       ytmp <- vector()
       j  <- 0
+      if (!is.na(argv$cv_mode_random_setseed)) set.seed(argv$cv_mode_random_setseed)
       randomize <- sample( ndata, replace=FALSE)
       for (i in randomize) {
         if ( !(auxflag[i]) | is.na(data$value[i]) | data$dqc[i]!=0 | !flag_in_master[i] | !flag_in_fg[i] ) next
@@ -330,6 +331,33 @@ read_obs <- function( argv, env, y_env) {
     for (i in 1:fg_env$nfg) y_env$yo$value_fg  <- data$value_fg[ix0,i]
   }
   rm(data)
+
+  if (argv$cv_mode_calcidiv) {
+    suppressPackageStartupMessages( library( "RANN"))
+    nn2 <- nn2( cbind( y_env$yo$x, y_env$yo$y), 
+                query = cbind( y_env$yov$x, y_env$yov$y),
+                k = argv$calcidiv_nobs, 
+                searchtype = "radius", radius = argv$calcidiv_radius)
+    mat <- nn2[[1]]
+    c_xy <- which( ( aux <- rowSums( mat)) > 0 )
+    dh2 <- argv$calcidiv_dh * argv$calcidiv_dh
+    mapply_idiv  <- function(i) {
+      j <- c_xy[i]
+      n <- length(which(mat[j,]!=0))
+      vx <- y_env$yo$x[mat[j,1:n]]
+      vy <- y_env$yo$y[mat[j,1:n]]
+      deltax <- abs(y_env$yov$x[j]-vx)
+      deltay <- abs(y_env$yov$y[j]-vy)
+      rloc<-exp( -0.5* (deltax*deltax+deltay*deltay) / dh2 )
+      SRinv<-chol2inv(chol( (S+diag(x=0.1,n)) ))
+      return( sum(rloc*as.vector(rowSums(SRinv))))
+    }
+    y_env$yov$idi <- rep( 0, y_env$yov$ncv)
+    rfobs[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
+    t1 <- Sys.time()
+    print(paste("mapply",t1-t0))
+
+  }
 
 #  #
 #  # Aggregate observations
@@ -443,18 +471,6 @@ read_obs <- function( argv, env, y_env) {
     }
   }
 
-  if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
-    if (!is.na(argv$rrinf)) {
-      print(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")"))
-      if (env$cv_mode | env$cv_mode_random) {
-        print(paste("#cv-observations (wet/dry) =",y_env$yov$ncv,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")"))
-      }
-    } else {
-      print(paste("#observations =",y_env$yo$n))
-    }
-    print("+...............................................................+")
-  }
 
   if (!is.na(argv$off_obspp)) {
     dataout<-array(data=NA, dim=c(length(VecLat),8))
@@ -478,6 +494,19 @@ read_obs <- function( argv, env, y_env) {
     quit(status=0)
   }
 
- return (TRUE)
+  if (argv$verbose) {
+    print("+---------------------------------------------------------------+")
+    if (!is.na(argv$rrinf)) {
+      print(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")"))
+      if (env$cv_mode | env$cv_mode_random) {
+        print(paste("#cv-observations (wet/dry) =",y_env$yov$ncv,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")"))
+      }
+    } else {
+      print(paste("#observations =",y_env$yo$n))
+    }
+    print("+...............................................................+")
+  }
+
+  return (TRUE)
 
 }

@@ -1,5 +1,7 @@
 #+
-wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=1000, 
+wise_analysis_loop <- function( argv, y_env, fg_env, env,
+                                supob_nobs=50, supob_radius=1500, supob_q=0.99,
+                                max_it=100, opttol=0.02,
                                 plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
@@ -24,7 +26,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   rfxb <- rdyad
   rfyb <- rdyad
   rfin <- rdyad
-  rfxb_alt <- rdyad
+#  rfxb_alt <- rdyad
 
   cat( paste( "dyadic domain, nx ny dx dy >", ncol(rdyad), nrow(rdyad), round( res(rdyad)[1]), round( res(rdyad)[2]),"\n"))
   
@@ -41,15 +43,15 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
 
   t0 <- Sys.time()
   rfobs<-rdyad
-  nn2 <- nn2( cbind(y_env$yo$x, y_env$yo$y), 
+  nn2 <- nn2( cbind( y_env$yo$x, y_env$yo$y), 
               query = xyFromCell( rdyad, 1:ncell(rdyad)), 
-              k = 50, 
-              searchtype = "radius", radius = 1500)
+              k = supob_nobs, 
+              searchtype = "radius", radius = supob_radius)
 
   mat <- nn2[[1]]
   c_xy <- which( ( aux <- rowSums( mat)) > 0 )
 
-  mapply_quantile  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=0.99) }
+  mapply_quantile  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=supob_q) }
   rfobs[] <- 0
   rfobs[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
   t1 <- Sys.time()
@@ -74,6 +76,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   env$n_dim <- length( as.vector( unlist( dwt_out)))
   # total number of coefficients used. Dimension of the state variable
   env$m_dim <- length( getValues(rdyad))
+  sqrt_m_dim <- sqrt( env$m_dim)
   # number of observations
   env$p_dim <- length(y_env$yo$x)
   cat( paste( "state variable, wavelet coefficients, n dim >", env$n_dim, "\n"))
@@ -110,8 +113,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
   # Analysis
   cat("Analysis on the transformed space \n")
 
-  costf <- vector()
-  costf_En2 <- vector()
+  env$costf <- vector()
 #  ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
 
   En2 <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
@@ -125,7 +127,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
 
   #--------------------------------------------------------    
   # MAIN LOOP
-  for (loop in 1:20) {
+  for (loop in 1:max_it) {
 
     t0 <- Sys.time()
     cat( paste(" loop", loop, " "))
@@ -134,11 +136,11 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
     # set the background
 
     Ub     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-    Ub_alt <- array( data=NA, dim=c( env$n_dim, env$k_dim))
+#    Ub_alt <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     Vb     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     vo_Vb  <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     En2Ub     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
-    En2Ub_alt <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
+#    En2Ub_alt <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
     En2Vb     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
     En2in     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
 
@@ -152,14 +154,14 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
         # interpolate onto the dyadic grid
         # background at grid  points
         rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
-        rfxb[rfxb<0] <- 0
+        rfxb[rfxb<y_env$rain] <- 0
 
       # second iteration onwards - background from previous iteration 
       } else {
         # -- background at grid  points --
-  #      rfxb_to_plot[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
-        rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
-        rfxb[rfxb<0] <- 0
+  #      rfxb_to_plot[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
+        rfxb[] <- array( data=env$Xa_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
+        rfxb[rfxb<y_env$rain] <- 0
 #        ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
       }
 
@@ -167,8 +169,8 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       rfyb <- rdyad; rfyb[c_xy] <- rfxb[c_xy]
       # innovation 
       rfin <- rdyad; rfin[c_xy] <- rfobs[c_xy] - rfxb[c_xy]
-      # background alternative (obs+backg)
-      rfxb_alt <- rfxb; rfxb_alt[c_xy] <- rfobs[c_xy]
+#      # background alternative (obs+backg)
+#      rfxb_alt <- rfxb; rfxb_alt[c_xy] <- rfobs[c_xy]
 
       # plot the background
       if (plot & loop==1) {
@@ -183,7 +185,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
 
       # transformation operator
       dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-      dwtxb_alt <- dwt.2d( as.matrix(rfxb_alt), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
+#      dwtxb_alt <- dwt.2d( as.matrix(rfxb_alt), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
       dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
       dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
 
@@ -195,9 +197,9 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
         ii <- jj + 1
         jj <- ii + length(lh) + length(hl) + length(hh) - 1
         Ub[ii:jj,e] <- c( lh, hl, hh)
-        lh  <-  dwtxb_alt[[1+3*(l-1)]]; hl  <-  dwtxb_alt[[2+3*(l-1)]];  hh <-  dwtxb_alt[[3+3*(l-1)]]
-        En2Ub_alt[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-        Ub_alt[ii:jj,e] <- c( lh, hl, hh)
+#        lh  <-  dwtxb_alt[[1+3*(l-1)]]; hl  <-  dwtxb_alt[[2+3*(l-1)]];  hh <-  dwtxb_alt[[3+3*(l-1)]]
+#        En2Ub_alt[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
+#        Ub_alt[ii:jj,e] <- c( lh, hl, hh)
         lh  <-  dwtyb[[1+3*(l-1)]]; hl  <-  dwtyb[[2+3*(l-1)]];  hh <-  dwtyb[[3+3*(l-1)]]
         En2Vb[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
         Vb[ii:jj,e] <- c( lh, hl, hh)
@@ -209,8 +211,8 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       En2Ub[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Ub[(jj+1):env$n_dim,e] <- ll
       ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
-      En2Ub_alt[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
-      Ub_alt[(jj+1):env$n_dim,e] <- ll
+#      En2Ub_alt[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
+#      Ub_alt[(jj+1):env$n_dim,e] <- ll
       ll <- dwtyb[[4+3*(env$n_levs_mx-1)]] 
       En2Vb[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Vb[(jj+1):env$n_dim,e] <- ll
@@ -235,23 +237,24 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
     # Background error covariance matrices
     Ab <- Ub - rowMeans(Ub)
     Db <- Vb - rowMeans(Vb)
-    D  <- vo_Vb
+#    D  <- vo_Vb
     var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) #* 1/dwt_res**2 
-    var_b1_yy <- 1/(env$k_dim-1) * rowSums( Db*Db) #* 1/dwt_res**2
-    var_bd1_xy <- 1/(env$k_dim-1) * rowSums( Ab*D) #* 1/dwt_res**2 
-    var_d1_yy  <- 1/(env$k_dim-1) * rowSums( D *D) #* 1/dwt_res**2
+#    var_b1_yy <- 1/(env$k_dim-1) * rowSums( Db*Db) #* 1/dwt_res**2
+#    var_bd1_xy <- 1/(env$k_dim-1) * rowSums( Ab*D) #* 1/dwt_res**2 
+    var_d1_yy  <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) #* 1/dwt_res**2
 
-    D_alt  <- vo_Vb - rowMeans(vo_Vb)
-    Ab_alt <- Ub_alt - rowMeans(Ub_alt)
-    var_bd1alt_xy <- 1/(env$k_dim-1) * rowSums( Ab_alt*D_alt)
-    var_d1alt_yy  <- 1/(env$k_dim-1) * rowSums( D_alt *D_alt)
+#    D_alt  <- vo_Vb - rowMeans(vo_Vb)
+#    Ab_alt <- Ub_alt - rowMeans(Ub_alt)
+#    var_bd1alt_xy <- 1/(env$k_dim-1) * rowSums( Ab_alt*D_alt)
+#    var_d1alt_yy  <- 1/(env$k_dim-1) * rowSums( D_alt *D_alt)
 
-    rm( Ab, Db, D, D_alt, Ab_alt)
+#    rm( Ab, Db, D, D_alt, Ab_alt)
+    rm( Ab, Db)
 
-    #--------------------------------------------------------    
-    #   
-    costf[loop] <- mean( sqrt( var_d1_yy))
-    print( paste("rmse", round(costf[loop],5)))
+#    #--------------------------------------------------------    
+#    # sort of root mean squared error of the decomposed innovation
+#    env$costf[loop] <- mean( sqrt( var_d1_yy))
+#    cat( paste("rmse", round(env$costf[loop],5)), "\n")
 
     #--------------------------------------------------------    
     # Analysis
@@ -260,7 +263,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
 #    coeff <- var_bd1alt_xy / var_d1alt_yy
     coeff[!is.finite(coeff)] <- 0
     Ua  <- array( data=NA, dim=c(     env$n_dim, env$k_dim))
-    Xa  <- array( data=NA, dim=c( length(rdyad), env$k_dim))
+    env$Xa_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
     for (e in 1:env$k_dim) {
       cat(".")
       Ua[,e] <- Ub[,e] + coeff * ( vo - Vb[,e])
@@ -274,11 +277,11 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
       dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ua[ij[1]:ij[2],e]
       # reconstruct analysis
-      Xa[,e] <- idwt.2d( dwt_aux)
-      Xa[,e][Xa[,e]<y_env$rain]<-0
+      env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
+      if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
 
       # compute energies
-      rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
+      rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
       dwtxa <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
       jj <- 0; ii <- 0
       for (i in env$n_levs_mn:env$n_levs_mx) {
@@ -296,8 +299,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       En2[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Ua[(jj+1):env$n_dim,e] <- ll
     }
-    t1 <- Sys.time()
-    cat( paste0("time=",round(t1-t0,1), attr(t1-t0,"unit"),"\\"))
 
     # Constraint on energies
     for (e in 1:env$k_dim) {
@@ -320,15 +321,14 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env, seed=NA, obs_k_dim=100
       dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[i,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
 #      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- rho[env$n_levs_mx+1,e] * Ua[ij[1]:ij[2],e]
       En2[env$n_levs_mx+1,e] <- mean( ( dwt_aux[[3*(env$n_levs_mx-1)+4]][] / 2**i)**2)
-      Xa[,e] <- idwt.2d( dwt_aux)
-      Xa[,e][Xa[,e]<y_env$rain]<-0
+      env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
+      if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
     }
-    costf_En2[loop] <- mean(rho)
-    print( paste("en2 var", round(costf_En2[loop],5)))
- 
+
+     
     if (plot) {
       for (e in 1:env$k_dim) {
-        rfxb[] <- array(data=Xa[,e],dim=c(sqrt(length(Xa[,e])),sqrt(length(Xa[,e]))))
+        rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
         if (loop==1) ylim<-range(c(En2,En2_prev+var_En2_prev))
 
         # En2
@@ -412,7 +412,16 @@ save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev,rfxb,rfobs,c_xy)
       }
     }
 
-    cat( paste0("time=",round(t1-t0,1), attr(t1-t0,"unit"),"\n"))
+    #
+    #--------------------------------------------------------    
+    # DeltaEn2idx - index related to the mean variation of the energy over the spatial scales (0=no variation, 1=mean variation of the order of the variability)
+
+    env$costf[loop] <- 1 - mean( rho, na.rm=T)
+    t1 <- Sys.time()
+    cat( paste( "time=", round(t1-t0,1), attr(t1-t0,"unit"), "costf - Delta En2 index =", round(env$costf[loop],5), "\n"))
+    # break out of the main loop early if variations  
+    if ( env$costf[loop] < opttol) break
+
   } # end main loop
 
 }

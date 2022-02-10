@@ -91,19 +91,20 @@ if (!is.na(argv$off_y_table)   | !is.na(argv$off_yt_table)   |
   env$y_elab <- F
 }
 
+# cross-validation
 assign( "cv_mode_random", FALSE, envir = .GlobalEnv)
 env$cv_mode_random <- F
 
 assign( "cv_mode", FALSE, envir = .GlobalEnv)
 env$cv_mode <- F
 
-if ( argv$cv_mode | 
+if ( argv$cv_mode | argv$cv_mode_random | 
      !is.na( argv$off_cv_table)   | !is.na( argv$off_cvt_table)   |
      !is.na( argv$off_cv_verif_a) | !is.na( argv$off_cvt_verif_a) |
      !is.na( argv$off_cv_verif_b) | !is.na( argv$off_cvt_verif_b)) {
   assign( "cv_elab", TRUE, envir = .GlobalEnv)
   env$cv_elab <- T
-  if ( any( !is.na( argv$prId.cv))) {
+  if ( argv$cv_mode & any( !is.na( argv$prId.cv))) {
     assign( "cv_mode", TRUE, envir = .GlobalEnv)
     env$cv_mode <- T
   } else {
@@ -115,6 +116,7 @@ if ( argv$cv_mode |
   env$cv_elab <- F
 }
 
+# leave-one-out cross-validation
 if (!is.na(argv$off_lcv_table)   | !is.na(argv$off_lcvt_table)   |
     !is.na(argv$off_lcv_verif_a) | !is.na(argv$off_lcvt_verif_a) |
     !is.na(argv$off_lcv_verif_b) | !is.na(argv$off_lcvt_verif_b) ) {

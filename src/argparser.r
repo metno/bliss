@@ -54,12 +54,32 @@ p <- add_argument(p, "--d.cv",
                   help="distance used for ''cv_mode_random'' (km)",
                   type="numeric",
                   default=50)
+p <- add_argument(p, "--cv_mode_random_setseed",
+                  help="set the seed used by the random number generator, this way one always get the same set of stations. Useful for testing/debugging.",
+                  type="integer",
+                  default=NA)
 p <- add_argument(p, "--loocv_mode",
                   help="leave-one-out cross-validation mode",
                   type="logical",
                   default=F)
+p <- add_argument(p, "--cv_mode_calcidiv",
+                  help="compute IDI-cv",
+                  type="logical",
+                  default=F)
+p <- add_argument(p, "--calcidiv_nobs",
+                  help="IDI-cv maximum number of observations to use locally",
+                  type="integer",
+                  default=50)
+p <- add_argument(p, "--calcidiv_radius",
+                  help="IDI-cv radius of the neighbourhood",
+                  type="numeric",
+                  default=30000)
+p <- add_argument(p, "--calcidiv_dh",
+                  help="IDI-cv decorrelation lenght",
+                  type="numeric",
+                  default=10000)
 p <- add_argument(p, "--idiv_instead_of_elev",
-                  help="leave-one-out cross-validation mode",
+                  help="compute IDI-cv",
                   type="logical",
                   default=F)
 p <- add_argument(p, "--twostep_superobbing",
@@ -1030,11 +1050,11 @@ p <- add_argument(p, "--off_obspp",
 p <- add_argument(p, "--wise_rain_uo",
                   help="rain yes/no threshold for alignment (mm)",
                   type="numeric",
-                  default=1)
+                  default=NA)
 p <- add_argument(p, "--wise_rain_yo",
                   help="rain yes/no threshold for interpolation (mm)",
                   type="numeric",
-                  default=1)
+                  default=NA)
 p <- add_argument(p, "--wise_k_dim",
                   help="number of background ensemble members",
                   type="integer",
@@ -1059,6 +1079,27 @@ p <- add_argument(p, "--wise_n_levs_mn",
                   help="number of finest level to consider",
                   type="integer",
                   default=1)
+p <- add_argument(p, "--wise_supob_nobs",
+                  help="Wise Superobbing, max number of observations considered in the neighbourhhod of a grid point",
+                  type="integer",
+                  default=50)
+p <- add_argument(p, "--wise_supob_radius",
+                  help="Wise Superobbing, radius defining the neighbourhhod of a grid point",
+                  type="numeric",
+                  default=1500)
+p <- add_argument(p, "--wise_supob_q",
+                  help="Wise Superobbing, quantile used for superobbing",
+                  type="numeric",
+                  default=0.99)
+p <- add_argument(p, "--wise_opt_maxit",
+                  help="Wise Optimization, maximum number of iterations in the main loop",
+                  type="integer",
+                  default=100)
+p <- add_argument(p, "--wise_opt_opttol",
+                  help="Wise Optimization, tolerance threshold used to break out from the main loop",
+                  type="numeric",
+                  default=0.02)
+
 
 #------------------------------------------------------------------------------
 #
