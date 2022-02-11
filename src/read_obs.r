@@ -333,6 +333,7 @@ read_obs <- function( argv, env, y_env) {
   rm(data)
 
   if (argv$cv_mode_calcidiv) {
+    y_env$yov$idi <- rep( 0, y_env$yov$ncv)
     suppressPackageStartupMessages( library( "RANN"))
     nn2 <- nn2( cbind( y_env$yo$x, y_env$yo$y), 
                 query = cbind( y_env$yov$x, y_env$yov$y),
@@ -340,23 +341,24 @@ read_obs <- function( argv, env, y_env) {
                 searchtype = "radius", radius = argv$calcidiv_radius)
     mat <- nn2[[1]]
     c_xy <- which( ( aux <- rowSums( mat)) > 0 )
-    dh2 <- argv$calcidiv_dh * argv$calcidiv_dh
-    mapply_idiv  <- function(i) {
-      j <- c_xy[i]
-      n <- length(which(mat[j,]!=0))
-      vx <- y_env$yo$x[mat[j,1:n]]
-      vy <- y_env$yo$y[mat[j,1:n]]
-      deltax <- abs(y_env$yov$x[j]-vx)
-      deltay <- abs(y_env$yov$y[j]-vy)
-      rloc<-exp( -0.5* (deltax*deltax+deltay*deltay) / dh2 )
-      SRinv<-chol2inv(chol( (S+diag(x=0.1,n)) ))
-      return( sum(rloc*as.vector(rowSums(SRinv))))
+    if ( length(c_xy) > 0) {
+      dh2 <- argv$calcidiv_dh * argv$calcidiv_dh
+      mapply_idi <- function(i) {
+        j <- c_xy[i]
+        n <- length(which(mat[j,]!=0))
+        vx <- y_env$yo$x[mat[j,1:n]]
+        vy <- y_env$yo$y[mat[j,1:n]]
+        deltax <- abs(y_env$yov$x[j]-vx)
+        deltay <- abs(y_env$yov$y[j]-vy)
+        rloc<-exp( -0.5 * (deltax*deltax+deltay*deltay) / dh2 )
+        S<-exp(-0.5*(outer(vx,vx,FUN="-")**2. + outer(vy,vy,FUN="-")**2)/dh2)
+        SRinv<-chol2inv(chol( (S+diag(x=0.1,n)) ))
+        return( sum(rloc*as.vector(rowSums(SRinv))))
+      }
+      y_env$yov$idi[c_xy] <- t( mapply( mapply_idi, 1:length(c_xy), SIMPLIFY = T))
     }
-    y_env$yov$idi <- rep( 0, y_env$yov$ncv)
-    rfobs[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
     t1 <- Sys.time()
-    print(paste("mapply",t1-t0))
-
+    cat( paste("cv_mode_calcidiv time=", round(t1-t0,1), attr(t1-t0,"unit")))
   }
 
 #  #

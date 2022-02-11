@@ -160,7 +160,7 @@ read_dem( argv, env)
 
 dir_plot <- "/home/cristianl/data/wise/pngs"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
-load_if_present<-F
+load_if_present<-T
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -174,7 +174,7 @@ if (file.exists(ffff) & load_if_present) {
 # Read observations
 
 ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
-load_if_present<-F
+load_if_present<-T
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -250,7 +250,7 @@ if (argv$mode=="rasterize") {
   suppressPackageStartupMessages( library( "RANN"))
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
-  load_if_present<-F
+  load_if_present<-T
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
@@ -259,7 +259,7 @@ if (argv$mode=="rasterize") {
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
-  load_if_present<-F
+  load_if_present<-T
   plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
