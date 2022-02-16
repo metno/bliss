@@ -274,19 +274,35 @@ if (argv$mode=="rasterize") {
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
-q()
-
   ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
   load_if_present<-T
+  plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
-    res <- main_wise_sampling_postpdf( argv, y_env, fg_env, u_env, env, seed=100, plot=T, dir_plot=dir_plot)
+    res <- wise_sampling_postpdf( argv, y_env, fg_env, u_env, env,
+                                  resample=argv$wise_a_resample, 
+                                  seed=argv$wise_a_resample_setseed,
+                                  plot=plot, dir_plot=dir_plot)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
-  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
+
+  ffff<- file.path(dir_plot,paste0("tmp_wise_agg_",argv$date_out,".rdata"))
+  load_if_present<-F
+  plot<-F
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    res <- wise_aggregation( argv, y_env, fg_env, u_env, env,
+                             plot=plot, dir_plot=dir_plot)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
+
 
 q()
+
+  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
+
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

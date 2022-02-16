@@ -49,6 +49,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
               searchtype = "radius", radius = supob_radius)
 
   mat <- nn2[[1]]
+  rm(nn2)
   c_xy <- which( ( aux <- rowSums( mat)) > 0 )
 
   mapply_quantile  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=supob_q) }
@@ -362,7 +363,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         print(paste("written file",fout))
 
         # rr1 map
-save(file="tmp.rdata",env,En2,var_En2_prev,En2_prev,rfxb,rfobs,c_xy)
         br<-c(0,1,2,4,8,16,32,64,128)
         col<-c("lightgray",rev(rainbow(7)))
         fouta<-file.path(dir_plot,paste0("rr1a.png"))

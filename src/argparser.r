@@ -1059,7 +1059,14 @@ p <- add_argument(p, "--wise_k_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
-p <- add_argument(p, "--wise_n_dim",
+p <- add_argument(p, "--wise_a_resample",
+                  help="should we resample the analysis members from the posterior PDF? If yes, then use wise_a_dim to define the number of anlysis members, otherwise use wise_k_dim",
+                  flag=T)
+p <- add_argument(p, "--wise_a_resample_setseed",
+                  help="set seed when resampling (useful when testing)",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--wise_a_dim",
                   help="number of analysis ensemble members",
                   type="integer",
                   default=NA)
@@ -1191,7 +1198,8 @@ if ( !is.na( argv$uo.filename)) {
 # set variables of the env environment
 
 env$k_dim <- argv$wise_k_dim
-env$n_dim <- argv$wise_n_dim
+env$a_dim <- argv$wise_a_dim
+if (is.na(env$a_dim)) env$a_dim <- env$k_dim
 env$wf <- argv$wise_wf
 env$boundary <- argv$wise_boundary
 env$n_levs_mx <- argv$wise_n_levs_mx
