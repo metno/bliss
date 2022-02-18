@@ -17,7 +17,9 @@ wise_aggregation <- function( argv, y_env, fg_env, u_env, env,
     # 
     env$Xa <- array( data=NA, dim=c( env$ngrid, env$a_dim))
     if (env$cv_mode | env$cv_mode_random) 
-      y_env$yov$value_a <- array( data=NA, dim=c( y_env$yov$ncv, env$a_dim)) 
+      y_env$yov$value_a <- array( data=NA, dim=c( y_env$yov$n, env$a_dim)) 
+    y_env$yo$value_a <- array( data=NA, dim=c( y_env$yo$n, env$a_dim)) 
+
     for (a in 1:env$a_dim) {
       t0 <- Sys.time()
       rdyad[] <- array(data=env$Xa_dyad[,a],dim=c(sqrt_m_dim,sqrt_m_dim))
@@ -25,6 +27,7 @@ wise_aggregation <- function( argv, y_env, fg_env, u_env, env,
       env$Xa[,a] <- getValues(r)
       if (env$cv_mode | env$cv_mode_random) 
         y_env$yov$value_a[,a] <- extract( rdyad, cbind( y_env$yov$x, y_env$yov$y))
+      y_env$yo$value_a[,a]  <- extract( rdyad, cbind(  y_env$yo$x, y_env$yo$y))
 #      val<-getValues(rdyad)
 #      xy<-xyFromCell(rdyad,env$mask)
 #      ix_wet <- which( val >= y_env$rain)

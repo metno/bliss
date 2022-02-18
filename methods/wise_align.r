@@ -26,8 +26,7 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
   j <- 0
   for (f in 1:fg_env$nfg) {
     cat( paste("  data source",f,"ensembles"))
-    ef <- nlayers( fg_env$fg[[f]]$r_main)
-    for (e in 1:ef) {
+    for (e in 1:fg_env$fg[[f]]$k_dim) {
       r <- getValues( subset( fg_env$fg[[f]]$r_main, subset=e))
       r[r<u_env$rain] <- 0
       r[r>u_env$rain] <- 1
@@ -86,6 +85,20 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
   fg_env$ixf <- ixf
   fg_env$ixe <- ixe
   fg_env$ixs <- ixs
+
+  # add info to y-structures
+  if (env$cv_mode | env$cv_mode_random) {
+    y_env$yov$value_fgsel  <- array( data=NA, dim=c( y_env$yov$n, env$k_dim))
+    for (e in 1:env$k_dim) { 
+      i <- fg_env$ixs[e]
+      y_env$yov$value_fgsel[,e] <- extract( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), cbind( y_env$yov$x, y_env$yov$y)) 
+    }
+  }
+  y_env$yo$value_fgsel  <- array( data=NA, dim=c( y_env$yo$n, env$k_dim))
+  for (e in 1:env$k_dim) { 
+    i <- fg_env$ixs[e]
+    y_env$yo$value_fgsel[,e] <- extract( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), cbind( y_env$yo$x, y_env$yo$y)) 
+  }
 
   # diagnostics
   if (plot) {

@@ -207,10 +207,16 @@ read_fg <- function( argv, fg_env, u_env, env) {
           rm(res)
         } # end loop over ensemble
         if (argv$verbose) cat("done!\n")
+        fg_env$fg[[f]]$k_dim <- nlayers(fg_env$fg[[f]]$r_main)
       } # end if main file exists 
     } # end read the main file
   } # end loop over fg files
-
+  
+  # total number of background fields
+  fg_env$ktot_dim <- 0
+  for (f in 1:fg_env$nfg)
+    fg_env$ktot_dim <- fg_env$ktot_dim + fg_env$fg[[f]]$k_dim 
+ 
   #----------------------------------------------------------------------------
   # print info
   if (argv$verbose) {

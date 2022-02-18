@@ -460,6 +460,10 @@ p <- add_argument(p, "--off_rdata",
                   help="full file name for output (rdata)",
                   type="character",
                   default=NA)
+p <- add_argument(p, "--off_yenv_rdata",
+                  help="full file name for output at station locations (rdata, y_env environment)",
+                  type="character",
+                  default=NA)
 p <- add_argument(p, "--off_y_table",
                   help="full file name for output at station locations (txt)",
                   type="character",

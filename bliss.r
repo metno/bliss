@@ -160,7 +160,7 @@ read_dem( argv, env)
 
 dir_plot <- "/home/cristianl/data/wise/pngs"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -174,7 +174,7 @@ if (file.exists(ffff) & load_if_present) {
 # Read observations
 
 ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -186,7 +186,6 @@ if (file.exists(ffff) & load_if_present) {
   dev.off()
   save(file=ffff, argv, fg_env, u_env, env, y_env)
 }
-
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
@@ -250,20 +249,23 @@ if (argv$mode=="rasterize") {
   suppressPackageStartupMessages( library( "RANN"))
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
+    t00<-Sys.time()
     res <- wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
+    print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
+    t00<-Sys.time()
     res <- wise_analysis_loop( argv, y_env, fg_env, env, 
                                supob_nobs=argv$wise_supob_nobs,
                                supob_radius=argv$wise_supob_radius,
@@ -271,19 +273,22 @@ if (argv$mode=="rasterize") {
                                max_it=argv$wise_opt_maxit,
                                opttol=argv$wise_opt_opttol,
                                plot=plot, dir_plot=dir_plot)
+    print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
+    t00<-Sys.time()
     res <- wise_sampling_postpdf( argv, y_env, fg_env, u_env, env,
                                   resample=argv$wise_a_resample, 
                                   seed=argv$wise_a_resample_setseed,
                                   plot=plot, dir_plot=dir_plot)
+    print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
@@ -293,15 +298,14 @@ if (argv$mode=="rasterize") {
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
+    t00<-Sys.time()
     res <- wise_aggregation( argv, y_env, fg_env, u_env, env,
                              plot=plot, dir_plot=dir_plot)
+    print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
-
-q()
-
-  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
+#  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
 
 } # end if selection among spatial analysis methods
 #
@@ -311,30 +315,33 @@ if (argv$verbose)
 #
 # -- text files --
 # table
-if (!is.na(argv$off_y_table)) 
-  source( file.path( bliss_mod_path, "main_off_y_table.r"))
-# table (transformed data)
-if (!is.na(argv$off_yt_table)) 
-  source( file.path( bliss_mod_path, "main_off_yt_table.r"))
-# table cross-validation
-if (!is.na(argv$off_cv_table)) 
-  source( file.path( bliss_mod_path, "main_off_cv_table.r"))
-# table cross-validation (transformed data)
-if (!is.na(argv$off_cvt_table)) 
-  source( file.path( bliss_mod_path, "main_off_cvt_table.r"))
-# table leave-one-out cross-validation
-if (!is.na(argv$off_lcv_table)) 
-  source( file.path( bliss_mod_path, "main_off_lcv_table.r"))
-# table leave-one-out cross-validation (transformed data)
-if (!is.na(argv$off_lcvt_table)) 
-  source( file.path( bliss_mod_path, "main_off_lcvt_table.r"))
+#if (!is.na(argv$off_y_table)) 
+#  source( file.path( bliss_mod_path, "main_off_y_table.r"))
+## table (transformed data)
+#if (!is.na(argv$off_yt_table)) 
+#  source( file.path( bliss_mod_path, "main_off_yt_table.r"))
+## table cross-validation
+#if (!is.na(argv$off_cv_table)) 
+#  source( file.path( bliss_mod_path, "main_off_cv_table.r"))
+## table cross-validation (transformed data)
+#if (!is.na(argv$off_cvt_table)) 
+#  source( file.path( bliss_mod_path, "main_off_cvt_table.r"))
+## table leave-one-out cross-validation
+#if (!is.na(argv$off_lcv_table)) 
+#  source( file.path( bliss_mod_path, "main_off_lcv_table.r"))
+## table leave-one-out cross-validation (transformed data)
+#if (!is.na(argv$off_lcvt_table)) 
+#  source( file.path( bliss_mod_path, "main_off_lcvt_table.r"))
 #
 # -- netcdf - verif --
-source( file.path( bliss_mod_path, "main_off_verif.r"))
+#source( file.path( bliss_mod_path, "main_off_verif.r"))
 #
 # -- rdata --
-if ( !is.na( argv$off_rdata)) 
-  source( file.path( bliss_mod_path, "main_off_rdata.r"))
+#if ( !is.na( argv$off_rdata)) 
+#  source( file.path( bliss_mod_path, "main_off_rdata.r"))
+
+if ( !is.na( argv$off_yenv_rdata)) 
+  write_yenv_rdata( argv, y_env) 
 #
 # -- netcdf - gridded output --
 if ( !is.na( argv$off_x)) 
