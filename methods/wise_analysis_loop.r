@@ -56,7 +56,8 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   rfobs[] <- 0
   rfobs[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
   t1 <- Sys.time()
-  print(paste("mapply",t1-t0))
+
+  cat(paste("superobbing",t1-t0,"\n"))
 
   # ---~--------------
   # Initialization of the wavelet structures
@@ -108,6 +109,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   vo[(jj+1):env$n_dim] <- ll
   En2vo[env$n_levs_mx+1] <- mean( ( ll / 2**l)**2)
   rm( lh, hl, hh, ll)
+
   cat("\n")
 
   #--------------------------------------------------------    
@@ -325,7 +327,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
     }
-
      
     if (plot) {
       for (e in 1:env$k_dim) {

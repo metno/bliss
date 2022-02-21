@@ -180,10 +180,10 @@ if (file.exists(ffff) & load_if_present) {
 } else {
   res <- read_obs( argv, env, y_env)
   if (!res) boom( code=1, str="ERROR problems while reading the observations")
-  png(file="tmp_obs.png",width=1200,height=1200)
-  plot(y_env$yo$x,y_env$yo$y,pch=21,bg="gray",col="darkgray")
-  points(y_env$yov$x,y_env$yov$y,pch=21,bg="red",col="darkred")
-  dev.off()
+#  png(file="tmp_obs.png",width=1200,height=1200)
+#  plot(y_env$yo$x,y_env$yo$y,pch=21,bg="gray",col="darkgray")
+#  points(y_env$yov$x,y_env$yov$y,pch=21,bg="red",col="darkred")
+#  dev.off()
   save(file=ffff, argv, fg_env, u_env, env, y_env)
 }
 #
@@ -335,17 +335,18 @@ if (argv$verbose)
 #
 # -- netcdf - verif --
 #source( file.path( bliss_mod_path, "main_off_verif.r"))
+
 #
 # -- rdata --
-#if ( !is.na( argv$off_rdata)) 
-#  source( file.path( bliss_mod_path, "main_off_rdata.r"))
+if ( !is.na( argv$off_yenv_rdata))  write_rdata( argv$off_yenv_rdata,  argv, y_env) 
+if ( !is.na( argv$off_env_rdata))   write_rdata( argv$off_env_rdata,   argv, env) 
+if ( !is.na( argv$off_fgenv_rdata)) write_rdata( argv$off_fgenv_rdata, argv, fg_env) 
+if ( !is.na( argv$off_uenv_rdata))  write_rdata( argv$off_uenv_rdata,  argv, u_env) 
 
-if ( !is.na( argv$off_yenv_rdata)) 
-  write_yenv_rdata( argv, y_env) 
 #
 # -- netcdf - gridded output --
-if ( !is.na( argv$off_x)) 
-  source( file.path( bliss_mod_path, "main_off_x.r"))
+if ( !is.na( argv$off_x)) write_off_x_nc( argv,  y_env, fg_env, u_env, env) 
+
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # normal exit
 rip( code=0, t0=t0)

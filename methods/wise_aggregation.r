@@ -24,7 +24,7 @@ wise_aggregation <- function( argv, y_env, fg_env, u_env, env,
       t0 <- Sys.time()
       rdyad[] <- array(data=env$Xa_dyad[,a],dim=c(sqrt_m_dim,sqrt_m_dim))
       r <- resample( rdyad, env$rmaster, method="ngb")
-      env$Xa[,a] <- getValues(r)
+      env$Xa[,a] <- getValues(r)[env$mask]
       if (env$cv_mode | env$cv_mode_random) 
         y_env$yov$value_a[,a] <- extract( rdyad, cbind( y_env$yov$x, y_env$yov$y))
       y_env$yo$value_a[,a]  <- extract( rdyad, cbind(  y_env$yo$x, y_env$yo$y))

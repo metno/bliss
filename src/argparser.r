@@ -464,6 +464,18 @@ p <- add_argument(p, "--off_yenv_rdata",
                   help="full file name for output at station locations (rdata, y_env environment)",
                   type="character",
                   default=NA)
+p <- add_argument(p, "--off_env_rdata",
+                  help="full file name for output (rdata, env environment)",
+                  type="character",
+                  default=NA)
+p <- add_argument(p, "--off_fgenv_rdata",
+                  help="full file name for output (rdata, fg_env environment)",
+                  type="character",
+                  default=NA)
+p <- add_argument(p, "--off_uenv_rdata",
+                  help="full file name for output (rdata, u_env environment)",
+                  type="character",
+                  default=NA)
 p <- add_argument(p, "--off_y_table",
                   help="full file name for output at station locations (txt)",
                   type="character",
