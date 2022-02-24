@@ -27,14 +27,14 @@ wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env,
     cat( paste( "dyadic domain, nx ny dx dy >", ncol(rdyad), nrow(rdyad), round( res(rdyad)[1]), round( res(rdyad)[2]),"\n"))
 
     #
-    # compute ETS for each analysis field
-    cat (" compute ETS wrt u_env for each analysis field \n")
+    # compute score for each analysis field
+    cat (" compute score wrt u_env for each analysis field \n")
     # reference observed field
     # interpolate onto the dyadic grid
     uo <- getValues( resample( u_env$uo[[1]]$r_main, rdyad, method="bilinear"))
     uo[uo<u_env$rain] <- 0
     uo[uo>=u_env$rain] <- 1
-    ets <- array( data=NA, dim=c(1,env$k_dim))
+    score <- array( data=NA, dim=c(1,env$k_dim))
     for (e in 1:env$k_dim) {
       r <- env$Xa_dyad[,e]
       r[r<u_env$rain] <- 0
@@ -43,12 +43,16 @@ wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env,
       b <- as.numeric( length( which(r==1 & uo==0)))
       c <- as.numeric( length( which(r==0 & uo==1)))
       d <- as.numeric( length( which(r==0 & uo==0)))
-      a_random <- as.numeric( (a+c)*(a+b) / (a+b+c+d))
-      ets[1,e] <- (a-a_random) / (a+c+b-a_random)
+      if (argv$wise_align_mode == "ets") {
+        a_random <- (a+c)*(a+b) / (a+b+c+d)
+        score[1,e] <- (a-a_random) / (a+c+b-a_random)
+      } else if (argv$wise_align_mode == "maxoverlap") {
+        score[1,e] <- a/length(r)
+      }
       cat( ".")
     }
-    rm(a,a_random,b,c,d,uo,r)
-    weights <- ets / sum(ets)
+    rm(uo,r)
+    weights <- score / sum(score)
 
     # 
     # Initialization of the wavelet structures
@@ -82,7 +86,8 @@ wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env,
     if (!is.na(seed)) set.seed(seed)
     for (a in 1:env$a_dim) {
       cat(".")
-      aux     <- rnorm( env$m_dim, mean=Ua_mean_dyad, sd=sqrt(Ua_var_dyad) )
+#      aux     <- rnorm( env$m_dim, mean=Ua_mean_dyad, sd=sqrt(Ua_var_dyad) )
+      aux     <- rnorm( env$n_dim, mean=Ua_mean_dyad, sd=sqrt(Ua_var_dyad) )
       dwt_aux <- dwt_out
       for (i in env$n_levs_mn:env$n_levs_mx) {
         ij <- ijFromLev( env$n_levs_mx, i, F)

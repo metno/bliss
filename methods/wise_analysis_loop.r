@@ -51,10 +51,14 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   mat <- nn2[[1]]
   rm(nn2)
   c_xy <- which( ( aux <- rowSums( mat)) > 0 )
-
-  mapply_quantile  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=supob_q) }
+  if ( argv$wise_supob_mode == "quantile") {
+    mapply_fun  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=supob_q) }
+  } else if ( argv$wise_supob_mode == "mean") {
+    mapply_fun  <- function(i) { mean( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]]) }
+  }
   rfobs[] <- 0
-  rfobs[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
+  rfobs[c_xy] <- t( mapply( mapply_fun, 1:length(c_xy), SIMPLIFY = T))
+  env$rfobs <- rfobs
   t1 <- Sys.time()
 
   cat(paste("superobbing",t1-t0,"\n"))

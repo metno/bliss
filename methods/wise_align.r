@@ -2,10 +2,10 @@
 wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
 #
 # output
-#  fg_env$ets ETS for each potential background field
+#  fg_env$score score for each potential background field (higher the better)
 #  fg_env$ixf data source for each potential background field
 #  fg_env$ixe ensemble member number for each potential background field
-#  fg_env$ixs selection of the k background fields (indexes wrt fg_env$ets)
+#  fg_env$ixs selection of the k background fields (indexes wrt fg_env$score)
 #
 #------------------------------------------------------------------------------
   options( warn = 2)
@@ -14,13 +14,13 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
 
   if ( fg_env$nfg == 0) return( FALSE)
 
-  # compute ETS for each potential background field
-  cat (" compute ETS for each potential background field \n")
+  # compute score for each potential background field
+  cat (" compute score for each potential background field \n")
   # reference observed field
   uo <- getValues( u_env$uo[[1]]$r_main)
   uo[uo<u_env$rain] <- 0
   uo[uo>u_env$rain] <- 1
-  ets <- numeric(0)
+  score <- numeric(0)
   ixf <- integer(0)
   ixe <- integer(0)
   j <- 0
@@ -34,8 +34,12 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
       b <- as.numeric( length( which(r==1 & uo==0)))
       c <- as.numeric( length( which(r==0 & uo==1)))
       d <- as.numeric( length( which(r==0 & uo==0)))
-      a_random <- as.numeric( (a+c)*(a+b) / (a+b+c+d))
-      ets <- c( ets, (a-a_random) / (a+c+b-a_random))
+      if (argv$wise_align_mode == "ets") {
+        a_random <- as.numeric( (a+c)*(a+b) / (a+b+c+d))
+        score <- c( score, (a-a_random) / (a+c+b-a_random))
+      } else if (argv$wise_align_mode == "maxoverlap") {
+        score <- c( score, a/length(r))
+      }
       ixf <- c( ixf, f)
       ixe <- c( ixe, e)
       j <- j+1
@@ -61,7 +65,7 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
         png(file=f2,width=800,height=800)
         rb[]<-r
         rb<-mask(rb,ra)
-        image(rb,breaks=c(-1,0.5,1.5),col=c("gray","cornflowerblue"),main=paste("ets ",round(ets[j],4)))
+        image(rb,breaks=c(-1,0.5,1.5),col=c("gray","cornflowerblue"),main=paste("score ",round(score[j],4)))
         plot(b,add=T)
         dev.off()
         system( paste0("convert +append ",f1," ",f2," ",fout))
@@ -73,15 +77,12 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
     cat( "\n")
   } 
 
-# select all fields with ets > 0
-#  ixs <- which( ets > 0)
-#  env$k_dim <- length( ixs)
-  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(ets),")\n"))
-#  # select only the k fields with the highest ETSs
-  ixs <- order( ets, decreasing=T)[1:env$k_dim]
+  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(score),")\n"))
+#  # select only the k fields with the highest scores
+  ixs <- order( score, decreasing=T)[1:env$k_dim]
 
   # output
-  fg_env$ets <- ets
+  fg_env$score <- score
   fg_env$ixf <- ixf
   fg_env$ixe <- ixe
   fg_env$ixs <- ixs

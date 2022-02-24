@@ -338,14 +338,15 @@ if (argv$verbose)
 
 #
 # -- rdata --
-if ( !is.na( argv$off_yenv_rdata))  write_rdata( argv$off_yenv_rdata,  argv, y_env) 
-if ( !is.na( argv$off_env_rdata))   write_rdata( argv$off_env_rdata,   argv, env) 
-if ( !is.na( argv$off_fgenv_rdata)) write_rdata( argv$off_fgenv_rdata, argv, fg_env) 
-if ( !is.na( argv$off_uenv_rdata))  write_rdata( argv$off_uenv_rdata,  argv, u_env) 
+if ( !is.na( argv$off_yenv_rdata))  write_rdata( file=argv$off_yenv_rdata,  arguments=argv, environment=y_env) 
+if ( !is.na( argv$off_env_rdata))   write_rdata( file=argv$off_env_rdata,   arguments=argv, environment=env) 
+if ( !is.na( argv$off_fgenv_rdata)) write_rdata( file=argv$off_fgenv_rdata, arguments=argv, environment=fg_env) 
+if ( !is.na( argv$off_uenv_rdata))  write_rdata( file=argv$off_uenv_rdata,  arguments=argv, environment=u_env) 
 
 #
 # -- netcdf - gridded output --
-if ( !is.na( argv$off_x)) write_off_x_nc( argv,  y_env, fg_env, u_env, env) 
+if ( !is.na( argv$off_x))  write_off_x_nc(  argv,  y_env, fg_env, u_env, env) 
+if ( !is.na( argv$off_xb)) write_off_xb_nc( argv,  y_env, fg_env, u_env, env) 
 
 #@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 # normal exit

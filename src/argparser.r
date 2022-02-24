@@ -456,6 +456,10 @@ p <- add_argument(p, "--off_x",
                   help="full file name for output at gridpoints (nc)",
                   type="character",
                   default=NA)
+p <- add_argument(p, "--off_xb",
+                  help="full file name for output at gridpoints (nc)",
+                  type="character",
+                  default=NA)
 p <- add_argument(p, "--off_rdata",
                   help="full file name for output (rdata)",
                   type="character",
@@ -1013,6 +1017,77 @@ p <- add_argument(p, "--off_x.cell_methods",
                   nargs=Inf,
                   default=NA)
 #------------------------------------------------------------------------------
+# output file netcdf parameters
+p <- add_argument(p, "--off_xb.grid",
+                  help="grid type",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.variables",
+                  help="type of variable (analysis,background,idi,...)",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--off_xb.varname",
+                  help="variable name",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--off_xb.varlongname",
+                  help="variable long name",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.standardname",
+                  help="variable standard name",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--off_xb.varversion",
+                  help="variable version",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.varunit",
+                  help="variable unit",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--off_xb.timesunit",
+                  help="time unit",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.reference",
+                  help="references",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.write_lonlat",
+                  help="add latitude and longitude variables",
+                  type="logical",
+                  default=F)
+p <- add_argument(p, "--off_xb.diground",
+                  help="rounding digits",
+                  type="numeric",
+                  default=3)
+p <- add_argument(p, "--off_xb.summary",
+                  help="summary",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.sourcestring",
+                  help="source string",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.title",
+                  help="title",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.comment",
+                  help="title",
+                  type="character",
+                  default="none")
+p <- add_argument(p, "--off_xb.cell_methods",
+                  help="title",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+#------------------------------------------------------------------------------
 # gaussian anamorphosis
 p <- add_argument(p, "--transf",
                   help="transformation used in the gaussian anamorphosis (\"none\",\"Box-Cox\")",
@@ -1067,6 +1142,10 @@ p <- add_argument(p, "--wise_rain_uo",
                   help="rain yes/no threshold for alignment (mm)",
                   type="numeric",
                   default=NA)
+p <- add_argument(p, "--wise_align_mode",
+                  help="strategy used for alignment ('ets','maxoverlap')",
+                  type="character",
+                  default="maxoverlap")
 p <- add_argument(p, "--wise_rain_yo",
                   help="rain yes/no threshold for interpolation (mm)",
                   type="numeric",
@@ -1110,6 +1189,10 @@ p <- add_argument(p, "--wise_supob_radius",
                   help="Wise Superobbing, radius defining the neighbourhhod of a grid point",
                   type="numeric",
                   default=1500)
+p <- add_argument(p, "--wise_supob_mode",
+                  help="Wise Superobbing strategy ('quantile', 'mean')",
+                  type="character",
+                  default="mean")
 p <- add_argument(p, "--wise_supob_q",
                   help="Wise Superobbing, quantile used for superobbing",
                   type="numeric",
@@ -1215,7 +1298,7 @@ if ( !is.na( argv$uo.filename)) {
 
 env$k_dim <- argv$wise_k_dim
 env$a_dim <- argv$wise_a_dim
-if (is.na(env$a_dim)) env$a_dim <- env$k_dim
+if (is.na(env$a_dim) || !argv$wise_a_resample) env$a_dim <- env$k_dim
 env$wf <- argv$wise_wf
 env$boundary <- argv$wise_boundary
 env$n_levs_mx <- argv$wise_n_levs_mx
