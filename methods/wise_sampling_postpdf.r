@@ -82,6 +82,9 @@ wise_sampling_postpdf <- function( argv, y_env, fg_env, u_env, env,
     cat("Sample realizations from the posterior distribution ")
     Ua_mean_dyad <- as.vector( t( tcrossprod( weights, Ua)))
     Ua_var_dyad <- tcrossprod( weights, (Ua - Ua_mean_dyad)**2)
+#    Ua_mean_dyad <- rowMeans(Ua)
+#    Ua_var_dyad <- 1/(env$k_dim-1) * rowSums( (Ua - Ua_mean_dyad)**2)
+
     env$Xa_dyad <- array( data=NA, dim=c( env$m_dim, env$a_dim))
     if (!is.na(seed)) set.seed(seed)
     for (a in 1:env$a_dim) {

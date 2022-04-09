@@ -1205,6 +1205,14 @@ p <- add_argument(p, "--wise_opt_opttol",
                   help="Wise Optimization, tolerance threshold used to break out from the main loop",
                   type="numeric",
                   default=0.02)
+p <- add_argument(p, "--wise_En2_adj_fun",
+                  help="Wise adjustment function to avoid abrupt variations is the energy specturm between two consecutive iterations of the analysis loop (\"Gaussian\",\"SOAR\",\"powerlaw\",\"TOAR\")",
+                  type="character",
+                  default="Gaussian")
+p <- add_argument(p, "--wise_En2_adj_min",
+                  help="lower boundary for the adjustment function",
+                  type="numeric",
+                  default=0.)
 
 
 #------------------------------------------------------------------------------

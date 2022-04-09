@@ -2,6 +2,8 @@
 wise_analysis_loop <- function( argv, y_env, fg_env, env,
                                 supob_nobs=50, supob_radius=1500, supob_q=0.99,
                                 max_it=100, opttol=0.02,
+                                En2_adj_fun="Gaussian",
+                                En2_adj_min=0,
                                 plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
@@ -19,7 +21,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   ny <- nrow( env$rmaster)
 
   n <- ceiling( log( max(nx,ny), 2))
-
   rdyad <- raster( extent( xmn, xmx, ymn, ymx), 
                    ncol=2**n, nrow=2**n, crs=argv$grid_master.proj4)
   rdyad[] <- 0
@@ -134,6 +135,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
   #--------------------------------------------------------    
   # MAIN LOOP
+  rfxb_acc <- vector( mode="numeric", length=length(getValues(rdyad))); rfxb_acc[] <- 0
   for (loop in 1:max_it) {
 
     t0 <- Sys.time()
@@ -162,7 +164,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         # background at grid  points
         rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
         rfxb[rfxb<y_env$rain] <- 0
-
+        rfxb_acc <- rfxb_acc + getValues(rfxb)
       # second iteration onwards - background from previous iteration 
       } else {
         # -- background at grid  points --
@@ -182,8 +184,8 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       # plot the background
       if (plot & loop==1) {
         fxb[e] <- file.path(dir_plot,paste0("rfxb_",formatC(e,flag="0",width=2),".png"))
-        br<-c(0,1,2,4,8,16,32,64,128)
-        col<-c("lightgray",rev(rainbow(7)))
+        br<-c(0,0.1,1,2,4,8,16,32,64,128)
+        col<-c("lightgray",rev(rainbow(8)))
         png(file=fxb[e],width=1200,height=1200)
         image(rfxb,breaks=br,col=col,main="background")
         abline(h=seq(-1000000,10000000,by=100000),v=seq(-1000000,10000000,by=100000),lty=2)
@@ -286,7 +288,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       # reconstruct analysis
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
-
       # compute energies
       rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
       dwtxa <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
@@ -309,7 +310,22 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
     # Constraint on energies
     for (e in 1:env$k_dim) {
-      rho[,e] <- exp( -0.5 * (En2[,e] - En2_prev[,e])**2 / var_En2_prev)
+      # Gaussian
+      if ( En2_adj_fun == "Gaussian") {
+        rho[,e] <- exp( -0.5 * (En2[,e] - En2_prev[,e])**2 / var_En2_prev)
+      # SOAR
+      } else if ( En2_adj_fun == "SOAR") {
+        rho[,e] <- (1 + abs(En2[,e] - En2_prev[,e]) / sqrt(var_En2_prev)) * exp( -abs(En2[,e] - En2_prev[,e]) / sqrt(var_En2_prev) )
+      # powerlaw
+      } else if ( En2_adj_fun == "powerlaw") {
+        rho[,e] <- 1 / ( 1 + 0.5*(En2[,e] - En2_prev[,e])**2 / var_En2_prev)
+      # TOAR
+      } else if ( En2_adj_fun == "TOAR") {
+        rho[,e] <- (1 + abs(En2[,e] - En2_prev[,e]) / sqrt(var_En2_prev) + (En2[,e] - En2_prev[,e])**2 / (3*var_En2_prev)) * exp( -abs(En2[,e] - En2_prev[,e]) / sqrt(var_En2_prev) )
+      }
+      rho[,e][!is.finite(rho[,e])] <- 0
+      rho[,e] <- En2_adj_min + (1-En2_adj_min) * rho[,e]
+
 #      Ua[,e] <- Ub[,e] + coeff * ( vo - Vb[,e])
       dwt_aux <- dwt_out
       for (i in env$n_levs_mn:env$n_levs_mx) {
@@ -325,51 +341,65 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
                     mean( ( dwt_aux[[3*(i-1)+3]][] / 2**i)**2)
       }
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
-      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[i,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
+#      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[i,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
+      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[env$n_levs_mx+1,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
 #      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- rho[env$n_levs_mx+1,e] * Ua[ij[1]:ij[2],e]
       En2[env$n_levs_mx+1,e] <- mean( ( dwt_aux[[3*(env$n_levs_mx-1)+4]][] / 2**i)**2)
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
     }
+
+###### check this
+na <- length(env$Xa_dyad[1,])
+adjpdf <- function(i) {
+  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.25 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
+  return(env$Xa_dyad[i,])
+}
+aux<-t( mapply( adjpdf, 1:length(env$Xa_dyad[,1]), SIMPLIFY = T))
+env$Xa_dyad <- aux
+###### check this
+
      
     if (plot) {
       for (e in 1:env$k_dim) {
         rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
-        if (loop==1) ylim<-range(c(En2,En2_prev+var_En2_prev))
+        if (loop==1) ylim_en2<-range(c(En2,En2_prev+var_En2_prev))
 
         # En2
         fout<-file.path(dir_plot,paste0("en2_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
+        sd_En2_prev <- sqrt(var_En2_prev)
         png(file=fout,width=800,height=800)
         par(mar=c(5,5,1,3))
 #        plot(1:env$n_levs_mx,En2Ub[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim)
-        plot(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim,xlab="level",ylab="Energy^2")
+        plot(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",ylim=ylim_en2,xlab="level",ylab="Energy^2")
+        abline(h=0,col="black",lwd=2)
         points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
         polygon( c(1:env$n_levs_mx,env$n_levs_mx:1),
-                 c(En2_prev[1:env$n_levs_mx,e]-2*var_En2_prev[1:env$n_levs_mx],
-                   En2_prev[env$n_levs_mx:1,e]+2*var_En2_prev[env$n_levs_mx:1]),
-                 density=10,border="pink", col="pink")
+                 c(En2_prev[1:env$n_levs_mx,e]-2*sd_En2_prev[1:env$n_levs_mx],
+                   En2_prev[env$n_levs_mx:1,e]+2*sd_En2_prev[env$n_levs_mx:1]),
+                 density=10,border="pink", col="pink",angle=45,lwd=3)
         polygon( c(1:env$n_levs_mx,env$n_levs_mx:1),
-                 c(En2_prev[1:env$n_levs_mx,e]-var_En2_prev[1:env$n_levs_mx],
-                   En2_prev[env$n_levs_mx:1,e]+var_En2_prev[env$n_levs_mx:1]),
-                 border="pink", col="pink")
-        lines(1:env$n_levs_mx,En2_prev[1:env$n_levs_mx,e],col="pink4",lwd=4)
+                 c(En2_prev[1:env$n_levs_mx,e]-sd_En2_prev[1:env$n_levs_mx],
+                   En2_prev[env$n_levs_mx:1,e]+sd_En2_prev[env$n_levs_mx:1]),
+                 border="pink", col="pink", density=10, angle=-45,lwd=3)
+        lines(1:env$n_levs_mx,En2_prev[1:env$n_levs_mx,e],col="pink4",lwd=6)
         points(env$n_levs_mx,En2_prev[env$n_levs_mx+1,e],pch=21,bg="pink4",cex=2)
-        lines(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",lwd=4)
+        lines(1:env$n_levs_mx,En2[1:env$n_levs_mx,e],type="l",col="red",lwd=6)
         points(env$n_levs_mx,En2[env$n_levs_mx+1,e],pch=21,bg="red",cex=2)
-        lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
-        lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue")
-        lines(1:env$n_levs_mx,En2Vb[1:env$n_levs_mx,e],col="pink4")
+        lines(1:env$n_levs_mx,En2vo[1:env$n_levs_mx],col="blue",lwd=2)
+        lines(1:env$n_levs_mx,En2Vb[1:env$n_levs_mx,e],col="pink4",lwd=2)
         points(env$n_levs_mx,En2vo[env$n_levs_mx+1],pch=21,bg="blue",cex=2)
         points(env$n_levs_mx,En2Vb[env$n_levs_mx+1,e],pch=21,bg="pink4",cex=2)
         par(new=T)
-        plot(1:env$n_levs_mx,rho[1:env$n_levs_mx,e],ylim=c(0,1),col="gold",axes=F,type="l",lty=1,lwd=4,xlab="",ylab="")
+        plot(1:env$n_levs_mx,rho[1:env$n_levs_mx,e],ylim=c(0,1),col="gold",axes=F,type="l",lty=1,lwd=6,xlab="",ylab="")
+        abline(h=0,col="black",lwd=2,lty=2)
         axis(4)
         dev.off()
         print(paste("written file",fout))
 
         # rr1 map
-        br<-c(0,1,2,4,8,16,32,64,128)
-        col<-c("lightgray",rev(rainbow(7)))
+        br<-c(0,0.1,1,2,4,8,16,32,64,128)
+        col<-c("lightgray",rev(rainbow(8)))
         fouta<-file.path(dir_plot,paste0("rr1a.png"))
         png(file=fouta,width=1200,height=1200)
         image(rfxb,breaks=br,col=col,main="analysis")
@@ -395,7 +425,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
         # rr1 graph 
         aux <- extract( rfxb, cbind(yso_x,yso_y))
-        ylim <- range(c(0,yso_val))
+        ylim_rr1 <- range(c(0,yso_val))
         fouta<-file.path(dir_plot,paste0("rr1x.png"))
         png(file=fouta,width=1200,height=1200)
         plot(yso_x,aux,pch=21,bg="lightgray",col="gray")
@@ -408,7 +438,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         dev.off()
         foutc<-file.path(dir_plot,paste0("rr1scatt.png"))
         png(file=foutc,width=1200,height=1200)
-        plot(yso_val,aux,pch=21,bg="lightgray",col="gray",xlim=ylim,ylim=ylim)
+        plot(yso_val,aux,pch=21,bg="lightgray",col="gray",xlim=ylim_rr1,ylim=ylim_rr1)
         dev.off()
         fout<-file.path(dir_plot,paste0("rr1xy_",formatC(loop,width=2,flag="0"),"_",formatC(e,width=2,flag="0"),".png"))
         system(paste0("convert +append ",fouta," ",foutb," ",foutc," ",fout))
@@ -420,8 +450,10 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     #
     #--------------------------------------------------------    
     # DeltaEn2idx - index related to the mean variation of the energy over the spatial scales (0=no variation, 1=mean variation of the order of the variability)
-
-    env$costf[loop] <- 1 - mean( rho, na.rm=T)
+    # strict condition for convergence
+    env$costf[loop] <- 1 - min( rho, na.rm=T)
+    # less strict condition for convergence
+#    env$costf[loop] <- 1 - mean( rho, na.rm=T)
     t1 <- Sys.time()
     cat( paste( "time=", round(t1-t0,1), attr(t1-t0,"unit"), "costf - Delta En2 index =", round(env$costf[loop],5), "\n"))
     # break out of the main loop early if variations  

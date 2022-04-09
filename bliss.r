@@ -272,6 +272,8 @@ if (argv$mode=="rasterize") {
                                supob_q=argv$wise_supob_q,
                                max_it=argv$wise_opt_maxit,
                                opttol=argv$wise_opt_opttol,
+                               En2_adj_fun=argv$wise_En2_adj_fun,
+                               En2_adj_min=argv$wise_En2_adj_min,
                                plot=plot, dir_plot=dir_plot)
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
