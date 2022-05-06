@@ -162,8 +162,10 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         i <- fg_env$ixs[e]
         # interpolate onto the dyadic grid
         # background at grid  points
+        Xb_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
         rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
         rfxb[rfxb<y_env$rain] <- 0
+        Xb_dyad[,e]  <- getValues(rfxb)
         rfxb_acc <- rfxb_acc + getValues(rfxb)
       # second iteration onwards - background from previous iteration 
       } else {
@@ -282,9 +284,13 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         dwt_aux[[3*(i-1)+1]][] <- Ua[ij[1,1]:ij[1,2],e]
         dwt_aux[[3*(i-1)+2]][] <- Ua[ij[2,1]:ij[2,2],e]
         dwt_aux[[3*(i-1)+3]][] <- Ua[ij[3,1]:ij[3,2],e]
+#        En2[i,e] <- mean( ( Ua[ij[1,1]:ij[1,2],e] / 2**i)**2) + 
+#                    mean( ( Ua[ij[2,1]:ij[2,2],e] / 2**i)**2) + 
+#                    mean( ( Ua[ij[3,1]:ij[3,2],e] / 2**i)**2)
       }
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
       dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ua[ij[1]:ij[2],e]
+#      En2[env$n_levs_mx+1,e] <- mean( (Ua[ij[1]:ij[2],e]/2**env$n_levs_mx)**2)
       # reconstruct analysis
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
@@ -347,17 +353,35 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       En2[env$n_levs_mx+1,e] <- mean( ( dwt_aux[[3*(env$n_levs_mx-1)+4]][] / 2**i)**2)
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
+      rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
+      rclump <- clump(rfxb)
+      oclump <- rclump[c_xy]
+      fr<-freq(rclump)
+      ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=2) | !(fr[,1] %in% oclump)) )
+      env$Xa_dyad[which(getValues(rclump) %in% fr[ix,1]),e] <- 0
+#      ra[]<-xa_aux
+#      rclump<-clump(ra)
+#      oclump<-extract(rclump,cbind(VecX[ixwet],VecY[ixwet]))
+#      fr<-freq(rclump)
+#      # remove clumps of YESprec cells less than (4x4)km^2 or not including wet obs
+#      ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=16) | !(fr[,1] %in% oclump)) )
+#      xa[which(getValues(rclump)[mask.l] %in% fr[ix,1])]<-0
+#      rm(xa_aux,rclump,oclump,fr,ix)
+#      ra[mask.l]<-xa
+
     }
 
-###### check this
-na <- length(env$Xa_dyad[1,])
-adjpdf <- function(i) {
-  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.25 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
-  return(env$Xa_dyad[i,])
-}
-aux<-t( mapply( adjpdf, 1:length(env$Xa_dyad[,1]), SIMPLIFY = T))
-env$Xa_dyad <- aux
-###### check this
+##### check this
+#na <- length(env$Xa_dyad[1,])
+#adjpdf <- function(i) {
+##  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.10 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
+###  if ((length(which(env$Xa_dyad[i,]==0)))>1 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
+#  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.25) return(rep(0,length(env$Xa_dyad[i,])))
+#  return(env$Xa_dyad[i,])
+#}
+#aux<-t( mapply( adjpdf, 1:length(env$Xa_dyad[,1]), SIMPLIFY = T))
+#env$Xa_dyad <- aux
+##### check this
 
      
     if (plot) {
