@@ -27,7 +27,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   rfxb <- rdyad
   rfyb <- rdyad
   rfin <- rdyad
-#  rfxb_alt <- rdyad
 
   cat( paste( "dyadic domain, nx ny dx dy >", ncol(rdyad), nrow(rdyad), round( res(rdyad)[1]), round( res(rdyad)[2]),"\n"))
   
@@ -122,16 +121,12 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   cat("Analysis on the transformed space \n")
 
   env$costf <- vector()
-#  ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
 
-  En2 <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
-  En2_prev <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
-  rho <- array( data=NA, dim=c(env$n_levs_mx+1,env$k_dim))
+  En2      <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
+  En2_prev <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
+  rho      <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
+  Xb_dyad <- array( data=NA, dim=c( env$m_dim, env$k_dim))
 
-#  En2_prev <- En2Ub
-#  aux <- En2_prev - rowMeans(En2_prev) 
-#  var_En2_prev <- 1/(env$k_dim-1) * rowSums( aux * aux)
-#  rm(aux)
 
   #--------------------------------------------------------    
   # MAIN LOOP
@@ -145,11 +140,9 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     # set the background
 
     Ub     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
-#    Ub_alt <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     Vb     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     vo_Vb  <- array( data=NA, dim=c( env$n_dim, env$k_dim))
     En2Ub     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
-#    En2Ub_alt <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
     En2Vb     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
     En2in     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
 
@@ -162,7 +155,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         i <- fg_env$ixs[e]
         # interpolate onto the dyadic grid
         # background at grid  points
-        Xb_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
         rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
         rfxb[rfxb<y_env$rain] <- 0
         Xb_dyad[,e]  <- getValues(rfxb)
@@ -170,18 +162,14 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       # second iteration onwards - background from previous iteration 
       } else {
         # -- background at grid  points --
-  #      rfxb_to_plot[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
         rfxb[] <- array( data=env$Xa_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
         rfxb[rfxb<y_env$rain] <- 0
-#        ya <- extract( rfxb, cbind( y_env$yo$x, y_env$yo$y))
       }
 
       # background at observation points
       rfyb <- rdyad; rfyb[c_xy] <- rfxb[c_xy]
       # innovation 
       rfin <- rdyad; rfin[c_xy] <- rfobs[c_xy] - rfxb[c_xy]
-#      # background alternative (obs+backg)
-#      rfxb_alt <- rfxb; rfxb_alt[c_xy] <- rfobs[c_xy]
 
       # plot the background
       if (plot & loop==1) {
@@ -196,7 +184,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
       # transformation operator
       dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
-#      dwtxb_alt <- dwt.2d( as.matrix(rfxb_alt), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
       dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
       dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
 
@@ -208,9 +195,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         ii <- jj + 1
         jj <- ii + length(lh) + length(hl) + length(hh) - 1
         Ub[ii:jj,e] <- c( lh, hl, hh)
-#        lh  <-  dwtxb_alt[[1+3*(l-1)]]; hl  <-  dwtxb_alt[[2+3*(l-1)]];  hh <-  dwtxb_alt[[3+3*(l-1)]]
-#        En2Ub_alt[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
-#        Ub_alt[ii:jj,e] <- c( lh, hl, hh)
         lh  <-  dwtyb[[1+3*(l-1)]]; hl  <-  dwtyb[[2+3*(l-1)]];  hh <-  dwtyb[[3+3*(l-1)]]
         En2Vb[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
         Vb[ii:jj,e] <- c( lh, hl, hh)
@@ -222,8 +206,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       En2Ub[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Ub[(jj+1):env$n_dim,e] <- ll
       ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
-#      En2Ub_alt[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
-#      Ub_alt[(jj+1):env$n_dim,e] <- ll
       ll <- dwtyb[[4+3*(env$n_levs_mx-1)]] 
       En2Vb[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Vb[(jj+1):env$n_dim,e] <- ll
@@ -235,7 +217,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
     } # end loop over ensemble members
 
-#    En2_prev <- En2Ub_alt
+    # store energy statistics of previous iteration 
     En2_prev <- En2Ub
     aux <- En2_prev - rowMeans(En2_prev) 
     var_En2_prev <- 1/(env$k_dim-1) * rowSums( aux * aux)
@@ -248,18 +230,12 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     # Background error covariance matrices
     Ab <- Ub - rowMeans(Ub)
     Db <- Vb - rowMeans(Vb)
-#    D  <- vo_Vb
-    var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) #* 1/dwt_res**2 
-#    var_b1_yy <- 1/(env$k_dim-1) * rowSums( Db*Db) #* 1/dwt_res**2
-#    var_bd1_xy <- 1/(env$k_dim-1) * rowSums( Ab*D) #* 1/dwt_res**2 
-    var_d1_yy  <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) #* 1/dwt_res**2
+    var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) 
+    var_d1_yy  <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) 
+    # scaling coefficient used in spatial analysis
+    coeff <- var_b1_xy / var_d1_yy
+    coeff[!is.finite(coeff)] <- 0
 
-#    D_alt  <- vo_Vb - rowMeans(vo_Vb)
-#    Ab_alt <- Ub_alt - rowMeans(Ub_alt)
-#    var_bd1alt_xy <- 1/(env$k_dim-1) * rowSums( Ab_alt*D_alt)
-#    var_d1alt_yy  <- 1/(env$k_dim-1) * rowSums( D_alt *D_alt)
-
-#    rm( Ab, Db, D, D_alt, Ab_alt)
     rm( Ab, Db)
 
 #    #--------------------------------------------------------    
@@ -268,11 +244,8 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 #    cat( paste("rmse", round(env$costf[loop],5)), "\n")
 
     #--------------------------------------------------------    
-    # Analysis
+    # Rescale the different components
     
-    coeff <- var_b1_xy / var_d1_yy
-#    coeff <- var_bd1alt_xy / var_d1alt_yy
-    coeff[!is.finite(coeff)] <- 0
     Ua  <- array( data=NA, dim=c(     env$n_dim, env$k_dim))
     env$Xa_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
     for (e in 1:env$k_dim) {
@@ -284,13 +257,9 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         dwt_aux[[3*(i-1)+1]][] <- Ua[ij[1,1]:ij[1,2],e]
         dwt_aux[[3*(i-1)+2]][] <- Ua[ij[2,1]:ij[2,2],e]
         dwt_aux[[3*(i-1)+3]][] <- Ua[ij[3,1]:ij[3,2],e]
-#        En2[i,e] <- mean( ( Ua[ij[1,1]:ij[1,2],e] / 2**i)**2) + 
-#                    mean( ( Ua[ij[2,1]:ij[2,2],e] / 2**i)**2) + 
-#                    mean( ( Ua[ij[3,1]:ij[3,2],e] / 2**i)**2)
       }
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
       dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ua[ij[1]:ij[2],e]
-#      En2[env$n_levs_mx+1,e] <- mean( (Ua[ij[1]:ij[2],e]/2**env$n_levs_mx)**2)
       # reconstruct analysis
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
@@ -312,7 +281,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       ll <- dwtxa[[4+3*(env$n_levs_mx-1)]] 
       En2[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
       Ua[(jj+1):env$n_dim,e] <- ll
-    }
+    } # end of rescaling cycle
 
     # Constraint on energies
     for (e in 1:env$k_dim) {
@@ -332,58 +301,39 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       rho[,e][!is.finite(rho[,e])] <- 0
       rho[,e] <- En2_adj_min + (1-En2_adj_min) * rho[,e]
 
-#      Ua[,e] <- Ub[,e] + coeff * ( vo - Vb[,e])
       dwt_aux <- dwt_out
       for (i in env$n_levs_mn:env$n_levs_mx) {
         ij <- ijFromLev( env$n_levs_mx, i, F)
         dwt_aux[[3*(i-1)+1]][] <- Ub[ij[1,1]:ij[1,2],e] + rho[i,e] * coeff[ij[1,1]:ij[1,2]] * ( vo[ij[1,1]:ij[1,2]] - Vb[ij[1,1]:ij[1,2],e])
         dwt_aux[[3*(i-1)+2]][] <- Ub[ij[2,1]:ij[2,2],e] + rho[i,e] * coeff[ij[2,1]:ij[2,2]] * ( vo[ij[2,1]:ij[2,2]] - Vb[ij[2,1]:ij[2,2],e])
         dwt_aux[[3*(i-1)+3]][] <- Ub[ij[3,1]:ij[3,2],e] + rho[i,e] * coeff[ij[3,1]:ij[3,2]] * ( vo[ij[3,1]:ij[3,2]] - Vb[ij[3,1]:ij[3,2],e])
-#        dwt_aux[[3*(i-1)+1]][] <- rho[i,e] * Ua[ij[1,1]:ij[1,2],e]
-#        dwt_aux[[3*(i-1)+2]][] <- rho[i,e] * Ua[ij[2,1]:ij[2,2],e]
-#        dwt_aux[[3*(i-1)+3]][] <- rho[i,e] * Ua[ij[3,1]:ij[3,2],e]
         En2[i,e] <- mean( ( dwt_aux[[3*(i-1)+1]][] / 2**i)**2) + 
                     mean( ( dwt_aux[[3*(i-1)+2]][] / 2**i)**2) +
                     mean( ( dwt_aux[[3*(i-1)+3]][] / 2**i)**2)
       }
       ij <- ijFromLev( env$n_levs_mx, env$n_levs_mx, T)
-#      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[i,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
       dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- Ub[ij[1]:ij[2],e] + rho[env$n_levs_mx+1,e] * coeff[ij[1]:ij[2]] * ( vo[ij[1]:ij[2]] - Vb[ij[1]:ij[2],e])
-#      dwt_aux[[3*(env$n_levs_mx-1)+4]][] <- rho[env$n_levs_mx+1,e] * Ua[ij[1]:ij[2],e]
       En2[env$n_levs_mx+1,e] <- mean( ( dwt_aux[[3*(env$n_levs_mx-1)+4]][] / 2**i)**2)
       env$Xa_dyad[,e] <- idwt.2d( dwt_aux)
+      # adjust for negative precip values
       if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0
-      rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
-      rclump <- clump(rfxb)
-      oclump <- rclump[c_xy]
-      fr<-freq(rclump)
-      ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=2) | !(fr[,1] %in% oclump)) )
-      env$Xa_dyad[which(getValues(rclump) %in% fr[ix,1]),e] <- 0
-#      ra[]<-xa_aux
-#      rclump<-clump(ra)
-#      oclump<-extract(rclump,cbind(VecX[ixwet],VecY[ixwet]))
-#      fr<-freq(rclump)
-#      # remove clumps of YESprec cells less than (4x4)km^2 or not including wet obs
-#      ix<-which(!is.na(fr[,1]) & !is.na(fr[,2]) & ( (fr[,2]<=16) | !(fr[,1] %in% oclump)) )
-#      xa[which(getValues(rclump)[mask.l] %in% fr[ix,1])]<-0
-#      rm(xa_aux,rclump,oclump,fr,ix)
-#      ra[mask.l]<-xa
+      # spatial analysis is useful only for precip events that includes observations 
+      rfxb[] <- array( data=env$Xa_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
+      aclump <- clump(rfxb)
+      oclump <- aclump[c_xy]
+      fro <- as.data.frame( table( oclump), stringsAsFactors=F) 
+      if ( length( ixo <- which( !is.na(fro[,1]) & fro[,2] >= 100)) > 0) {
+        oclump_ok <- as.integer(fro[ixo,1])
+      } else {
+        oclump_ok <- integer(0)
+      }
+      fra <- freq(aclump)
+      # remove clumps of YESprec cells less than 100 cells of the dyadic domain or not including enough obs
+      ixa <- which( !is.na(fra[,1]) & !is.na(fra[,2]) & 
+                   ( (fra[,2]<=100) | !(fra[,1] %in% oclump_ok)) )
+      env$Xa_dyad[which(getValues(t(aclump)) %in% fra[ixa,1]),e] <- 0
+    } # end of Constraint on energies
 
-    }
-
-##### check this
-#na <- length(env$Xa_dyad[1,])
-#adjpdf <- function(i) {
-##  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.10 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
-###  if ((length(which(env$Xa_dyad[i,]==0)))>1 & rfxb_acc[i]==0) return(rep(0,length(env$Xa_dyad[i,])))
-#  if ((length(which(env$Xa_dyad[i,]<0.1))/na)>0.25) return(rep(0,length(env$Xa_dyad[i,])))
-#  return(env$Xa_dyad[i,])
-#}
-#aux<-t( mapply( adjpdf, 1:length(env$Xa_dyad[,1]), SIMPLIFY = T))
-#env$Xa_dyad <- aux
-##### check this
-
-     
     if (plot) {
       for (e in 1:env$k_dim) {
         rfxb[] <- array(data=env$Xa_dyad[,e],dim=c(sqrt_m_dim,sqrt_m_dim))
@@ -485,4 +435,22 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
   } # end main loop
 
+#save(file="tmp.rdata",env,Xb_dyad,sqrt_m_dim,rfxb,c_xy)
+  cat( paste( "Add the background data where no observations are available\n"))
+  for (e in 1:env$k_dim) {
+    cat(".")
+    rfxb[] <- Xb_dyad[,e]
+    bclump <- clump(rfxb)
+    oclump <- bclump[c_xy]
+    fro <- as.data.frame( table( oclump), stringsAsFactors=F) 
+    if ( length( ixo <- which( !is.na(fro[,1]) & fro[,2] > 100)) > 0) {
+      oclump_ok <- as.integer(fro[ixo,1])
+    } else {
+      oclump_ok <- integer(0)
+    }
+    Xb_dyad[which(getValues(bclump) %in% oclump_ok),e] <- 0
+    rfxb[] <- Xb_dyad[,e]
+    env$Xa_dyad[,e] <- env$Xa_dyad[,e] + getValues(t(rfxb))
+  }
+  cat( paste( "\n", "End of analysis loop time=", round(t1-t0,1), attr(t1-t0,"unit"), "\n"))
 }
