@@ -1213,6 +1213,14 @@ p <- add_argument(p, "--wise_En2_adj_min",
                   help="lower boundary for the adjustment function",
                   type="numeric",
                   default=0.)
+p <- add_argument(p, "--wise_rescale_min_obs",
+                  help="minimum number of observations in an event to apply wise",
+                  type="integer",
+                  default=100)
+p <- add_argument(p, "--wise_rescale_min_cells",
+                  help="minimum number of cells for the extent of a precipitation event to be considered significative enough to apply wise",
+                  type="integer",
+                  default=100)
 
 
 #------------------------------------------------------------------------------

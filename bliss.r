@@ -274,6 +274,8 @@ if (argv$mode=="rasterize") {
                                opttol=argv$wise_opt_opttol,
                                En2_adj_fun=argv$wise_En2_adj_fun,
                                En2_adj_min=argv$wise_En2_adj_min,
+                               rescale_min_obs=argv$wise_rescale_min_obs,
+                               rescale_min_cells=rgv$wise_rescale_min_cells,
                                plot=plot, dir_plot=dir_plot)
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)

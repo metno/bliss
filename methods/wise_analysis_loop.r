@@ -4,6 +4,7 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
                                 max_it=100, opttol=0.02,
                                 En2_adj_fun="Gaussian",
                                 En2_adj_min=0,
+                                rescale_min_obs=100, rescale_min_cells=100,
                                 plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
