@@ -1136,6 +1136,29 @@ p <- add_argument(p, "--off_obspp",
                   help="output full file name for the post-processed observations. write file in TITAN format, then exit",
                   type="character",
                   default=NA)
+
+p <- add_argument(p, "--ensi_k_dim",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--ensi_a_dim",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--ensi_rain_uo",
+                  help="rain yes/no threshold for alignment (mm)",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--ensi_align_mode",
+                  help="strategy used for alignment ('ets','maxoverlap')",
+                  type="character",
+                  default="maxoverlap")
+p <- add_argument(p, "--ensi_rain_yo",
+                  help="rain yes/no threshold for interpolation (mm)",
+                  type="numeric",
+                  default=NA)
+
+
 #------------------------------------------------------------------------------
 # gaussian anamorphosis
 p <- add_argument(p, "--wise_rain_uo",
@@ -1311,16 +1334,23 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
-
-env$k_dim <- argv$wise_k_dim
-env$a_dim <- argv$wise_a_dim
-if (is.na(env$a_dim) || !argv$wise_a_resample) env$a_dim <- env$k_dim
-env$wf <- argv$wise_wf
-env$boundary <- argv$wise_boundary
-env$n_levs_mx <- argv$wise_n_levs_mx
-env$n_levs_mn <- argv$wise_n_levs_mn
-u_env$rain <- argv$wise_rain_uo
-y_env$rain <- argv$wise_rain_yo
+if (argv$mode=="wise") {
+  env$k_dim <- argv$wise_k_dim
+  env$a_dim <- argv$wise_a_dim
+  if (is.na(env$a_dim) || !argv$wise_a_resample) env$a_dim <- env$k_dim
+  env$wf <- argv$wise_wf
+  env$boundary <- argv$wise_boundary
+  env$n_levs_mx <- argv$wise_n_levs_mx
+  env$n_levs_mn <- argv$wise_n_levs_mn
+  u_env$rain <- argv$wise_rain_uo
+  y_env$rain <- argv$wise_rain_yo
+} else if (argv$mode=="ensi") {
+  env$k_dim <- argv$ensi_k_dim
+  env$a_dim <- argv$ensi_a_dim
+  if ( is.na(env$a_dim)) env$a_dim <- env$k_dim
+  u_env$rain <- argv$ensi_rain_uo
+  y_env$rain <- argv$ensi_rain_yo
+}
 
 #
 return(argv)

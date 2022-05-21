@@ -195,7 +195,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "hyletkf", "wise")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "hyletkf", "wise", "ensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
@@ -236,7 +236,10 @@ if (argv$mode=="rasterize") {
 #..............................................................................
 # ===>  Ensemble-based Statistical Interpolation  <===
 } else if (argv$mode=="ensi") {
-  source( file.path( bliss_mod_path, "main_ensi.r"))
+  suppressPackageStartupMessages( library( "RANN"))
+  envtmp <- new.env( parent = emptyenv())
+  res <- fg_u_align( argv, fg_env, u_env, env)
+  res <- ensi( argv, y_env, fg_env, env)
 #..............................................................................
 # ===>  EnSI with Gaussian Anamorphosis for Precipitation  <===
 } else if (argv$mode=="ensigap") {
