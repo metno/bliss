@@ -1157,6 +1157,11 @@ p <- add_argument(p, "--ensi_rain_yo",
                   help="rain yes/no threshold for interpolation (mm)",
                   type="numeric",
                   default=NA)
+p <- add_argument(p, "--ensi_range",
+                  help="range of allowed values",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
 
 
 #------------------------------------------------------------------------------

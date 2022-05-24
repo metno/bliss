@@ -19,11 +19,12 @@ ensi <- function( argv, y_env, fg_env, env) {
 
   for (e in 1:env$k_dim) {
     i <- fg_env$ixs[e]
+    rb <- subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i])
     if ( e == 1) {
-      aux <- getValues( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]))
+      aux <- getValues(rb)
       if (length( ixb <- which( !is.na( aux))) == 0) boom()
       env$m_dim <- length( ixb)
-      xy <- xyFromCell(fg_env$fg[[fg_env$ixf[i]]]$r_main,1:ncell(fg_env$fg[[fg_env$ixf[i]]]$r_main))
+      xy <- xyFromCell( rb, 1:ncell(rb))
       envtmp$x <- xy[ixb,1]
       envtmp$y <- xy[ixb,2]
       envtmp$eps2 <- rep( 0.1, env$m_dim)
@@ -32,15 +33,15 @@ ensi <- function( argv, y_env, fg_env, env) {
                          k = argv$pmax, searchtype = "radius", 
                          radius = 70000)
     }
-    envtmp$xb <- getValues(fg_env$fg[[fg_env$ixf[i]]]$r_main)[ixb]
-    envtmp$yb <- extract( fg_env$fg[[fg_env$ixf[i]]]$r_main, cbind( y_env$yo$x, y_env$yo$y))
+    envtmp$xb <- getValues(rb)[ixb]
+    envtmp$yb <- extract( rb, cbind(y_env$yo$x, y_env$yo$y))
     if (!is.na(argv$cores)) {
       env$Xa[ixb,e] <- t( mcmapply( oi_basic_gridpoint_by_gridpoint,
                           1:env$m_dim,
                           mc.cores=argv$cores,
                           SIMPLIFY=T,
                           pmax=argv$pmax,
-                          corr=argv$corrfun))
+                          corr=argv$corrfun))[,1]
     # no-multicores
     } else {
       env$Xa[ixb,e] <- t( mapply( oi_basic_gridpoint_by_gridpoint,
@@ -49,10 +50,24 @@ ensi <- function( argv, y_env, fg_env, env) {
                         pmax=argv$pmax,
                         corr=argv$corrfun))[,1]
     }
-    
+    # Safe checks
+    if (!is.na(argv$ensi_range[1])) 
+      env$Xa[env$Xa[,e]<argv$ensi_range[1],e] <- argv$ensi_range[1]  
+    if (!is.na(argv$ensi_range[2])) 
+      env$Xa[env$Xa[,e]>argv$ensi_range[2],e] <- argv$ensi_range[2]  
     r[] <- env$Xa[,e]
-    if (env$cv_mode | env$cv_mode_random) 
-      y_env$yov$value_a[,a] <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
-    y_env$yo$value_a[,a]  <- extract( r, cbind(  y_env$yo$x, y_env$yo$y))
+    if (env$cv_mode | env$cv_mode_random) { 
+      y_env$yov$value_a[,e] <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
+      if (!is.na(argv$ensi_range[1])) 
+        y_env$yov$value_a[y_env$yov$value_a[,e]<argv$ensi_range[1],e] <- argv$ensi_range[1]  
+      if (!is.na(argv$ensi_range[2])) 
+        y_env$yov$value_a[y_env$yov$value_a[,e]>argv$ensi_range[2],e] <- argv$ensi_range[2]  
+    }
+    y_env$yo$value_a[,e]  <- extract( r, cbind(  y_env$yo$x, y_env$yo$y))
+    if (!is.na(argv$ensi_range[1])) 
+      y_env$yo$value_a[y_env$yo$value_a[,e]<argv$ensi_range[1],e] <- argv$ensi_range[1]  
+    if (!is.na(argv$ensi_range[2])) 
+      y_env$yo$value_a[y_env$yo$value_a[,e]>argv$ensi_range[2],e] <- argv$ensi_range[2]  
+    cat("\n")
   }
 }
