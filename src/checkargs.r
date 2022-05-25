@@ -10,32 +10,34 @@ checkargs <- function( argv, env) {
 
 if (!(file.exists(argv$iff_obs))) boom(paste0("file not found ",argv$iff_obs))
 
-if (argv$mode=="OI_multiscale") {
+if ( argv$mode == "OI_multiscale") {
   if (argv$verbose) {
     if (!(file.exists(argv$iff_rf))) 
       print("warning: file not found",argv$iff_rf)
   }
-} else if (argv$mode=="OI_firstguess") {
+} else if ( argv$mode == "OI_firstguess") {
   if (!(file.exists(argv$iff_fg))) 
     boom(paste0("file not found ",argv$iff_fg))
-} else if (argv$mode=="OI_twosteptemperature") {
+} else if ( argv$mode == "OI_twosteptemperature") {
   if (argv$verbose) {
     if (!(file.exists(argv$iff_dem))) 
       print("warning: file not found",argv$iff_dem)
   }
-} else if ( argv$mode=="hyletkf") {
+} else if ( argv$mode == "hyletkf") {
   print("chosen mode is Hybrid Local Ensemble Transform Kalman Filter")
-} else if ( argv$mode=="letkf") {
+} else if ( argv$mode == "letkf") {
   print("chosen mode is Local Ensemble Transform Kalman Filter")
-} else if ( argv$mode=="OI_Bratseth") {
+} else if ( argv$mode == "OI_Bratseth") {
   print("chosen mode is OI_Bratseth")
-} else if ( argv$mode=="ensi") {
+} else if ( argv$mode == "oi") {
+  print("chosen mode is oi")
+} else if ( argv$mode == "ensi") {
   print("chosen mode is ensi")
-} else if ( argv$mode=="ensigap") {
+} else if ( argv$mode == "ensigap") {
   print("chosen mode is ensigap")
-} else if ( argv$mode=="wise") {
+} else if ( argv$mode == "wise") {
   print("chosen mode is wise")
-} else if ( argv$mode=="rasterize") {
+} else if ( argv$mode == "rasterize") {
   print("chosen mode is rasterize")
 } else {
   boom("error statistical interpolation scheme undefined")

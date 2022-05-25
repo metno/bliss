@@ -10,7 +10,7 @@ fg_u_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
 #------------------------------------------------------------------------------
   options( warn = 2)
 
-  cat( "-- main_wise_align --\n")
+  cat( "-- Align Background with the Reference field --\n")
 
   if ( fg_env$nfg == 0) return( FALSE)
 

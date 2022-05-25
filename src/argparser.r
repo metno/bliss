@@ -92,7 +92,7 @@ p <- add_argument(p, "--twostep_nogrid",
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
 #                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"ensip\")",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"wise\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"wise\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1137,31 +1137,47 @@ p <- add_argument(p, "--off_obspp",
                   type="character",
                   default=NA)
 
-p <- add_argument(p, "--ensi_k_dim",
+p <- add_argument(p, "--oi_k_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
-p <- add_argument(p, "--ensi_a_dim",
+p <- add_argument(p, "--oi_a_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
-p <- add_argument(p, "--ensi_rain_uo",
+p <- add_argument(p, "--oi_rain_uo",
                   help="rain yes/no threshold for alignment (mm)",
                   type="numeric",
                   default=NA)
-p <- add_argument(p, "--ensi_align_mode",
+p <- add_argument(p, "--oi_align_mode",
                   help="strategy used for alignment ('ets','maxoverlap')",
                   type="character",
                   default="maxoverlap")
-p <- add_argument(p, "--ensi_rain_yo",
+p <- add_argument(p, "--oi_rain_yo",
                   help="rain yes/no threshold for interpolation (mm)",
                   type="numeric",
                   default=NA)
-p <- add_argument(p, "--ensi_range",
+p <- add_argument(p, "--oi_pmax",
+                  help="maximum number of observations to use in the surrounding of a grid point",
+                  type="integer",
+                  default=50)
+p <- add_argument(p, "--oi_range",
                   help="range of allowed values",
                   type="numeric",
                   nargs=2,
                   default=c(NA,NA))
+p <- add_argument(p, "--oi_dh",
+                  help="horizontal decorrelation lenght scale",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--oi_eps2",
+                  help="ration observation and background error variances",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--oi_corrfun",
+                  help="correlation functions (\"gaussian\",\"soar\",\"toar\",\"powerlaw\")",
+                  type="character",
+                  default="gaussian")
 
 
 #------------------------------------------------------------------------------
@@ -1349,12 +1365,12 @@ if (argv$mode=="wise") {
   env$n_levs_mn <- argv$wise_n_levs_mn
   u_env$rain <- argv$wise_rain_uo
   y_env$rain <- argv$wise_rain_yo
-} else if (argv$mode=="ensi") {
-  env$k_dim <- argv$ensi_k_dim
-  env$a_dim <- argv$ensi_a_dim
+} else if (argv$mode=="oi") {
+  env$k_dim <- argv$oi_k_dim
+  env$a_dim <- argv$oi_a_dim
   if ( is.na(env$a_dim)) env$a_dim <- env$k_dim
-  u_env$rain <- argv$ensi_rain_uo
-  y_env$rain <- argv$ensi_rain_yo
+  u_env$rain <- argv$oi_rain_uo
+  y_env$rain <- argv$oi_rain_yo
 }
 
 #
