@@ -1179,6 +1179,28 @@ p <- add_argument(p, "--oi_corrfun",
                   type="character",
                   default="gaussian")
 
+p <- add_argument(p, "--wise_oi_pmax",
+                  help="maximum number of observations to use in the surrounding of a grid point",
+                  type="integer",
+                  default=50)
+p <- add_argument(p, "--wise_oi_range",
+                  help="range of allowed values",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
+p <- add_argument(p, "--wise_oi_dh",
+                  help="horizontal decorrelation lenght scale",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--wise_oi_eps2",
+                  help="ration observation and background error variances",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--wise_oi_corrfun",
+                  help="correlation functions (\"gaussian\",\"soar\",\"toar\",\"powerlaw\")",
+                  type="character",
+                  default="gaussian")
+
 
 #------------------------------------------------------------------------------
 # gaussian anamorphosis

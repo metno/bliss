@@ -158,7 +158,7 @@ read_dem( argv, env)
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
 
-dir_plot <- "/home/cristianl/data/wise/pngs"
+dir_plot <- "/home/cristianl/data/wise/dev/pngs"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
 load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
@@ -311,6 +311,20 @@ if (argv$mode=="rasterize") {
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
+
+  ffff<- file.path(dir_plot,paste0("tmp_wise_oi_",argv$date_out,".rdata"))
+  load_if_present<-F
+  plot<-F
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    t00<-Sys.time()
+    envtmp <- new.env( parent = emptyenv())
+    res <- wise_oi_driver( argv, y_env, fg_env, env)
+    print(Sys.time()-t00)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
+
 
 #  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
 

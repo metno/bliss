@@ -25,7 +25,7 @@ oi_driver <- function( argv, y_env, fg_env, env) {
       xy <- xyFromCell( rb, 1:ncell(rb))
       envtmp$x <- xy[ixb,1]
       envtmp$y <- xy[ixb,2]
-      envtmp$eps2 <- rep( argv$eps2, env$m_dim)
+      envtmp$eps2 <- rep( argv$oi_eps2, env$m_dim)
       envtmp$nn2 <- nn2( cbind(y_env$yo$x,y_env$yo$y), 
                          query = cbind(envtmp$x,envtmp$y), 
                          k = argv$oi_pmax, searchtype = "radius", 
