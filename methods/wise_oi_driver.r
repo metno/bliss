@@ -32,7 +32,7 @@ wise_oi_driver <- function( argv, y_env, fg_env, env) {
     r[] <- env$Xa[,e]
     envtmp$yb <- extract( r, cbind(y_env$yo$x, y_env$yo$y))
 
-    # run oi gridpoint by gridpoint (idi only the first time)
+    # run oi gridpoint by gridpoint (idi the first time only)
     if (!is.na(argv$cores)) {
       res <- t( mcmapply( oi_basic_gridpoint_by_gridpoint,
                           1:env$m_dim,

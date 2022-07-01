@@ -1,5 +1,5 @@
 #+
-wise_analysis_loop <- function( argv, y_env, fg_env, env,
+wise_analysis_loop_bak <- function( argv, y_env, fg_env, env,
                                 supob_nobs=50, supob_radius=1500, supob_q=0.99,
                                 max_it=100, opttol=0.02,
                                 En2_adj_fun="Gaussian",
@@ -8,10 +8,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
                                 plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
-
-  t0a <- Sys.time()
-
-  cat( "-- wise analysis --\n")
 
   # number of background ensemble members
   if ( ( nfg <- length( fg_env$ixs)) == 0) return( FALSE)
@@ -34,40 +30,40 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   rfin <- rdyad
 
   cat( paste( "dyadic domain, nx ny dx dy >", ncol(rdyad), nrow(rdyad), round( res(rdyad)[1]), round( res(rdyad)[2]),"\n"))
-
-  # ---~--------------
-  # observations on the dyadic grid
-  rfobs <- resample( env$mergeobs$r, rdyad, method="bilinear")
-  rfobs[rfobs<y_env$rain] <- 0
-
-  vobs <- getValues(rfobs)
-  vobs_val <- !is.na(getValues(rfobs))
-  vobs_nan <- is.na(getValues(rfobs))
-
-  c_xy <- which( !is.na( getValues(rfobs)))
-  cneg_xy <- which( is.na( getValues(rfobs)))
-  env$rfobs <- rfobs
-
-  rfobsidi <- rfobs
-  rfobsidi[cneg_xy] <- 0
-  rfobsidi[c_xy] <- 1
-
-  rfnoidi <- rfobs
-  rfnoidi[cneg_xy] <- 1
-  rfnoidi[c_xy] <- 0
-
-  rfobsidiwet <- rfobs
-  rfobsidiwet[which(vobs  < y_env$rain & vobs_val)] <- 0
-  rfobsidiwet[which(vobs >= y_env$rain & vobs_val)] <- 1
-  rfobsidiwet[cneg_xy] <- 0
-
-  rfobsididry <- rfobs
-  rfobsididry[which(vobs  < y_env$rain & vobs_val)] <- 1
-  rfobsididry[which(vobs >= y_env$rain & vobs_val)] <- 0
-  rfobsididry[cneg_xy] <- 0
-
-  rfobs[cneg_xy] <- 0
   
+  # ---~--------------
+  # Superobbing
+
+#   uncomment the following lines to use radar
+#  radarval <- getValues( u_env$uo[[1]]$r_main)
+#  ixrad <- which(!is.na(radarval))
+#   
+#  y_env$yo$x <- c( y_env$yo$x, xyFromCell(u_env$uo[[1]]$r_main,ixrad)[,1])
+#  y_env$yo$y <- c( y_env$yo$y, xyFromCell(u_env$uo[[1]]$r_main,ixrad)[,2])
+#  y_env$yo$value <- c( y_env$yo$value, radarval[ixrad])
+
+  t0 <- Sys.time()
+  rfobs<-rdyad
+  nn2 <- nn2( cbind( y_env$yo$x, y_env$yo$y), 
+              query = xyFromCell( rdyad, 1:ncell(rdyad)), 
+              k = supob_nobs, 
+              searchtype = "radius", radius = supob_radius)
+
+  mat <- nn2[[1]]
+  rm(nn2)
+  c_xy <- which( ( aux <- rowSums( mat)) > 0 )
+  if ( argv$wise_supob_mode == "quantile") {
+    mapply_fun  <- function(i) { quantile( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=supob_q) }
+  } else if ( argv$wise_supob_mode == "mean") {
+    mapply_fun  <- function(i) { mean( y_env$yo$value[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]]) }
+  }
+  rfobs[] <- 0
+  rfobs[c_xy] <- t( mapply( mapply_fun, 1:length(c_xy), SIMPLIFY = T))
+  env$rfobs <- rfobs
+  t1 <- Sys.time()
+
+  cat(paste("superobbing",t1-t0,"\n"))
+
   # ---~--------------
   # Initialization of the wavelet structures
   #  dwt_out. dwt.2d class.
@@ -101,52 +97,37 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   cat("Transform observations and compute error covariance matrix ")
  
   # transformation operator
-  dwtobs  <- dwt.2d( as.matrix(rfobs),    wf=env$wf, J=n, boundary=env$boundary)
-  dwtidi  <- dwt.2d( as.matrix(rfobsidi), wf=env$wf, J=n, boundary=env$boundary)
-  dwtnoidi   <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=n, boundary=env$boundary)
-  dwtidiwet  <- dwt.2d( as.matrix(rfobsidiwet), wf=env$wf, J=n, boundary=env$boundary)
-  dwtididry  <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=n, boundary=env$boundary)
-  # multires representations
-  mrobs <- list()
-  mrnoidi <- list()
-  mridi <- list()
-  mridiwet <- list()
-  mrididry <- list()
-  # unlist the result and compute squared energies
-  vo    <- vector( mode="numeric", length=env$n_dim); vo[]<-NA
-  nn <- 0
-  for (l in 1:n) {
-    ij <- ijFromLev( n, l, F)
-    vo[ij[1,1]:ij[3,2]] <- c( dwtobs[[3*l-2]], dwtobs[[3*l-1]], dwtobs[[3*l]])
-    mrobs[[l]] <- dwt.2d( as.matrix(rfobs), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mrnoidi[[l]] <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mridi[[l]] <- dwt.2d( as.matrix(rfobsidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mridiwet[[l]] <- dwt.2d( as.matrix(rfobsidiwet), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mrididry[[l]] <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    if ( any( mridi[[l]] > mrnoidi[[l]])) nn <- l
-  }
-  ij <- ijFromLev( n, n, T)
-  vo[ij[1]:ij[2]] <- dwtobs[[3*n+1]]
+  dwt     <- dwt.2d( as.matrix(rfobs), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
 
-  if (nn == 0) return(NULL)
-  env$nn_dim <- max( ijFromLev( n, (nn+1), F))
-  env$nn1_dim <- sqrt( diff(ijFromLev( n, nn, T)) + 1 )
+  # unlist the result and compute squared energies
+  vo   <- vector( mode="numeric", length=env$n_dim); vo[]<-NA
+  En2vo <- vector( mode="numeric", length=(env$n_levs_mx+1)); En2vo[]<-NA
+  jj <- 0; ii <- 0
+  for (l in 1:env$n_levs_mx) {
+    lh <- dwt[[1+3*(l-1)]]; hl <- dwt[[2+3*(l-1)]]; hh <- dwt[[3+3*(l-1)]]
+    ii <- jj + 1
+    jj <- ii + length(lh) + length(hl) + length(hh) - 1
+    vo[ii:jj] <- c( lh, hl, hh)
+    En2vo[l] <- mean( ( lh / 2**l)**2) + mean( ( hl / 2**l)**2) + mean( ( hh / 2**l)**2)
+  }
+  ll <- dwt[[4+3*(env$n_levs_mx-1)]] 
+  vo[(jj+1):env$n_dim] <- ll
+  En2vo[env$n_levs_mx+1] <- mean( ( ll / 2**l)**2)
+  rm( lh, hl, hh, ll)
+
   cat("\n")
-#
-#moveDown <- function(matin) {
-#  dimout <- 2*dim(matin)[1]
-#  matout <- array( data=NA, dim=c(dimout,dimout))
-#  for (i in 1:dimout) {
-#    matout[2*i,]   <- rep( matin[i,], each=2)
-#    matout[2*i-1,] <- rep( matin[i,], each=2)
-#  }
-#}
+
   #--------------------------------------------------------    
   # Analysis
   cat("Analysis on the transformed space \n")
 
+  env$costf <- vector()
+
+  En2      <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
+  En2_prev <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
+  rho      <- array( data=NA, dim=c( env$n_levs_mx+1,env$k_dim))
   Xb_dyad <- array( data=NA, dim=c( env$m_dim, env$k_dim))
-  Xb_dyad_original <- array( data=NA, dim=c( env$m_dim, env$k_dim))
+
 
   #--------------------------------------------------------    
   # MAIN LOOP
@@ -159,9 +140,12 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     #--------------------------------------------------------    
     # set the background
 
-    Ub     <- array( data=NA, dim=c( env$nn_dim, env$k_dim))
-    Vb     <- array( data=NA, dim=c( env$nn_dim, env$k_dim))
-    vo_Vb  <- array( data=NA, dim=c( env$nn_dim, env$k_dim))
+    Ub     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
+    Vb     <- array( data=NA, dim=c( env$n_dim, env$k_dim))
+    vo_Vb  <- array( data=NA, dim=c( env$n_dim, env$k_dim))
+    En2Ub     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
+    En2Vb     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
+    En2in     <- array( data=NA, dim=c( env$n_levs_mx+1, env$k_dim))
 
     if (plot & loop == 1) fxb <- vector()
     
@@ -174,7 +158,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         # background at grid  points
         rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
         rfxb[rfxb<y_env$rain] <- 0
-        Xb_dyad_original[,e]  <- getValues(rfxb)
         Xb_dyad[,e]  <- getValues(rfxb)
         rfxb_acc <- rfxb_acc + getValues(rfxb)
       # second iteration onwards - background from previous iteration 
@@ -182,7 +165,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         # -- background at grid  points --
         rfxb[] <- array( data=env$Xa_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
         rfxb[rfxb<y_env$rain] <- 0
-        Xb_dyad[,e]  <- getValues(rfxb)
       }
 
       # background at observation points
@@ -202,20 +184,46 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
       }
 
       # transformation operator
-      dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(nn+1), boundary=env$boundary)
-      dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=(nn+1), boundary=env$boundary)
-      dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=(nn+1), boundary=env$boundary)
+      dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
+      dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
+      dwtin <- dwt.2d( as.matrix(rfin), wf=env$wf, J=env$n_levs_mx, boundary=env$boundary)
 
       # unlist the result and compute squared energies
       jj <- 0; ii <- 0
-      for (l in 1:(nn+1)) {
-        ij <- ijFromLev( n, l, F)
-        Ub[ij[1,1]:ij[3,2],e] <- c( dwtxb[[3*l-2]], dwtxb[[3*l-1]], dwtxb[[3*l]])
-        Vb[ij[1,1]:ij[3,2],e] <- c( dwtyb[[3*l-2]], dwtyb[[3*l-1]], dwtyb[[3*l]])
-        vo_Vb[ij[1,1]:ij[3,2],e] <- c( dwtin[[3*l-2]], dwtin[[3*l-1]], dwtin[[3*l]])
+      for (l in env$n_levs_mn:env$n_levs_mx) {
+        lh <- dwtxb[[1+3*(l-1)]]; hl <- dwtxb[[2+3*(l-1)]]; hh <- dwtxb[[3+3*(l-1)]]
+        En2Ub[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
+        ii <- jj + 1
+        jj <- ii + length(lh) + length(hl) + length(hh) - 1
+        Ub[ii:jj,e] <- c( lh, hl, hh)
+        lh  <-  dwtyb[[1+3*(l-1)]]; hl  <-  dwtyb[[2+3*(l-1)]];  hh <-  dwtyb[[3+3*(l-1)]]
+        En2Vb[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
+        Vb[ii:jj,e] <- c( lh, hl, hh)
+        lh  <-  dwtin[[1+3*(l-1)]]; hl  <-  dwtin[[2+3*(l-1)]];  hh <-  dwtin[[3+3*(l-1)]]
+        En2in[l,e] <- mean( (lh / 2**l)**2) + mean( (hl / 2**l)**2) + mean( (hh / 2**l)**2)
+        vo_Vb[ii:jj,e] <- c( lh, hl, hh)
       }
+      ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
+      En2Ub[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
+      Ub[(jj+1):env$n_dim,e] <- ll
+      ll <- dwtxb[[4+3*(env$n_levs_mx-1)]] 
+      ll <- dwtyb[[4+3*(env$n_levs_mx-1)]] 
+      En2Vb[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
+      Vb[(jj+1):env$n_dim,e] <- ll
+      ll <- dwtin[[4+3*(env$n_levs_mx-1)]] 
+      En2in[env$n_levs_mx+1,e] <- mean( (ll/2**env$n_levs_mx)**2)
+      vo_Vb[(jj+1):env$n_dim,e] <- ll
+
+      rm( dwtxb, dwtyb, dwtin, lh, hl, hh, ll, ii, jj)
+
     } # end loop over ensemble members
 
+    # store energy statistics of previous iteration 
+    En2_prev <- En2Ub
+    aux <- En2_prev - rowMeans(En2_prev) 
+    var_En2_prev <- 1/(env$k_dim-1) * rowSums( aux * aux)
+    rm(aux)
+    
     # set the background: end
     #--------------------------------------------------------    
 
@@ -224,14 +232,13 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     Ab <- Ub - rowMeans(Ub)
     Db <- Vb - rowMeans(Vb)
     var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) 
-    var_d1_yy <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) 
+    var_d1_yy  <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) 
     # scaling coefficient used in spatial analysis
     coeff <- var_b1_xy / var_d1_yy
     coeff[!is.finite(coeff)] <- 0
+
     rm( Ab, Db)
 
-save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,n,nn)
-q()
 #    #--------------------------------------------------------    
 #    # sort of root mean squared error of the decomposed innovation
 #    env$costf[loop] <- mean( sqrt( var_d1_yy))
@@ -244,39 +251,7 @@ q()
     env$Xa_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
     for (e in 1:env$k_dim) {
       cat(".")
-      Ua[,e] <- Ub[,e] + coeff * vo_Vb[,e]
-      # FROM HERE - FROM HERE
-      rfxb[] <- array( data=env$Xb_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
-      for (l in (nn+1):2) {
-        dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=l, boundary=env$boundary)
-        dwt_aux <- dwtxb
-        for (i in 1:length(dwt_aux)) dwt_aux[[i]][] <- 0
-        if (l == (nn+1)) {
-          dwt_aux[[3*l+1]][] <- 0
-        } else {
-          dwt_aux[[3*l+1]][] <- mrdx 
-        }
-        ij <- ijFromLev( n, l, F)
-        dwt_aux[[3*l-2]][] <- Ua[ij[1,1]:ij[1,2],e]
-        dwt_aux[[3*l-1]][] <- Ua[ij[2,1]:ij[2,2],e]
-        dwt_aux[[3*l]][]   <- Ua[ij[3,1]:ij[3,2],e]
-        dx <- idwt.2d( dwt_aux)
-        l1 <- l-1 
-        mrdx <- dwt.2d( as.matrix(dx), wf=env$wf, J=l1, boundary=env$boundary)[[3*l1+1]]
-#        ix <- which( mrnoidi[[l]]>mridi[[l]] | (mrnoidi[[l]]<mridi[[l]] &) ) 
-      }
-      
-      mra <- mrxb[1:env$nn1_dim,1:env$nn1_dim,e] 
-      for (l in nn:1) {
-        for (i in 1:length(dwt_aux)) dwt_aux[[i]][] <- 0
-        dwt_aux[[3*l+1]][] <- mra
-        ij <- ijFromLev( n, l, F)
-        dwt_aux[[3*l-2]][] <- Ua[ij[1,1]:ij[1,2],e]
-        dwt_aux[[3*l-1]][] <- Ua[ij[2,1]:ij[2,2],e]
-        dwt_aux[[3*l]][]   <- Ua[ij[3,1]:ij[3,2],e]
-        dx_l <- idwt.2d( dwt_aux) 
-        mrdx_l <- dwt.2d( as.matrix(dx_l), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*l+1]]
-      }
+      Ua[,e] <- Ub[,e] + coeff * ( vo - Vb[,e])
       dwt_aux <- dwt_out
       for (i in env$n_levs_mn:env$n_levs_mx) {
         ij <- ijFromLev( env$n_levs_mx, i, F)

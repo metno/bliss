@@ -1203,7 +1203,6 @@ p <- add_argument(p, "--wise_oi_corrfun",
 
 
 #------------------------------------------------------------------------------
-# gaussian anamorphosis
 p <- add_argument(p, "--wise_rain_uo",
                   help="rain yes/no threshold for alignment (mm)",
                   type="numeric",
@@ -1287,6 +1286,8 @@ p <- add_argument(p, "--wise_rescale_min_cells",
                   help="minimum number of cells for the extent of a precipitation event to be considered significative enough to apply wise",
                   type="integer",
                   default=100)
+
+#------------------------------------------------------------------------------
 
 
 #------------------------------------------------------------------------------
