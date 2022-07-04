@@ -230,8 +230,6 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     coeff[!is.finite(coeff)] <- 0
     rm( Ab, Db)
 
-save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,n,nn)
-q()
 #    #--------------------------------------------------------    
 #    # sort of root mean squared error of the decomposed innovation
 #    env$costf[loop] <- mean( sqrt( var_d1_yy))
@@ -240,32 +238,51 @@ q()
     #--------------------------------------------------------    
     # Rescale the different components
     
-    Ua  <- array( data=NA, dim=c(     env$n_dim, env$k_dim))
+    Ua  <- array( data=NA, dim=c(     env$nn_dim, env$k_dim))
     env$Xa_dyad  <- array( data=NA, dim=c( env$m_dim, env$k_dim))
     for (e in 1:env$k_dim) {
       cat(".")
       Ua[,e] <- Ub[,e] + coeff * vo_Vb[,e]
       # FROM HERE - FROM HERE
-      rfxb[] <- array( data=env$Xb_dyad[,e], dim=c(sqrt_m_dim,sqrt_m_dim))
-      for (l in (nn+1):2) {
-        dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=l, boundary=env$boundary)
-        dwt_aux <- dwtxb
-        for (i in 1:length(dwt_aux)) dwt_aux[[i]][] <- 0
-        if (l == (nn+1)) {
-          dwt_aux[[3*l+1]][] <- 0
-        } else {
-          dwt_aux[[3*l+1]][] <- mrdx 
-        }
+
+      rfxb[] <- Xb_dyad[,e]
+      r <- rdyad
+      dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(nn+1), boundary=env$boundary)
+      for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
+      ij <- ijFromLev( n, (nn+1), F)
+      dwt[[3*(nn+1)-2]][] <- Ua[ij[1,1]:ij[1,2],e]
+      dwt[[3*(nn+1)-1]][] <- Ua[ij[2,1]:ij[2,2],e]
+      dwt[[3*(nn+1)]][]   <- Ua[ij[3,1]:ij[3,2],e]
+      xbadj <- idwt.2d( dwt) 
+      r[] <- array(data=as.matrix(xbadj),dim=c(sqrt_m_dim,sqrt_m_dim))
+      dwtxbadj <- dwt.2d( as.matrix(r), wf=env$wf, J=nn, boundary=env$boundary)
+      mrxbadj <- dwtxbadj[[3*nn+1]]
+      mrxbadj[mrididry[[nn]]>mridiwet[[nn]]] <- 0
+      mrxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=nn, boundary=env$boundary)[[3*nn+1]]
+      mrxa <- mrnoidi[[nn]] * mrxb + mridi[[nn]] * mrxbadj
+
+
+      for (l in nn:2) {
+        r[] <- mrxa
+        dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=l, boundary=env$boundary)
+        for (i in 1:(length(dwt))) dwt[[i]][] <- 0
+        dwt[[3*l+1]][] <- mrxa
         ij <- ijFromLev( n, l, F)
-        dwt_aux[[3*l-2]][] <- Ua[ij[1,1]:ij[1,2],e]
-        dwt_aux[[3*l-1]][] <- Ua[ij[2,1]:ij[2,2],e]
-        dwt_aux[[3*l]][]   <- Ua[ij[3,1]:ij[3,2],e]
-        dx <- idwt.2d( dwt_aux)
-        l1 <- l-1 
-        mrdx <- dwt.2d( as.matrix(dx), wf=env$wf, J=l1, boundary=env$boundary)[[3*l1+1]]
-#        ix <- which( mrnoidi[[l]]>mridi[[l]] | (mrnoidi[[l]]<mridi[[l]] &) ) 
+        dwt[[3*l-2]][] <- Ua[ij[1,1]:ij[1,2],e]
+        dwt[[3*l-1]][] <- Ua[ij[2,1]:ij[2,2],e]
+        dwt[[3*l]][]   <- Ua[ij[3,1]:ij[3,2],e]
+        xbadj <- idwt.2d( dwt) 
+        r[] <- array(data=as.matrix(xbadj),dim=c(sqrt_m_dim,sqrt_m_dim))
+        dwtxbadj <- dwt.2d( as.matrix(r), wf=env$wf, J=(l-1), boundary=env$boundary)
+        mrxbadj <- dwtxbadj[[3*(l-1)+1]]
+        mrxbadj[mrididry[[l-1]]>mridiwet[[l-1]]] <- 0
+        mrxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*(l-1)+1]]
+        mrxa <- mrnoidi[[l-1]] * mrxb + mridi[[l-1]] * mrxbadj
       }
-      
+save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,mrxa,n,nn,rdyad,Xb_dyad,Ua,Ub,vo_Vb,y_env)
+q()
+      # FROM HERE
+
       mra <- mrxb[1:env$nn1_dim,1:env$nn1_dim,e] 
       for (l in nn:1) {
         for (i in 1:length(dwt_aux)) dwt_aux[[i]][] <- 0
