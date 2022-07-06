@@ -37,8 +37,17 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
 
   # ---~--------------
   # observations on the dyadic grid
-  rfobs <- resample( env$mergeobs$r, rdyad, method="bilinear")
+  rfobs <- resample( env$mergeobs$r, rdyad, method="bilinear", na.rm=T)
   rfobs[rfobs<y_env$rain] <- 0
+
+  r <- env$rmaster
+  r[] <- env$mergeobs$idi
+  rfidi <- resample( r, rdyad, method="bilinear", na.rm=T)
+  rfidi[rfidi<0] <- 0
+  rfidi[rfidi>1] <- 1
+  r[] <- env$mergeobs$rall
+  rfobsall <- resample( r, rdyad, method="bilinear", na.rm=T)
+  rfobsall[rfobsall<y_env$rain] <- 0
 
   vobs <- getValues(rfobs)
   vobs_val <- !is.na(getValues(rfobs))
@@ -47,26 +56,36 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   c_xy <- which( !is.na( getValues(rfobs)))
   cneg_xy <- which( is.na( getValues(rfobs)))
   env$rfobs <- rfobs
-
-  rfobsidi <- rfobs
-  rfobsidi[cneg_xy] <- 0
-  rfobsidi[c_xy] <- 1
-
-  rfnoidi <- rfobs
-  rfnoidi[cneg_xy] <- 1
-  rfnoidi[c_xy] <- 0
-
-  rfobsidiwet <- rfobs
-  rfobsidiwet[which(vobs  < y_env$rain & vobs_val)] <- 0
-  rfobsidiwet[which(vobs >= y_env$rain & vobs_val)] <- 1
-  rfobsidiwet[cneg_xy] <- 0
-
-  rfobsididry <- rfobs
-  rfobsididry[which(vobs  < y_env$rain & vobs_val)] <- 1
-  rfobsididry[which(vobs >= y_env$rain & vobs_val)] <- 0
-  rfobsididry[cneg_xy] <- 0
+  env$rfidi <- rfidi
+  env$rfobsall <- rfobsall
 
   rfobs[cneg_xy] <- 0
+  rfidi[is.na(rfidi)] <- 0
+  rfobsall[is.na(rfobsall)] <- 0
+  vidi <- getValues(rfidi)
+  vobsall <- getValues(rfobsall)
+
+  rfobsidi <- rfidi
+#  rfobsidi[cneg_xy] <- 0
+#  rfobsidi[c_xy] <- 1
+
+  rfnoidi <- 1 - rfidi
+#  rfnoidi[cneg_xy] <- 1
+#  rfnoidi[c_xy] <- 0
+
+  rfobsidiwet <- rfidi
+  rfobsidiwet[] <- 0
+  rfobsidiwet[which(vobsall >= y_env$rain & vidi >= 0.1)] <- 1
+#  rfobsidiwet[which(vobs  < y_env$rain & vobs_val)] <- 0
+#  rfobsidiwet[which(vobs >= y_env$rain & vobs_val)] <- 1
+#  rfobsidiwet[cneg_xy] <- 0
+
+  rfobsididry <- rfobs
+  rfobsididry[] <- 0
+  rfobsididry[which(vobsall < y_env$rain & vidi >= 0.1)] <- 1
+#  rfobsididry[which(vobs  < y_env$rain & vobs_val)] <- 1
+#  rfobsididry[which(vobs >= y_env$rain & vobs_val)] <- 0
+#  rfobsididry[cneg_xy] <- 0
   
   # ---~--------------
   # Initialization of the wavelet structures
@@ -116,13 +135,20 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
   vo    <- vector( mode="numeric", length=env$n_dim); vo[]<-NA
   nn <- 0
   for (l in 1:n) {
+print(l)
     ij <- ijFromLev( n, l, F)
     vo[ij[1,1]:ij[3,2]] <- c( dwtobs[[3*l-2]], dwtobs[[3*l-1]], dwtobs[[3*l]])
     mrobs[[l]] <- dwt.2d( as.matrix(rfobs), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mrnoidi[[l]] <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
+#    mrnoidi[[l]] <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
     mridi[[l]] <- dwt.2d( as.matrix(rfobsidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
+    print(dim(mridi[[l]])[2])
+    if ( dim(mridi[[l]])[1] > 2)
+      mridi[[l]] <- gauss2dsmooth(x=mridi[[l]],lambda=1,nx=dim(mridi[[l]])[1],ny=dim(mridi[[l]])[2])
+    mrnoidi[[l]] <- 1 - mridi[[l]]
     mridiwet[[l]] <- dwt.2d( as.matrix(rfobsidiwet), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
-    mrididry[[l]] <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
+    if ( dim(mridiwet[[l]])[1] > 2)
+      mridiwet[[l]] <- gauss2dsmooth(x=mridiwet[[l]],lambda=1,nx=dim(mridiwet[[l]])[1],ny=dim(mridiwet[[l]])[2])
+#    mrididry[[l]] <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
     if ( any( mridi[[l]] > mrnoidi[[l]])) nn <- l
   }
   ij <- ijFromLev( n, n, T)
@@ -246,13 +272,15 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         if (l > 1) {
           dwtxbadj <- dwt.2d( as.matrix(r), wf=env$wf, J=(l-1), boundary=env$boundary)
           mrxbadj <- dwtxbadj[[3*(l-1)+1]]
-          mrxbadj[mrididry[[l-1]]>mridiwet[[l-1]]] <- 0
+#          mrxbadj[mrididry[[l-1]]>mridiwet[[l-1]]] <- 0
+          mrxbadj <- mrxbadj * mridiwet[[l-1]]
           mrxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*(l-1)+1]]
           mrxa <- mrnoidi[[l-1]] * mrxb + mridi[[l-1]] * mrxbadj
           if (!is.na(y_env$rain)) mrxa[mrxa<y_env$rain] <- 0
         } else {
           xbadj <- getValues(r)
-          xbadj[getValues(rfobsididry)>getValues(rfobsidiwet)] <- 0
+#          xbadj[getValues(rfobsididry)>getValues(rfobsidiwet)] <- 0
+          xbadj <- getValues(rfobsidiwet) * xbadj
           env$Xa_dyad[,e] <- getValues(rfnoidi) * Xb_dyad[,e] + getValues(rfobsidi) * xbadj
           if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0 
         }
@@ -274,10 +302,14 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
     # break out of the main loop early if variations  
 #    if ( env$costf[loop] < opttol) break
 if (loop==20) {
-save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,mrxa,n,nn,rdyad,Xb_dyad,Ua,Ub,vo_Vb,y_env,mrxb,mrxbadj,Xb_dyad_original)
+save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,mrxa,n,nn,rdyad,Xb_dyad,Ua,Ub,vo_Vb,y_env,mrxb,mrxbadj,Xb_dyad_original,rfobs,rfnoidi,rfobsidi,rfobsidiwet,rfobsididry)
 #i<-1; s<-rdyad; s[]<-env$Xa_dyad[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-#i<-1; s<-rdyad; s[]<-Xb_dyad_original[i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+#i<-1; s<-rdyad; s[]<-Xb_dyad_original[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
 #points(y_env$yo$x,y_env$yo$y,cex=0.25,pch=21,bg="beige",col="beige")
+# i<-1; s[]<-Xb_dyad_original[,i]; yb<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,yb)
+# i<-1; s[]<-env$Xa_dyad[,i]; ya<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,ya)
+#s<-env$rfobs; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+# 
 q()
 }
   } # end main loop

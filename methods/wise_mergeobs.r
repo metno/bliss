@@ -65,8 +65,7 @@ wise_mergeobs <- function( argv, y_env, u_env, env) {
   env$mergeobs$r <- env$rmaster
   env$mergeobs$r[] <- NA
   env$mergeobs$r[ix] <- res[ix,1]
-  env$mergeobs$rall[] <- NA
-  env$mergeobs$rall[] <- res[,1]
+  env$mergeobs$rall <- res[,1]
   env$mergeobs$idi <- res[,2]
   env$mergeobs$o_errvar <- res[,3]
   env$mergeobs$a_errvar <- res[,4]

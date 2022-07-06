@@ -250,6 +250,7 @@ if (argv$mode=="rasterize") {
   
   suppressPackageStartupMessages( library( "waveslim"))
   suppressPackageStartupMessages( library( "RANN"))
+  suppressPackageStartupMessages( library( "smoothie"))
   
   ffff<- file.path(dir_plot,paste0("tmp_wise_mergeobs_",argv$date_out,".rdata"))
   load_if_present<-T
