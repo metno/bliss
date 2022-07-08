@@ -144,11 +144,19 @@ print(l)
     print(dim(mridi[[l]])[2])
     if ( dim(mridi[[l]])[1] > 2)
       mridi[[l]] <- gauss2dsmooth(x=mridi[[l]],lambda=1,nx=dim(mridi[[l]])[1],ny=dim(mridi[[l]])[2])
+    if ( any( mridi[[l]] > 1)) mridi[[l]][ mridi[[l]]>1] <- 1
+    if ( any( mridi[[l]] < 0)) mridi[[l]][ mridi[[l]]<0] <- 0
     mrnoidi[[l]] <- 1 - mridi[[l]]
     mridiwet[[l]] <- dwt.2d( as.matrix(rfobsidiwet), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
     if ( dim(mridiwet[[l]])[1] > 2)
       mridiwet[[l]] <- gauss2dsmooth(x=mridiwet[[l]],lambda=1,nx=dim(mridiwet[[l]])[1],ny=dim(mridiwet[[l]])[2])
-#    mrididry[[l]] <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
+    if ( any( mridiwet[[l]] > 1)) mridiwet[[l]][ mridiwet[[l]]>1] <- 1
+    if ( any( mridiwet[[l]] < 0)) mridiwet[[l]][ mridiwet[[l]]<0] <- 0
+    mrididry[[l]] <- dwt.2d( as.matrix(rfobsididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]/2**l
+    if ( dim(mrididry[[l]])[1] > 2)
+      mrididry[[l]] <- gauss2dsmooth(x=mrididry[[l]],lambda=1,nx=dim(mrididry[[l]])[1],ny=dim(mrididry[[l]])[2])
+    if ( any( mrididry[[l]] > 1)) mrididry[[l]][ mrididry[[l]]>1] <- 1
+    if ( any( mrididry[[l]] < 0)) mrididry[[l]][ mrididry[[l]]<0] <- 0
     if ( any( mridi[[l]] > mrnoidi[[l]])) nn <- l
   }
   ij <- ijFromLev( n, n, T)
@@ -156,7 +164,6 @@ print(l)
 
   if (nn == 0) return(NULL)
   env$nn_dim <- max( ijFromLev( n, (nn+1), F))
-  env$nn1_dim <- sqrt( diff(ijFromLev( n, nn, T)) + 1 )
   cat("\n")
 #
 #moveDown <- function(matin) {
@@ -238,8 +245,10 @@ print(l)
     # Background error covariance matrices
     Ab <- Ub - rowMeans(Ub)
     Db <- Vb - rowMeans(Vb)
+    Ao_b <- vo_Vb - rowMeans(vo_Vb)
     var_b1_xy <- 1/(env$k_dim-1) * rowSums( Ab*Db) 
-    var_d1_yy <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) 
+#    var_d1_yy <- 1/(env$k_dim-1) * rowSums( vo_Vb *vo_Vb) 
+    var_d1_yy <- 1/(env$k_dim-1) * rowSums( Ao_b * Ao_b) 
     # scaling coefficient used in spatial analysis
     coeff <- var_b1_xy / var_d1_yy
     coeff[!is.finite(coeff)] <- 0
@@ -262,7 +271,9 @@ print(l)
       for (l in (nn+1):1) {
         dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=l, boundary=env$boundary)
         for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
-        if (l < (nn+1)) dwt[[3*l+1]][] <- mrxa
+        if (l < (nn+1)) 
+          dwt[[length(dwt)]][] <- mrxa
+        if (!is.na(y_env$rain)) dwt[[length(dwt)]][dwt[[length(dwt)]]<y_env$rain] <- 0
         ij <- ijFromLev( n, l, F)
         dwt[[3*l-2]][] <- Ua[ij[1,1]:ij[1,2],e]
         dwt[[3*l-1]][] <- Ua[ij[2,1]:ij[2,2],e]
@@ -272,30 +283,105 @@ print(l)
         if (l > 1) {
           dwtxbadj <- dwt.2d( as.matrix(r), wf=env$wf, J=(l-1), boundary=env$boundary)
           mrxbadj <- dwtxbadj[[3*(l-1)+1]]
-#          mrxbadj[mrididry[[l-1]]>mridiwet[[l-1]]] <- 0
-          mrxbadj <- mrxbadj * mridiwet[[l-1]]
+          mrxbadj[mrididry[[l-1]]>mridiwet[[l-1]]] <- 0
+###          mrxbadj <- mrxbadj * mridiwet[[l-1]]
           mrxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*(l-1)+1]]
+          if (!is.na(y_env$rain)) { mrxb[mrxb<y_env$rain] <- 0; mrxbadj[mrxbadj<y_env$rain] <- 0 }
           mrxa <- mrnoidi[[l-1]] * mrxb + mridi[[l-1]] * mrxbadj
           if (!is.na(y_env$rain)) mrxa[mrxa<y_env$rain] <- 0
         } else {
           xbadj <- getValues(r)
-#          xbadj[getValues(rfobsididry)>getValues(rfobsidiwet)] <- 0
-          xbadj <- getValues(rfobsidiwet) * xbadj
+          xbadj[getValues(rfobsididry)>getValues(rfobsidiwet)] <- 0
+###          xbadj <- getValues(rfobsidiwet) * xbadj
+          if (!is.na(y_env$rain)) { xbadj[xbadj<y_env$rain] <- 0 }
           env$Xa_dyad[,e] <- getValues(rfnoidi) * Xb_dyad[,e] + getValues(rfobsidi) * xbadj
           if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0 
         }
+if (e==1) {
+if (l > 1) {
+  dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)
+  for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
+  dwt[[length(dwt)]][] <- mrxa
+#  s<-aggregate(rdyad,fact=2**(l-1))
+  s<-rdyad
+  sb<-rdyad
+  sbadj<-rdyad
+  sobs<-rdyad
+  s[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+  dwt[[length(dwt)]][] <- mrxbadj
+  sbadj[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+  dwt[[length(dwt)]][] <- mrobs[[l-1]]
+  sobs[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+  dwt[[length(dwt)]][] <- mrxb
+  sb[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+} else {
+  s<-rdyad
+  sb<-rdyad
+  sbadj<-rdyad
+  s[]<-env$Xa_dyad[,e]
+  sbadj[]<-xbadj
+  sb[]<-Xb_dyad[,e]
+  sobs<-env$rfobs
+}
+ffout <- paste0( "pngs/fig_",
+                 formatC(loop,width=2,flag="0"),"_",
+                 formatC(e,width=2,flag="0"),"_",
+                 formatC(l,width=2,flag="0"), ".png")
+ffout1<-paste0(ffout,".1")
+ffout2<-paste0(ffout,".2")
+ffout3<-paste0(ffout,".3")
+ffout4<-paste0(ffout,".4")
+png(file=ffout1,width=1200,height=1200)
+image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+image(s,breaks=c(-1000,0.1,1000),col=c("white","black"),add=T)
+image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))),add=T)
+aux<-dev.off()
+png(file=ffout2,width=1200,height=1200)
+image(sbadj,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+aux<-dev.off()
+png(file=ffout3,width=1200,height=1200)
+image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+aux<-dev.off()
+png(file=ffout4,width=1200,height=1200)
+image(sb,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+aux<-dev.off()
+system(paste("convert +append",ffout1,ffout3,"top.png"))
+system(paste("convert +append",ffout4,ffout2,"bot.png"))
+system(paste("convert -append top.png bot.png",ffout))
+system(paste("rm top.png bot.png",ffout1,ffout2,ffout3,ffout4))
+print(paste("written file",ffout))
+}
       }  # end loop over scales
     }  # end loop over ensembles
 
     #
     #--------------------------------------------------------    
     # strict condition for convergence
-    r[] <-  rowMeans(Xb_dyad)
-    aux <- sqrt( mean( (extract(r,cbind(y_env$yo$x,y_env$yo$y)) - y_env$yo$value))**2)
-    r[] <-  rowMeans(env$Xa_dyad)
-    env$costf[loop] <- sqrt( mean( (extract(r,cbind(y_env$yo$x,y_env$yo$y)) - y_env$yo$value))**2)
+    r[] <- rowMeans(Xb_dyad)
+    vxb <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+    r[] <- rowMeans(env$Xa_dyad)
+    vxa <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+    aux <- sqrt( mean( ( vxb - y_env$yo$value))**2)
+    env$costf[loop] <- sqrt( mean( ( vxa - y_env$yo$value))**2)
+
+ets <- function(pred,ref,thr) {
+  flag <- !is.na(pred) & !is.na(ref)
+  hits <- length( which( flag & ref >= thr & pred >= thr))
+  fals <- length( which( flag & ref <  thr & pred >= thr))
+  miss <- length( which( flag & ref >= thr & pred <  thr))
+  corn <- length( which( flag & ref <  thr & pred <  thr))
+  hits_random <- (hits+miss) * (hits+fals) / (hits+fals+miss+corn)
+  den <- (hits+fals+miss-hits_random)
+  if (den == 0) return(NA)
+  return( (hits-hits_random)/den )
+}
+
+    ets_b <- ets( vxb, y_env$yo$value, y_env$rain)
+    ets_a <- ets( vxa, y_env$yo$value, y_env$rain)
     cat(paste("\n","rmse before after Delta% =",round(aux,5),round(env$costf[loop],5),
                                              round(100*(aux-env$costf[loop])/aux,1),"\n"))
+    cat(paste("\n","ets before after Delta% =",round(ets_b,3),round(ets_a,3),
+                                             round(100*(ets_b-ets_a)/ets_b,1),"\n"))
     # less strict condition for convergence
     t1 <- Sys.time()
 #    cat( paste( "time=", round(t1-t0,1), attr(t1-t0,"unit"), "costf - Delta En2 index =", round(env$costf[loop],5), "\n"))
