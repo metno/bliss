@@ -1,5 +1,6 @@
 #+ Select the background fields using an observed field as the reference
-wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
+#wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
+wise_align <- function( argv, fg_env, env, plot=F, dir_plot=NA) {
 #
 # output
 #  fg_env$score score for each potential background field (higher the better)
@@ -17,9 +18,12 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
   # compute score for each potential background field
   cat (" compute score for each potential background field \n")
   # reference observed field
-  uo <- getValues( u_env$uo[[1]]$r_main)
-  uo[uo<u_env$rain] <- 0
-  uo[uo>u_env$rain] <- 1
+#  uo <- getValues( u_env$uo[[1]]$r_main)
+#  uo[uo<u_env$rain] <- 0
+#  uo[uo>u_env$rain] <- 1
+  uo <- env$mergeobs$rall
+  uo[uo<y_env$rain] <- 0
+  uo[uo>=y_env$rain] <- 1
   score <- numeric(0)
   ixf <- integer(0)
   ixe <- integer(0)
@@ -28,8 +32,10 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
     cat( paste("  data source",f,"ensembles"))
     for (e in 1:fg_env$fg[[f]]$k_dim) {
       r <- getValues( subset( fg_env$fg[[f]]$r_main, subset=e))
-      r[r<u_env$rain] <- 0
-      r[r>u_env$rain] <- 1
+#      r[r<u_env$rain] <- 0
+#      r[r>u_env$rain] <- 1
+      r[r<y_env$rain] <- 0
+      r[r>=y_env$rain] <- 1
       a <- as.numeric( length( which(r==1 & uo==1)))
       b <- as.numeric( length( which(r==1 & uo==0)))
       c <- as.numeric( length( which(r==0 & uo==1)))
@@ -55,8 +61,10 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
         b<-spTransform(b_utm33,CRS(proj4.lcc))
         rm(b_utm33,proj4.lcc)
 
-        ra <- u_env$uo[[1]]$r_main
-        rb <- u_env$uo[[1]]$r_main
+#        ra <- u_env$uo[[1]]$r_main
+#        rb <- u_env$uo[[1]]$r_main
+        ra <- env$mergeobs$r
+        rb <- env$mergeobs$r
         png(file=f1,width=800,height=800)
         ra[]<-uo
         image(ra,breaks=c(-1,0.5,1.5),col=c("gray","cornflowerblue"))
@@ -110,7 +118,9 @@ wise_align <- function( argv, fg_env, u_env, env, plot=F, dir_plot=NA) {
       cat(".")
       r <- subset( fg_env$fg[[ixf[i]]]$r_main, subset=ixe[i])
       fout<-file.path(dir_plot,paste0("wise_align_sel_e",formatC(j,width=2,flag="0"),".png"))
-      ra <- u_env$uo[[1]]$r_main
+#      ra <- u_env$uo[[1]]$r_main
+      ra <- env$mergeobs$r
+      ra[] <- env$mergeobs$rall
       png(file=f1,width=800,height=800)
       image(ra,breaks=c(0,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(7))))
       plot(b,add=T)

@@ -1,5 +1,5 @@
 #+
-wise_aggregation <- function( argv, y_env, fg_env, u_env, env, 
+wise_aggregation <- function( argv, y_env, env, 
                               plot=F,dir_plot=NA) {
 
     # set dyadic domain

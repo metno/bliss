@@ -1,11 +1,6 @@
 #+
-wise_analysis_loop <- function( argv, y_env, fg_env, env,
-                                supob_nobs=50, supob_radius=1500, supob_q=0.99,
-                                max_it=100, opttol=0.02,
-                                En2_adj_fun="Gaussian",
-                                En2_adj_min=0,
-                                rescale_min_obs=100, rescale_min_cells=100,
-                                plot=F, dir_plot=NA) {
+wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
+                                     max_it=100, plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
 
@@ -198,12 +193,12 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
         rfxb[rfxb<y_env$rain] <- 0
         Xb_dyad_original[,e]  <- getValues(rfxb)
         Xb_dyad[,e]  <- getValues(rfxb)
-        env$Xa_dyad  <- Xb_dyad
-        env$Xa_dyad[] <- NA
+        Xbpp_dyad  <- Xb_dyad
+        Xbpp_dyad[] <- NA
       # second iteration onwards - background from previous iteration 
       } else {
         # -- background at grid  points --
-        rfxb[] <- env$Xa_dyad[,e]
+        rfxb[] <- Xbpp_dyad[,e]
         rfxb[rfxb<y_env$rain] <- 0
         Xb_dyad[,e]  <- getValues(rfxb)
       }
@@ -284,64 +279,66 @@ wise_analysis_loop <- function( argv, y_env, fg_env, env,
           xbadj[getValues(rfobsididry)>getValues(rfobsidiwet)] <- 0
 ###          xbadj <- getValues(rfobsidiwet) * xbadj
           if (!is.na(y_env$rain)) { xbadj[xbadj<y_env$rain] <- 0 }
-          env$Xa_dyad[,e] <- getValues(rfnoidi) * Xb_dyad[,e] + getValues(rfobsidi) * xbadj
-          if (!is.na(y_env$rain)) env$Xa_dyad[,e][env$Xa_dyad[,e]<y_env$rain] <- 0 
+          Xbpp_dyad[,e] <- getValues(rfnoidi) * Xb_dyad[,e] + getValues(rfobsidi) * xbadj
+          if (!is.na(y_env$rain)) Xbpp_dyad[,e][Xbpp_dyad[,e]<y_env$rain] <- 0 
         }
-#if (e==1) {
-if (loop==3) {
-if (l > 1) {
-  dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)
-  for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
-  dwt[[length(dwt)]][] <- mrxa
-#  s<-aggregate(rdyad,fact=2**(l-1))
-  s<-rdyad
-  sb<-rdyad
-  sbadj<-rdyad
-  sobs<-rdyad
-  s[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-  dwt[[length(dwt)]][] <- mrxbadj
-  sbadj[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-  dwt[[length(dwt)]][] <- mrobs[[l-1]]
-  sobs[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-  dwt[[length(dwt)]][] <- mrxb
-  sb[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-} else {
-  s<-rdyad
-  sb<-rdyad
-  sbadj<-rdyad
-  s[]<-env$Xa_dyad[,e]
-  sbadj[]<-xbadj
-  sb[]<-Xb_dyad[,e]
-  sobs<-env$rfobs
-}
-ffout <- paste0( "pngs/fig_",
-                 formatC(loop,width=2,flag="0"),"_",
-                 formatC(e,width=2,flag="0"),"_",
-                 formatC(l,width=2,flag="0"), ".png")
-ffout1<-paste0(ffout,".1")
-ffout2<-paste0(ffout,".2")
-ffout3<-paste0(ffout,".3")
-ffout4<-paste0(ffout,".4")
-png(file=ffout1,width=1200,height=1200)
-image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-image(s,breaks=c(-1000,0.1,1000),col=c("white","black"),add=T)
-image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))),add=T)
-aux<-dev.off()
-png(file=ffout2,width=1200,height=1200)
-image(sbadj,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-aux<-dev.off()
-png(file=ffout3,width=1200,height=1200)
-image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-aux<-dev.off()
-png(file=ffout4,width=1200,height=1200)
-image(sb,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-aux<-dev.off()
-system(paste("convert +append",ffout1,ffout3,"top.png"))
-system(paste("convert +append",ffout4,ffout2,"bot.png"))
-system(paste("convert -append top.png bot.png",ffout))
-system(paste("rm top.png bot.png",ffout1,ffout2,ffout3,ffout4))
-print(paste("written file",ffout))
-}
+
+        #if (e==1) {
+        if (loop==3) {
+          if (l > 1) {
+            dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)
+            for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
+            dwt[[length(dwt)]][] <- mrxa
+          #  s<-aggregate(rdyad,fact=2**(l-1))
+            s<-rdyad
+            sb<-rdyad
+            sbadj<-rdyad
+            sobs<-rdyad
+            s[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+            dwt[[length(dwt)]][] <- mrxbadj
+            sbadj[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+            dwt[[length(dwt)]][] <- mrobs[[l-1]]
+            sobs[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+            dwt[[length(dwt)]][] <- mrxb
+            sb[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
+          } else {
+            s<-rdyad
+            sb<-rdyad
+            sbadj<-rdyad
+            s[]<-Xbpp_dyad[,e]
+            sbadj[]<-xbadj
+            sb[]<-Xb_dyad[,e]
+            sobs<-env$rfobs
+          }
+          ffout <- paste0( "pngs/fig_",
+                           formatC(loop,width=2,flag="0"),"_",
+                           formatC(e,width=2,flag="0"),"_",
+                           formatC(l,width=2,flag="0"), ".png")
+          ffout1<-paste0(ffout,".1")
+          ffout2<-paste0(ffout,".2")
+          ffout3<-paste0(ffout,".3")
+          ffout4<-paste0(ffout,".4")
+          png(file=ffout1,width=1200,height=1200)
+          image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+          image(s,breaks=c(-1000,0.1,1000),col=c("white","black"),add=T)
+          image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))),add=T)
+          aux<-dev.off()
+          png(file=ffout2,width=1200,height=1200)
+          image(sbadj,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+          aux<-dev.off()
+          png(file=ffout3,width=1200,height=1200)
+          image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+          aux<-dev.off()
+          png(file=ffout4,width=1200,height=1200)
+          image(sb,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+          aux<-dev.off()
+          system(paste("convert +append",ffout1,ffout3,"top.png"))
+          system(paste("convert +append",ffout4,ffout2,"bot.png"))
+          system(paste("convert -append top.png bot.png",ffout))
+          system(paste("rm top.png bot.png",ffout1,ffout2,ffout3,ffout4))
+          print(paste("written file",ffout))
+        }
+
       }  # end loop over scales
     }  # end loop over ensembles
 
@@ -350,10 +347,111 @@ print(paste("written file",ffout))
     # strict condition for convergence
     r[] <- rowMeans(Xb_dyad)
     vxb <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
-    r[] <- rowMeans(env$Xa_dyad)
-    vxa <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
-    aux <- sqrt( mean( ( vxb - y_env$yo$value))**2)
-    env$costf[loop] <- sqrt( mean( ( vxa - y_env$yo$value))**2)
+    r[] <- rowMeans(Xbpp_dyad)
+    vxbpp <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+
+    ets_thr <- y_env$rain
+    if (any(y_env$yo$value>y_env$rain)) ets_thr <- median(y_env$yo$value[y_env$yo$value>y_env$rain])
+
+    ets_b <- ets( vxb, y_env$yo$value, ets_thr)
+    ets_bpp <- ets( vxbpp, y_env$yo$value, ets_thr)
+    env$costf[loop] <- ets_bpp - ets_b
+    cat(paste("\n","ets before after Delta% =",round(ets_b,3),round(ets_bpp,3),
+                                             round(100*(ets_b-ets_bpp)/ets_b,1),"\n"))
+    # break out of the main loop 
+    if ( env$costf[loop] < 0) {
+      Xbpp_dyad <- Xb_dyad
+      break
+    }
+    t1 <- Sys.time()
+#    if ( env$costf[loop] < opttol) break
+    if (loop==20) {
+      save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,mrxa,n,nn,rdyad,Xb_dyad,Ua,Ub,vo_Vb,y_env,mrxb,mrxbadj,Xb_dyad_original,rfobs,rfnoidi,rfobsidi,rfobsidiwet,rfobsididry)
+#i<-1; s<-rdyad; s[]<-Xbpp_dyad[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+#i<-1; s<-rdyad; s[]<-Xb_dyad_original[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+#points(y_env$yo$x,y_env$yo$y,cex=0.25,pch=21,bg="beige",col="beige")
+# i<-1; s[]<-Xb_dyad_original[,i]; yb<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,yb)
+# i<-1; s[]<-Xbpp_dyad[,i]; ya<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,ya)
+#s<-env$rfobs; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
+# 
+      q()
+    }
+  } # end main loop
+
+  # -- Aggregation onto the original grid --
+  env$Xa <- array( data=NA, dim=c( env$ngrid, env$a_dim))
+  if (env$cv_mode | env$cv_mode_random) 
+    y_env$yov$value_a_beforeOI <- array( data=NA, dim=c( y_env$yov$n, env$a_dim)) 
+  y_env$yo$value_a_beforeOI <- array( data=NA, dim=c( y_env$yo$n, env$a_dim)) 
+
+  for (a in 1:env$a_dim) {
+    t0 <- Sys.time()
+    rdyad[] <- array(data=Xbpp_dyad[,a],dim=c(sqrt_m_dim,sqrt_m_dim))
+    r <- resample( rdyad, env$rmaster, method="ngb")
+    env$Xa[,a] <- getValues(r)[env$mask]
+    if (env$cv_mode | env$cv_mode_random) 
+      y_env$yov$value_a_beforeOI[,a] <- extract( rdyad, cbind( y_env$yov$x, y_env$yov$y))
+    y_env$yo$value_a_beforeOI[,a]  <- extract( rdyad, cbind(  y_env$yo$x, y_env$yo$y))
+    print(paste(a,Sys.time()-t0))
+  }
+
+
+} # END FUNCTION
+
+#+
+wise_aggregation <- function( argv, y_env, env, 
+                              plot=F,dir_plot=NA) {
+
+    # set dyadic domain
+    xmn <- as.numeric(argv$grid_master.x1) - as.numeric(argv$grid_master.resx)/2
+    xmx <- as.numeric(argv$grid_master.xn) + as.numeric(argv$grid_master.resx)/2
+    ymn <- as.numeric(argv$grid_master.y1) - as.numeric(argv$grid_master.resy)/2
+    ymx <- as.numeric(argv$grid_master.yn) + as.numeric(argv$grid_master.resy)/2
+    nx <- ncol( env$rmaster)
+    ny <- nrow( env$rmaster)
+    n <- ceiling( log( max(nx,ny), 2))
+    rdyad <- raster( extent( xmn, xmx, ymn, ymx), ncol=2**n, nrow=2**n, crs=argv$grid_master.proj4)
+    rdyad[] <- 0
+    sqrt_m_dim <- sqrt( env$m_dim)
+
+    # 
+    env$Xa <- array( data=NA, dim=c( env$ngrid, env$a_dim))
+    if (env$cv_mode | env$cv_mode_random) 
+      y_env$yov$value_a_beforeOI <- array( data=NA, dim=c( y_env$yov$n, env$a_dim)) 
+    y_env$yo$value_a_beforeOI <- array( data=NA, dim=c( y_env$yo$n, env$a_dim)) 
+
+    for (a in 1:env$a_dim) {
+      t0 <- Sys.time()
+      rdyad[] <- array(data=env$Xa_dyad[,a],dim=c(sqrt_m_dim,sqrt_m_dim))
+      r <- resample( rdyad, env$rmaster, method="ngb")
+      env$Xa[,a] <- getValues(r)[env$mask]
+      if (env$cv_mode | env$cv_mode_random) 
+        y_env$yov$value_a_beforeOI[,a] <- extract( rdyad, cbind( y_env$yov$x, y_env$yov$y))
+      y_env$yo$value_a_beforeOI[,a]  <- extract( rdyad, cbind(  y_env$yo$x, y_env$yo$y))
+#      val<-getValues(rdyad)
+#      xy<-xyFromCell(rdyad,env$mask)
+#      ix_wet <- which( val >= y_env$rain)
+##      r<-rasterize(x=xy,y=env$rmaster,field=val[env$mask],fun=function(x,...){quantile(x,probs=0.9,na.rm=T)})
+##      r<-rasterize(x=xy,y=env$rmaster,field=val[env$mask],fun=mean)
+#      if (a==1) {
+#        rfobs<-rdyad
+#        nn2 <- nn2( xyFromCell( rdyad, 1:ncell(rdyad)), 
+#                    query = xyFromCell( env$rmaster, 1:ncell(env$rmaster)), 
+#                    k = 1000, 
+#                    searchtype = "radius", radius = (res(rdyad)[1]*sqrt(2)))
+#        mat <- nn2[[1]]
+#        print(dim(mat))
+#        c_xy <- which( ( aux <- rowSums( mat)) > 0 )
+#        rm(nn2)
+#        r<-env$rmaster; r[]<-NA
+#      }  
+#      mapply_quantile  <- function(i) { if ((i%%10000)==0) print(i);quantile( val[mat[c_xy[i],1:length(which(mat[c_xy[i],]!=0))]], probs=0.9) }
+#      r[] <- 0
+#      r[c_xy] <- t( mapply( mapply_quantile, 1:length(c_xy), SIMPLIFY = T))
+      print(paste(a,Sys.time()-t0))
+    }
+}
+
 
 ets <- function(pred,ref,thr) {
   flag <- !is.na(pred) & !is.na(ref)
@@ -367,54 +465,3 @@ ets <- function(pred,ref,thr) {
   return( (hits-hits_random)/den )
 }
 
-    ets_b <- ets( vxb, y_env$yo$value, y_env$rain)
-    ets_a <- ets( vxa, y_env$yo$value, y_env$rain)
-    cat(paste("\n","rmse before after Delta% =",round(aux,5),round(env$costf[loop],5),
-                                             round(100*(aux-env$costf[loop])/aux,1),"\n"))
-    cat(paste("\n","ets before after Delta% =",round(ets_b,3),round(ets_a,3),
-                                             round(100*(ets_b-ets_a)/ets_b,1),"\n"))
-print(median( y_env$yo$value[y_env$yo$value>y_env$rain]))
-    ets_thr <- y_env$rain
-    if (any(y_env$yo$value>y_env$rain)) ets_thr <- median(y_env$yo$value[y_env$yo$value>y_env$rain])
-    ets_b <- ets( vxb, y_env$yo$value, ets_thr)
-    ets_a <- ets( vxa, y_env$yo$value, ets_thr)
-    cat(paste("\n","ets before after Delta% =",round(ets_b,3),round(ets_a,3),
-                                             round(100*(ets_b-ets_a)/ets_b,1),"\n"))
-    # less strict condition for convergence
-    t1 <- Sys.time()
-#    cat( paste( "time=", round(t1-t0,1), attr(t1-t0,"unit"), "costf - Delta En2 index =", round(env$costf[loop],5), "\n"))
-    # break out of the main loop early if variations  
-#    if ( env$costf[loop] < opttol) break
-if (loop==20) {
-save(file="tmp.rdata",coeff,env,mrobs,mrnoidi,mridi,mridiwet,mrididry,mrxa,n,nn,rdyad,Xb_dyad,Ua,Ub,vo_Vb,y_env,mrxb,mrxbadj,Xb_dyad_original,rfobs,rfnoidi,rfobsidi,rfobsidiwet,rfobsididry)
-#i<-1; s<-rdyad; s[]<-env$Xa_dyad[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-#i<-1; s<-rdyad; s[]<-Xb_dyad_original[,i]; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-#points(y_env$yo$x,y_env$yo$y,cex=0.25,pch=21,bg="beige",col="beige")
-# i<-1; s[]<-Xb_dyad_original[,i]; yb<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,yb)
-# i<-1; s[]<-env$Xa_dyad[,i]; ya<-extract(s,cbind(y_env$yo$x,y_env$yo$y)); plot(y_env$yo$value,ya)
-#s<-env$rfobs; image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-# 
-q()
-}
-  } # end main loop
-q()
-
-#save(file="tmp.rdata",env,Xb_dyad,sqrt_m_dim,rfxb,c_xy)
-  cat( paste( "Add the background data where no observations are available\n"))
-  for (e in 1:env$k_dim) {
-    cat(".")
-    rfxb[] <- Xb_dyad[,e]
-    bclump <- clump(rfxb)
-    oclump <- bclump[c_xy]
-    fro <- as.data.frame( table( oclump), stringsAsFactors=F) 
-    if ( length( ixo <- which( !is.na(fro[,1]) & fro[,2] > 100)) > 0) {
-      oclump_ok <- as.integer(fro[ixo,1])
-    } else {
-      oclump_ok <- integer(0)
-    }
-    Xb_dyad[which(getValues(bclump) %in% oclump_ok),e] <- 0
-    rfxb[] <- Xb_dyad[,e]
-    env$Xa_dyad[,e] <- env$Xa_dyad[,e] + getValues(t(rfxb))
-  }
-  cat( paste( "\n", "End of analysis loop time=", round(t1-t0,1), attr(t1-t0,"unit"), "\n"))
-}

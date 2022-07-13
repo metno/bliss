@@ -273,35 +273,60 @@ if (argv$mode=="rasterize") {
     load(ffff)
   } else {
     t00<-Sys.time()
-    res <- wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
+    res <- wise_align( argv, fg_env, env, plot=F, dir_plot=dir_plot)
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
   }
 
-  ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
+  ffff<- file.path(dir_plot,paste0("tmp_wise_preproc_",argv$date_out,".rdata"))
   load_if_present<-F
   plot<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
     t00<-Sys.time()
-    res <- wise_analysis_loop( argv, y_env, fg_env, env, 
-                               supob_nobs=argv$wise_supob_nobs,
-                               supob_radius=argv$wise_supob_radius,
-                               supob_q=argv$wise_supob_q,
-                               max_it=argv$wise_opt_maxit,
-                               opttol=argv$wise_opt_opttol,
-                               En2_adj_fun=argv$wise_En2_adj_fun,
-                               En2_adj_min=argv$wise_En2_adj_min,
-                               rescale_min_obs=argv$wise_rescale_min_obs,
-                               rescale_min_cells=rgv$wise_rescale_min_cells,
-                               plot=plot, dir_plot=dir_plot)
+    res <- wise_preprocessing_loop( argv, y_env, fg_env, env, 
+#                                    supob_nobs=argv$wise_supob_nobs,
+#                                    supob_radius=argv$wise_supob_radius,
+#                                    supob_q=argv$wise_supob_q,
+                                    max_it=argv$wise_opt_maxit,
+#                                    opttol=argv$wise_opt_opttol,
+#                                    En2_adj_fun=argv$wise_En2_adj_fun,
+#                                    En2_adj_min=argv$wise_En2_adj_min,
+#                                    rescale_min_obs=argv$wise_rescale_min_obs,
+#                                    rescale_min_cells=rgv$wise_rescale_min_cells,
+                                    plot=plot, dir_plot=dir_plot)
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
     cat( paste( "written file", ffff,"\n"))
   }
 
+#  ffff<- file.path(dir_plot,paste0("tmp_wise_agg_",argv$date_out,".rdata"))
+#  load_if_present<-F
+#  plot<-F
+#  if (file.exists(ffff) & load_if_present) {
+#    load(ffff)
+#  } else {
+#    t00<-Sys.time()
+#    res <- wise_aggregation( argv, y_env, env,
+#                             plot=plot, dir_plot=dir_plot)
+#    print(Sys.time()-t00)
+#    save(file=ffff, argv, fg_env, u_env, env, y_env)
+#  }
 q()
+
+  ffff<- file.path(dir_plot,paste0("tmp_wise_oi_",argv$date_out,".rdata"))
+  load_if_present<-F
+  plot<-F
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    t00<-Sys.time()
+    envtmp <- new.env( parent = emptyenv())
+    res <- wise_oi_driver( argv, y_env, fg_env, env)
+    print(Sys.time()-t00)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+  }
   
 
   suppressPackageStartupMessages( library( "waveslim"))

@@ -4,7 +4,7 @@ wise_oi_driver <- function( argv, y_env, fg_env, env) {
   cat( "-- wise oi --\n")
 
   # number of observations
-  env$p_dim <- length(y_env$yo$x)
+  env$p_dim <- y_env$yo$n
 
   # initialization
   Xa <- array( data=NA, dim=c( env$ngrid, env$a_dim))
