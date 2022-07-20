@@ -1287,6 +1287,11 @@ p <- add_argument(p, "--wise_rescale_min_cells",
                   type="integer",
                   default=100)
 
+p <- add_argument(p, "--wise_agg_qprob",
+                  help="define the quantile to use during the aggregation (0-1)",
+                  type="numeric",
+                  default=0.75)
+
 #------------------------------------------------------------------------------
 
 
