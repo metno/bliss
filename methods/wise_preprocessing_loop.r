@@ -38,49 +38,72 @@ wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
 
   # ---~--------------
   # observations on the dyadic grid
-  # rfobs covers obs-dense areas only
-  rfobs <- resample( env$mergeobs$r, rdyad, method="bilinear", na.rm=T)
-  rfobs[rfobs<y_env$rain] <- 0
+
+argv$wise_preproc_ididense <- 0.8
+argv$wise_preproc_idisparse <- 0.1
+
+  r <-  env$rmaster
+  
+  # rfobs covers the wider region where we have observations
+  r[] <- env$mergeobs$value
+  rfobs <- resample( r, rdyad, method="bilinear", na.rm=T)
+  rfobs[is.na(rfobs)] <- 0
+  if (!is.na(y_env$rain)) rfobs[rfobs<y_env$rain] <- 0
 
   # rfidi covers wider areas than rfobs (=1 obs-dense; =0 obs-void)
-  r <- env$rmaster
   r[] <- env$mergeobs$idi
   rfidi <- resample( r, rdyad, method="bilinear", na.rm=T)
   rfidi[rfidi<0] <- 0
   rfidi[rfidi>1] <- 1
-
-  # rfobsall covers wider areas than rfobs
-  r[] <- env$mergeobs$rall
-  rfobsall <- resample( r, rdyad, method="bilinear", na.rm=T)
-  rfobsall[rfobsall<y_env$rain] <- 0
+  rfidi[is.na(rfidi)] <- 0
 
   # helper
-  c_xy <- which( !is.na( getValues(rfobs)))
-  # save for future use
-  env$rfobs <- rfobs
-  env$rfidi <- rfidi
-  env$rfobsall <- rfobsall
+  ixb <- which( getValues(rfidi) >= argv$wise_preproc_idisparse)
+  ixa <- which( getValues(rfidi) >= argv$wise_preproc_ididense)
+  rfobsb <- rdyad
+  rfobsb[ixb] <- rfobs[ixb]
 
-  # paddle with 0s
-  rfobs[is.na(rfobs)] <- 0
-  rfidi[is.na(rfidi)] <- 0
-  rfobsall[is.na(rfobsall)] <- 0
-
-  vidi <- getValues(rfidi)
-  vobsall <- getValues(rfobsall)
-
+  # idi region a
+  rfidia <- rdyad
+  rfidia[ixa] <- 1
+  # idi region b
+  rfidib <- rdyad
+  rfidib[ixb] <- 1
   # =1 obs-void; =0 obs_dense
-  rfnoidi <- 1 - rfidi
+  rfidic <- 1 - rfidib
 
-  # wet gridpoints in observed regions
-  rfidiwet <- rfidi
-  rfidiwet[] <- 0
-  rfidiwet[which(vobsall >= y_env$rain & vidi >= 0.1)] <- 1
-
-  # dry gridpoints in observed regions
-  rfididry <- rfobs
-  rfididry[] <- 0
-  rfididry[which(vobsall < y_env$rain & vidi >= 0.1)] <- 1
+#  # rfobsall covers wider areas than rfobs
+#  rfobsb[rfidi<argv$wise_preproc_idisparse] <- 0
+#  rfobsall <- resample( r, rdyad, method="bilinear", na.rm=T)
+#  rfobsall[rfobsall<y_env$rain] <- 0
+#
+#  # helper
+#  c_xy <- which( !is.na( getValues(rfobs)))
+#  # save for future use
+#  env$rfobs <- rfobs
+#  env$rfidi <- rfidi
+#  env$rfobsall <- rfobsall
+#
+#  # paddle with 0s
+#  rfobs[is.na(rfobs)] <- 0
+#  rfidi[is.na(rfidi)] <- 0
+#  rfobsall[is.na(rfobsall)] <- 0
+#
+#  vidi <- getValues(rfidi)
+#  vobsall <- getValues(rfobsall)
+#
+#  # =1 obs-void; =0 obs_dense
+#  rfnoidi <- 1 - rfidi
+#
+#  # wet gridpoints in observed regions
+#  rfidiwet <- rfidi
+#  rfidiwet[] <- 0
+#  rfidiwet[which(vobsall >= y_env$rain & vidi >= 0.1)] <- 1
+#
+#  # dry gridpoints in observed regions
+#  rfididry <- rfobs
+#  rfididry[] <- 0
+#  rfididry[which(vobsall < y_env$rain & vidi >= 0.1)] <- 1
   
   # ---~--------------
   # define constants
@@ -93,7 +116,8 @@ wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
   env$p_dim <- length(y_env$yo$x)
   cat( paste( " number of grid points, m dim >", env$m_dim, "\n"))
   cat( paste( "number of observations, p dim >", env$p_dim, "\n"))
-  cat( paste( "number of observations, superob >", length(c_xy), "\n"))
+  cat( paste( "number of observations (sparse) >", length(ixb), "\n"))
+  cat( paste( "number of observations (dense) >",  length(ixa), "\n"))
 
   # ---~--------------
   # -- Observations --
@@ -102,8 +126,12 @@ wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
  
   # multires representations
   mrobs <- list()
+  mrobsb <- list()
   mrnoidi <- list()
   mridi <- list()
+  mridia <- list()
+  mridib <- list()
+  mridic <- list()
   mridiwet <- list()
   mrididry <- list()
   mrnorain<- list()
@@ -112,6 +140,9 @@ wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
   mrwbkg<- list()
   mrwwet<- list()
   mrwdry<- list()
+  mrwa<- list()
+  mrwb<- list()
+  mrwc<- list()
   # aux
   rf1<-rdyad
   rf1[]<-1
@@ -122,71 +153,100 @@ wise_preprocessing_loop <- function( argv, y_env, fg_env, env,
   nn <- 0
   for (l in 1:n) {
     aux1 <- dwt.2d( as.matrix(rf1), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]
-    mridi[[l]] <- dwt.2d( as.matrix(rfidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mridi[[l]])[1] > 2)
-      mridi[[l]] <- gauss2dsmooth( x=mridi[[l]], lambda=lambda, nx=dim(mridi[[l]])[1], ny=dim(mridi[[l]])[2])
-    if ( any( mridi[[l]] > 1)) mridi[[l]][ mridi[[l]]>1] <- 1
-    if ( any( mridi[[l]] < 0)) mridi[[l]][ mridi[[l]]<0] <- 0
+    mridib[[l]] <- dwt.2d( as.matrix(rfidib), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+    if ( dim(mridib[[l]])[1] > 2)
+      mridib[[l]] <- gauss2dsmooth( x=mridib[[l]], lambda=lambda, nx=dim(mridib[[l]])[1], ny=dim(mridib[[l]])[2])
+    if ( any( mridib[[l]] > 1)) mridib[[l]][mridib[[l]]>1] <- 1
+    if ( any( mridib[[l]] < 0)) mridib[[l]][mridib[[l]]<0] <- 0
 
-    mrnoidi[[l]] <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mrnoidi[[l]])[1] > 2)
-      mrnoidi[[l]] <- gauss2dsmooth( x=mrnoidi[[l]], lambda=lambda, nx=dim(mrnoidi[[l]])[1], ny=dim(mrnoidi[[l]])[2])
-    if ( any( mrnoidi[[l]] > 1)) mrnoidi[[l]][ mrnoidi[[l]]>1] <- 1
-    if ( any( mrnoidi[[l]] < 0)) mrnoidi[[l]][ mrnoidi[[l]]<0] <- 0
+    mridic[[l]] <- dwt.2d( as.matrix(rfidic), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+    if ( dim(mridic[[l]])[1] > 2)
+      mridic[[l]] <- gauss2dsmooth( x=mridic[[l]], lambda=lambda, nx=dim(mridic[[l]])[1], ny=dim(mridic[[l]])[2])
+    if ( any( mridic[[l]] > 1)) mridic[[l]][ mridic[[l]]>1] <- 1
+    if ( any( mridic[[l]] < 0)) mridic[[l]][ mridic[[l]]<0] <- 0
 
-    if ( any( mridi[[l]] > mrnoidi[[l]])) nn <- l
+    if ( any( mridib[[l]] > mridic[[l]])) nn <- l
   }
 
 #  lambda <- c( seq( 2**n/2, 1, length=nn), 1)
 #  lambda <- c( seq( 2**nn/2, 1, length=nn), 1)
-  lambda <- c( nn/(nn-1) * (2**nn/4-1) * 1/1:nn + (nn-2**nn/4)/(nn-1), 1)
+  
+argv$wise_preproc_cellsmooth <- 10
+  lambda <- c( (nn+1)/((nn+1)-1) * (argv$wise_preproc_cellsmooth-1) * 1/1:(nn+1) + ((nn+1)-argv$wise_preproc_cellsmooth)/((nn+1)-1), 1)
+  print(lambda)
+
   for (l in 1:(nn+1)) {
     aux1 <- dwt.2d( as.matrix(rf1), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]
-    mrobs[[l]] <- dwt.2d( as.matrix(rfobs), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]
-#    if ( any( mrobs[[l]] < mrnorain[[l]])) mrobs[[l]][mrobs[[l]]<mrnorain[[l]]] <- 0
-    if ( any( mrobs[[l]] < 0)) mrobs[[l]][mrobs[[l]]<0] <- 0
+    mrobsb[[l]] <- dwt.2d( as.matrix(rfobsb), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]]
+##    if ( any( mrobsb[[l]] < mrnorain[[l]])) mrobsb[[l]][mrobsb[[l]]<mrnorain[[l]]] <- 0
+    if ( any( mrobsb[[l]] < 0)) mrobsb[[l]][mrobsb[[l]]<0] <- 0
 
-    mridiwet[[l]] <- dwt.2d( as.matrix(rfidiwet), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mridiwet[[l]])[1] > 2)
-      mridiwet[[l]] <- gauss2dsmooth(x=mridiwet[[l]],lambda=lambda[l],nx=dim(mridiwet[[l]])[1],ny=dim(mridiwet[[l]])[2])
-    if ( any( mridiwet[[l]] > 1)) mridiwet[[l]][mridiwet[[l]]>1] <- 1
-    if ( any( mridiwet[[l]] < 0)) mridiwet[[l]][mridiwet[[l]]<0] <- 0
-    mrididry[[l]] <- dwt.2d( as.matrix(rfididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mrididry[[l]])[1] > 2)
-      mrididry[[l]] <- gauss2dsmooth(x=mrididry[[l]],lambda=lambda[l],nx=dim(mrididry[[l]])[1],ny=dim(mrididry[[l]])[2])
-    if ( any( mrididry[[l]] > 1)) mrididry[[l]][mrididry[[l]]>1] <- 1
-    if ( any( mrididry[[l]] < 0)) mrididry[[l]][mrididry[[l]]<0] <- 0
-#    res <- set_weights(cbind(as.vector(mridiwet[[l]]),as.vector(mrididry[[l]])))
-#    mrwwet[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
-#    mrwdry[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
-    res <- set_weights(cbind(as.vector(mrididry[[l]]),as.vector(mridiwet[[l]])))
-    mrwwet[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
-    mrwdry[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
-    if ( any( mrwdry[[l]] > mrwwet[[l]])) mrobs[[l]][mrwdry[[l]] > mrwwet[[l]]] <- 0
+#    mridiwet[[l]] <- dwt.2d( as.matrix(rfidiwet), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+#    if ( dim(mridiwet[[l]])[1] > 2)
+#      mridiwet[[l]] <- gauss2dsmooth(x=mridiwet[[l]],lambda=lambda[l],nx=dim(mridiwet[[l]])[1],ny=dim(mridiwet[[l]])[2])
+#    if ( any( mridiwet[[l]] > 1)) mridiwet[[l]][mridiwet[[l]]>1] <- 1
+#    if ( any( mridiwet[[l]] < 0)) mridiwet[[l]][mridiwet[[l]]<0] <- 0
+#    mrididry[[l]] <- dwt.2d( as.matrix(rfididry), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+#    if ( dim(mrididry[[l]])[1] > 2)
+#      mrididry[[l]] <- gauss2dsmooth(x=mrididry[[l]],lambda=lambda[l],nx=dim(mrididry[[l]])[1],ny=dim(mrididry[[l]])[2])
+#    if ( any( mrididry[[l]] > 1)) mrididry[[l]][mrididry[[l]]>1] <- 1
+#    if ( any( mrididry[[l]] < 0)) mrididry[[l]][mrididry[[l]]<0] <- 0
+##    res <- set_weights(cbind(as.vector(mridiwet[[l]]),as.vector(mrididry[[l]])))
+##    mrwwet[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+##    mrwdry[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+#    res <- set_weights(cbind(as.vector(mrididry[[l]]),as.vector(mridiwet[[l]])))
+#    mrwwet[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+#    mrwdry[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+#    if ( any( mrwdry[[l]] > mrwwet[[l]])) mrobs[[l]][mrwdry[[l]] > mrwwet[[l]]] <- 0
 
-    mridi[[l]] <- dwt.2d( as.matrix(rfidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mridi[[l]])[1] > 2)
-      mridi[[l]] <- gauss2dsmooth( x=mridi[[l]], lambda=lambda[l], nx=dim(mridi[[l]])[1], ny=dim(mridi[[l]])[2])
-    if ( any( mridi[[l]] > 1)) mridi[[l]][mridi[[l]]>1] <- 1
-    if ( any( mridi[[l]] < 0)) mridi[[l]][mridi[[l]]<0] <- 0
+    mridia[[l]] <- dwt.2d( as.matrix(rfidia), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+    if ( dim(mridia[[l]])[1] > 2)
+      mridia[[l]] <- gauss2dsmooth( x=mridia[[l]], lambda=lambda[l+1], nx=dim(mridia[[l]])[1], ny=dim(mridia[[l]])[2])
+    if ( any( mridia[[l]] > 1)) mridia[[l]][mridia[[l]]>1] <- 1
+    if ( any( mridia[[l]] < 0)) mridia[[l]][mridia[[l]]<0] <- 0
 
-    mrnoidi[[l]] <- dwt.2d( as.matrix(rfnoidi), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
-    if ( dim(mrnoidi[[l]])[1] > 2)
-      mrnoidi[[l]] <- gauss2dsmooth( x=mrnoidi[[l]], lambda=lambda[l], nx=dim(mrnoidi[[l]])[1], ny=dim(mrnoidi[[l]])[2])
-    if ( any( mrnoidi[[l]] > 1)) mrnoidi[[l]][ mrnoidi[[l]]>1] <- 1
-    if ( any( mrnoidi[[l]] < 0)) mrnoidi[[l]][ mrnoidi[[l]]<0] <- 0
+    mridib[[l]] <- dwt.2d( as.matrix(rfidib), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+    if ( dim(mridib[[l]])[1] > 2)
+      mridib[[l]] <- gauss2dsmooth( x=mridib[[l]], lambda=lambda[l+1], nx=dim(mridib[[l]])[1], ny=dim(mridib[[l]])[2])
+    if ( any( mridib[[l]] > 1)) mridib[[l]][mridib[[l]]>1] <- 1
+    if ( any( mridib[[l]] < 0)) mridib[[l]][mridib[[l]]<0] <- 0
 
-    res <- set_weights(cbind(as.vector(mridi[[l]]),as.vector(mrnoidi[[l]])))
-    mrwobs[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
-    mrwbkg[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+    mridic[[l]] <- dwt.2d( as.matrix(rfidic), wf=env$wf, J=l, boundary=env$boundary)[[3*l+1]] / aux1
+    if ( dim(mridic[[l]])[1] > 2)
+      mridic[[l]] <- gauss2dsmooth( x=mridic[[l]], lambda=lambda[l+1], nx=dim(mridic[[l]])[1], ny=dim(mridic[[l]])[2])
+    if ( any( mridic[[l]] > 1)) mridic[[l]][ mridic[[l]]>1] <- 1
+    if ( any( mridic[[l]] < 0)) mridic[[l]][ mridic[[l]]<0] <- 0
+
+    res <- set_weights( cbind( as.vector(mridic[[l]]), as.vector(mridia[[l]]), as.vector(mridib[[l]])))
+#    res <- set_weights( cbind( as.vector(mridic[[l]]), as.vector(mridia[[l]]), as.vector(mridib[[l]])))
+#    mrwobs[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+#    mrwbkg[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+    mrwa[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+    mrwb[[l]] <- array(data=as.matrix(res[,3]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
+    mrwc[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
 #    res <- set_weights(cbind(as.vector(mrnoidi[[l]]),as.vector(mridi[[l]])))
 #    mrwobs[[l]] <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
 #    mrwbkg[[l]] <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim/2**l,sqrt_m_dim/2**l))
   }
-  
-save(file="tmp.rdata",lambda,mridi,mrnoidi,mridiwet,mrididry,mrobs,mrnorain,rdyad,mrw,mrwobs,mrwbkg,mrwwet,mrwdry)
+
+  mridia0 <- gauss2dsmooth( x=as.matrix(rfidia), lambda=lambda[1], nx=sqrt_m_dim, ny=sqrt_m_dim)
+  if ( any( mridia0 > 1)) mridia0[mridia0>1] <- 1
+  if ( any( mridia0 < 0)) mridia0[mridia0<0] <- 0
+  mridib0 <- gauss2dsmooth( x=as.matrix(rfidib), lambda=lambda[1], nx=sqrt_m_dim, ny=sqrt_m_dim)
+  if ( any( mridib0 > 1)) mridib0[mridib0>1] <- 1
+  if ( any( mridib0 < 0)) mridib0[mridib0<0] <- 0
+  mridic0 <- gauss2dsmooth( x=as.matrix(rfidic), lambda=lambda[1], nx=sqrt_m_dim, ny=sqrt_m_dim)
+  if ( any( mridic0 > 1)) mridic0[mridic0>1] <- 1
+  if ( any( mridic0 < 0)) mridic0[mridic0<0] <- 0
+  res <- set_weights( cbind( as.vector(mridic0), as.vector(mridia0), as.vector(mridib0)))
+  mrwa0 <- array(data=as.matrix(res[,2]),dim=c(sqrt_m_dim,sqrt_m_dim))
+  mrwb0 <- array(data=as.matrix(res[,3]),dim=c(sqrt_m_dim,sqrt_m_dim))
+  mrwc0 <- array(data=as.matrix(res[,1]),dim=c(sqrt_m_dim,sqrt_m_dim))
+
+ 
+save(file="tmp.rdata",lambda,mridi,mrnoidi,mridiwet,mrididry,mrobs,mrnorain,rdyad,mrw,mrwobs,mrwbkg,mrwwet,mrwdry,env,mrwa,mrwb,mrwc,mridia,mridib,mridic,mrobsb,mridia0,mridib0,mridic0,mrwa0,mrwb0,mrwc0)
 print(nn)
-q()
+#q()
 #i<-1;r<-aggregate(rdyad,fact=2**i);r[]<-mrobs[[i]];image(r,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
 #i<-1;r<-aggregate(rdyad,fact=2**i);r[]<-mrwobs[[i]];contour(r,levels=c(0,0.4,0.8),add=T)
 
@@ -240,13 +300,9 @@ q()
       }
 
       # background at observation points
-      rfyb <- rdyad; rfyb[c_xy] <- rfxb[c_xy]
+      rfyb <- rdyad; rfyb[ixa] <- rfxb[ixa]
       # innovation 
-      rfin <- rdyad; rfin[c_xy] <- rfobs[c_xy] - rfxb[c_xy]
-print(rfxb)
-print(rfyb)
-print(rfobs)
-print(rfin)
+      rfin <- rdyad; rfin[ixa] <- rfobs[ixa] - rfxb[ixa]
       # transformation operator
       dwtxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(nn+1), boundary=env$boundary)
       dwtyb <- dwt.2d( as.matrix(rfyb), wf=env$wf, J=(nn+1), boundary=env$boundary)
@@ -256,9 +312,6 @@ print(rfin)
       jj <- 0; ii <- 0
       for (l in 1:(nn+1)) {
         ij <- ijFromLev( n, l, F)
-print("---------")
-print(l)
-print(ij)
         Ub[ij[1,1]:ij[3,2],e] <- c( dwtxb[[3*l-2]], dwtxb[[3*l-1]], dwtxb[[3*l]])
         Vb[ij[1,1]:ij[3,2],e] <- c( dwtyb[[3*l-2]], dwtyb[[3*l-1]], dwtyb[[3*l]])
         vo_Vb[ij[1,1]:ij[3,2],e] <- c( dwtin[[3*l-2]], dwtin[[3*l-1]], dwtin[[3*l]])
@@ -288,7 +341,7 @@ print(ij)
 
     #--------------------------------------------------------    
     # Rescale the different components
-    
+env$mrxa<-list()    
     Ua  <- array( data=NA, dim=c(     env$nn_dim, env$k_dim))
     for (e in 1:env$k_dim) {
       cat(".")
@@ -310,77 +363,24 @@ print(ij)
         if (l > 1) {
           mrxbadj <- dwt.2d( as.matrix(r), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*(l-1)+1]]
           mrxb <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)[[3*(l-1)+1]]
-          mrxbadj <- mrwbkg[[l-1]] * mrxb + mrwobs[[l-1]] * mrxbadj
-#          if (!is.na(y_env$rain)) { mrxb[mrxb<y_env$rain] <- 0; mrxbadj[mrxbadj<y_env$rain] <- 0 }
-          mrxa <- mrwbkg[[l-1]] * mrxbadj + mrwobs[[l-1]] * mrobs
+##          mrxbadj <- mrwbkg[[l-1]] * mrxb + mrwobs[[l-1]] * mrxbadj
+###          if (!is.na(y_env$rain)) { mrxb[mrxb<y_env$rain] <- 0; mrxbadj[mrxbadj<y_env$rain] <- 0 }
+##          mrxa <- mrwbkg[[l-1]] * mrxbadj + mrwobs[[l-1]] * mrobs
+          mrxa <- mrwa[[l-1]] * mrobsb[[l-1]] +  mrwb[[l-1]] * mrxbadj + mrwc[[l-1]] * mrxb
+env$mrxa[[l-1]]<-mrxa
         } else {
-          xbadj <- getValues(r)
-          xbadj <- getValues(rfidiwet)/(getValues(rfidiwet)+getValues(rfididry)) * rfobs +  getValues(rfididry)/(getValues(rfidiwet)+getValues(rfididry)) * xbadj
-          xbadj[getValues(rfididry)>getValues(rfidiwet)] <- 0
+#          xbadj <- getValues(r)
+##          xbadj <- getValues(rfidiwet)/(getValues(rfidiwet)+getValues(rfididry)) * rfobs +  getValues(rfididry)/(getValues(rfidiwet)+getValues(rfididry)) * xbadj
+##          xbadj[getValues(rfididry)>getValues(rfidiwet)] <- 0
 ###          xbadj <- getValues(rfidiwet) * xbadj
-          if (!is.na(y_env$rain)) { xbadj[xbadj<y_env$rain] <- 0 }
-          Xbpp_dyad[,e] <- getValues(rfnoidi)/(getValues(rfnoidi)+getValues(rfidi)) * Xb_dyad[,e] + getValues(rfidi)/(getValues(rfnoidi)+getValues(rfidi)) * xbadj
+##          if (!is.na(y_env$rain)) { xbadj[xbadj<y_env$rain] <- 0 }
+##          Xbpp_dyad[,e] <- getValues(rfnoidi)/(getValues(rfnoidi)+getValues(rfidi)) * Xb_dyad[,e] + getValues(rfidi)/(getValues(rfnoidi)+getValues(rfidi)) * xbadj
+          Xbpp_dyad[,e] <-  mrwa0 * getValues(rfobsb) + mrwb0 * getValues(r) + mrwc0 * Xb_dyad[,e]
           if (!is.na(y_env$rain)) Xbpp_dyad[,e][Xbpp_dyad[,e]<y_env$rain] <- 0 
         }
-
-###        #if (e==1) {
-###        if (loop==3) {
-###          if (l > 1) {
-###            dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=(l-1), boundary=env$boundary)
-###            for (i in 1:(length(dwt)-1)) dwt[[i]][] <- 0
-###            dwt[[length(dwt)]][] <- mrxa
-###          #  s<-aggregate(rdyad,fact=2**(l-1))
-###            s<-rdyad
-###            sb<-rdyad
-###            sbadj<-rdyad
-###            sobs<-rdyad
-###            s[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-###            dwt[[length(dwt)]][] <- mrxbadj
-###            sbadj[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-###            dwt[[length(dwt)]][] <- mrobs[[l-1]]
-###            sobs[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-###            dwt[[length(dwt)]][] <- mrxb
-###            sb[]<-array(data=as.matrix(idwt.2d( dwt)),dim=c(sqrt_m_dim,sqrt_m_dim))
-###          } else {
-###            s<-rdyad
-###            sb<-rdyad
-###            sbadj<-rdyad
-###            s[]<-Xbpp_dyad[,e]
-###            sbadj[]<-xbadj
-###            sb[]<-Xb_dyad[,e]
-###            sobs<-env$rfobs
-###          }
-###          ffout <- paste0( "pngs/fig_",
-###                           formatC(loop,width=2,flag="0"),"_",
-###                           formatC(e,width=2,flag="0"),"_",
-###                           formatC(l,width=2,flag="0"), ".png")
-###          ffout1<-paste0(ffout,".1")
-###          ffout2<-paste0(ffout,".2")
-###          ffout3<-paste0(ffout,".3")
-###          ffout4<-paste0(ffout,".4")
-###          png(file=ffout1,width=1200,height=1200)
-###          image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-###          image(s,breaks=c(-1000,0.1,1000),col=c("white","black"),add=T)
-###          image(sobs,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))),add=T)
-###          aux<-dev.off()
-###          png(file=ffout2,width=1200,height=1200)
-###          image(sbadj,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-###          aux<-dev.off()
-###          png(file=ffout3,width=1200,height=1200)
-###          image(s,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-###          aux<-dev.off()
-###          png(file=ffout4,width=1200,height=1200)
-###          image(sb,breaks=c(0,0.1,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(8))))
-###          aux<-dev.off()
-###          system(paste("convert +append",ffout1,ffout3,"top.png"))
-###          system(paste("convert +append",ffout4,ffout2,"bot.png"))
-###          system(paste("convert -append top.png bot.png",ffout))
-###          system(paste("rm top.png bot.png",ffout1,ffout2,ffout3,ffout4))
-###          print(paste("written file",ffout))
-###        }
-
       }  # end loop over scales
     }  # end loop over ensembles
+save(file="tmp1.rdata",env,Xb_dyad,Xbpp_dyad,y_env,Xb_dyad_original,rfobsb,r)
 
     #
     #--------------------------------------------------------    

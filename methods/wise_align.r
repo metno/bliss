@@ -21,7 +21,7 @@ wise_align <- function( argv, fg_env, env, plot=F, dir_plot=NA) {
 #  uo <- getValues( u_env$uo[[1]]$r_main)
 #  uo[uo<u_env$rain] <- 0
 #  uo[uo>u_env$rain] <- 1
-  uo <- env$mergeobs$rall
+  uo <- env$mergeobs$value
   uo[uo<y_env$rain] <- 0
   uo[uo>=y_env$rain] <- 1
   score <- numeric(0)
@@ -63,8 +63,8 @@ wise_align <- function( argv, fg_env, env, plot=F, dir_plot=NA) {
 
 #        ra <- u_env$uo[[1]]$r_main
 #        rb <- u_env$uo[[1]]$r_main
-        ra <- env$mergeobs$r
-        rb <- env$mergeobs$r
+        ra <- env$rmaster
+        rb <- env$rmaster
         png(file=f1,width=800,height=800)
         ra[]<-uo
         image(ra,breaks=c(-1,0.5,1.5),col=c("gray","cornflowerblue"))
@@ -119,8 +119,8 @@ wise_align <- function( argv, fg_env, env, plot=F, dir_plot=NA) {
       r <- subset( fg_env$fg[[ixf[i]]]$r_main, subset=ixe[i])
       fout<-file.path(dir_plot,paste0("wise_align_sel_e",formatC(j,width=2,flag="0"),".png"))
 #      ra <- u_env$uo[[1]]$r_main
-      ra <- env$mergeobs$r
-      ra[] <- env$mergeobs$rall
+      ra <- env$rmaster
+      ra[] <- env$mergeobs$value
       png(file=f1,width=800,height=800)
       image(ra,breaks=c(0,1,2,4,8,16,32,64,128),col=c("gray",rev(rainbow(7))))
       plot(b,add=T)

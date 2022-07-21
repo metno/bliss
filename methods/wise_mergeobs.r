@@ -60,34 +60,35 @@ wise_mergeobs <- function( argv, y_env, u_env, env) {
     res[,1][res[,1]<argv$wise_mergeobs_range[1]] <- argv$wise_mergeobs_range[1]  
   if (!is.na(argv$wise_mergeobs_range[2])) 
     res[,1][res[,1]>argv$wise_mergeobs_range[2]] <- argv$wise_mergeobs_range[2]  
-  ix <- which( res[,2] >= argv$wise_mergeobs_idimin & !is.na(res[,2])) 
+  # output
   env$mergeobs <- list()
-  env$mergeobs$r <- env$rmaster
-  env$mergeobs$r[] <- NA
-  env$mergeobs$r[ix] <- res[ix,1]
-  env$mergeobs$rall <- res[,1]
-  env$mergeobs$idi <- res[,2]
-  env$mergeobs$o_errvar <- res[,3]
-  env$mergeobs$a_errvar <- res[,4]
+  # merged obs values (cover the same region as the "background")
+  env$mergeobs$value <- res[,1]
+  # integral data influence (=1 dense obs region; =0 obs void region; set to NAs where number of nearby obs is less than pmax)
+  env$mergeobs$idi    <- res[,2]
+  # estimated "observation" error variance at gridpoints (covers the same region as idi)
+  env$mergeobs$obs_errvar <- res[,3]
+  # estimated merged observation error variance at gridpoints (covers the same region as idi)
+  env$mergeobs$mergedobs_errvar <- res[,4]
   
   # extract point values (crossvalidation)
   if (env$cv_mode | env$cv_mode_random) { 
-    r[] <- getValues(env$mergeobs$r)
-    y_env$yov$mergeobs_a <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
+    r[] <- env$mergeobs$value
+    y_env$yov$mergeobs_value <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
     r[] <- env$mergeobs$idi 
     y_env$yov$mergeobs_idi <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
   }
     
   # extract point values (analysis)
-  r[] <- getValues(env$mergeobs$r)
-  y_env$yo$mergeobs_a <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+  r[] <- env$mergeobs$value
+  y_env$yo$mergeobs_value <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
   r[] <- env$mergeobs$idi 
   y_env$yo$mergeobs_idi <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
 
   t1a <- Sys.time()
   cat( paste( "\n", "mergeobs .", "dim =", m_dim, ".", "range =", 
-              round( min( getValues( env$mergeobs$r), na.rm=T), 2), 
-              round( max( getValues( env$mergeobs$r), na.rm=T), 2), "\n"))
+              round( min( env$mergeobs$value, na.rm=T), 2), 
+              round( max( env$mergeobs$value, na.rm=T), 2), "\n"))
     cat( paste( "total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
     cat( "+---------------------------------+\n")
  
