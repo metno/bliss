@@ -245,6 +245,30 @@ if (argv$mode=="rasterize") {
 } else if (argv$mode=="ensigap") {
   source( file.path( bliss_mod_path, "main_ensigap.r"))
 #..............................................................................
+# ===>  Change of Resolution Ensemble Kalman smoother  <===
+} else if (argv$mode=="corenks") {
+  
+  suppressPackageStartupMessages( library( "waveslim"))
+  suppressPackageStartupMessages( library( "RANN"))
+  suppressPackageStartupMessages( library( "smoothie"))
+  
+  ffff<- file.path(dir_plot,paste0("tmp_corenks_mergeobs_",argv$date_out,".rdata"))
+  load_if_present<-T
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    t00<-Sys.time()
+    envtmp <- new.env( parent = emptyenv())
+    res <- corenks_mergeobs( argv, y_env, u_env, env)
+    rm(envtmp)
+    print(Sys.time()-t00)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+    cat( paste( "written file", ffff,"\n"))
+#  env$mergeobs$: r rall idi o_errvar a_errvar
+#  y_env$yov$: mergeobs_a mergeobs_idi 
+  }
+
+#..............................................................................
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {
   

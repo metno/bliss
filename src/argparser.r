@@ -1293,6 +1293,32 @@ p <- add_argument(p, "--wise_agg_qprob",
                   default=0.75)
 
 #------------------------------------------------------------------------------
+# Change-of-Resolution Ensemble Kalman Smoother
+
+# corenks - mergeobs
+p <- add_argument(p, "--corenks_mergeobs_eps2",
+                  help="eps2 for corenks mergeobs",
+                  type="numeric",
+                  default=0.5)
+p <- add_argument(p, "--corenks_mergeobs_pmax",
+                  help="max number of observations for corenks mergeobs",
+                  type="integer",
+                  default=30)
+p <- add_argument(p, "--corenks_mergeobs_dh",
+                  help="horizontal decorrelation length scale for corenks mergeobs",
+                  type="numeric",
+                  default=3)
+p <- add_argument(p, "--corenks_mergeobs_corrfun",
+                  help="correlation function for corenks mergeobs",
+                  type="character",
+                  default="toar")
+p <- add_argument(p, "--corenks_mergeobs_range",
+                  help="range check for corenks mergeobs",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
+
+#------------------------------------------------------------------------------
 
 
 #------------------------------------------------------------------------------
@@ -1393,6 +1419,7 @@ if (argv$mode=="wise") {
   env$n_levs_mn <- argv$wise_n_levs_mn
   u_env$rain <- argv$wise_rain_uo
   y_env$rain <- argv$wise_rain_yo
+} else if (argv$mode=="corenks") {
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim

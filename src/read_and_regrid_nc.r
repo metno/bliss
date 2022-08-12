@@ -68,7 +68,11 @@ read_and_regrid_nc <- function( nc.file,
         if (!any(!is.na(val<-getValues(r)))) 
           cat( paste( "warning: all NAs after upscale\n"))
       } else {
-        r<-projectRaster(r,rmaster,method=projectraster_method)
+        if ( projection(r) != projection(rmaster)) {
+          r <- projectRaster(r,rmaster,method=projectraster_method)
+        } else {
+          r <- resample(r,rmaster,method=projectraster_method)
+        }
         val<-getValues(r)
       }
     } else {

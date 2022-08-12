@@ -168,6 +168,29 @@ argv$wise_preproc_idisparse <- 0.1
     if ( any( mridib[[l]] > mridic[[l]])) nn <- l
   }
 
+
+  lXb_dyad <- list()
+  for (e in 1:env$k_dim) {
+    i <- fg_env$ixs[e]
+    # interpolate onto the dyadic grid
+    # background at grid  points
+    rfxb <- resample( subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i]), rdyad, method="bilinear")
+    rfxb[rfxb<y_env$rain] <- 0
+#    Xb_dyad_original[,e]  <- getValues(rfxb)
+#    Xb_dyad[,e]  <- getValues(rfxb)
+    lXb_dyad[[e]] <- list()
+    lXb_dyad[[e]]$mr[[1]] <- getValues(rfxb)
+    for (j in 1:nn) {
+      cat(paste("e j",e,j,"\n"))
+      dwt <- dwt.2d( as.matrix(rfxb), wf=env$wf, J=j, boundary=env$boundary)
+      lXb_dyad[[e]]$mr[[j+1]] <- dwt[[3*j+1]]
+    }
+  }
+
+save(file="tmp.rdata",rfxb,env,lXb_dyad)
+q()
+
+
 #  lambda <- c( seq( 2**n/2, 1, length=nn), 1)
 #  lambda <- c( seq( 2**nn/2, 1, length=nn), 1)
   
