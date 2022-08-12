@@ -1295,6 +1295,11 @@ p <- add_argument(p, "--wise_agg_qprob",
 #------------------------------------------------------------------------------
 # Change-of-Resolution Ensemble Kalman Smoother
 
+p <- add_argument(p, "--corenks_k_dim",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
+
 # corenks - mergeobs
 p <- add_argument(p, "--corenks_mergeobs_eps2",
                   help="eps2 for corenks mergeobs",
@@ -1309,7 +1314,7 @@ p <- add_argument(p, "--corenks_mergeobs_dh",
                   type="numeric",
                   default=3)
 p <- add_argument(p, "--corenks_mergeobs_corrfun",
-                  help="correlation function for corenks mergeobs",
+                  help="correlation function for corenks mergeobs (gaussian, soar, powerlaw, toar)",
                   type="character",
                   default="toar")
 p <- add_argument(p, "--corenks_mergeobs_range",
@@ -1317,6 +1322,13 @@ p <- add_argument(p, "--corenks_mergeobs_range",
                   type="numeric",
                   nargs=2,
                   default=c(NA,NA))
+
+# corenks - selens
+
+p <- add_argument(p, "--corenks_selens_mode",
+                  help="selection of ensemble members (ets, maxoverlap)",
+                  type="character",
+                  default="maxoverlap")
 
 #------------------------------------------------------------------------------
 
@@ -1420,6 +1432,7 @@ if (argv$mode=="wise") {
   u_env$rain <- argv$wise_rain_uo
   y_env$rain <- argv$wise_rain_yo
 } else if (argv$mode=="corenks") {
+  env$k_dim <- argv$corenks_k_dim
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim

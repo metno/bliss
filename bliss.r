@@ -158,7 +158,7 @@ read_dem( argv, env)
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
 
-dir_plot <- "/home/cristianl/data/wise/dev/pngs"
+dir_plot <- "/home/cristianl/data/corenks/tests/tmp"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
 load_if_present<-T
 if (file.exists(ffff) & load_if_present) {
@@ -268,6 +268,33 @@ if (argv$mode=="rasterize") {
 #  y_env$yov$: mergeobs_a mergeobs_idi 
   }
 
+  ffff<- file.path(dir_plot,paste0("tmp_corenks_selensemble_",argv$date_out,".rdata"))
+  load_if_present<-T
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    t00<-Sys.time()
+    res <- corenks_selensemble( argv, fg_env, env, plot=F, dir_plot=dir_plot)
+    print(Sys.time()-t00)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+    cat( paste( "written file", ffff,"\n"))
+  }
+
+  ffff<- file.path(dir_plot,paste0("tmp_corenks_",argv$date_out,".rdata"))
+  load_if_present<-F
+  plot<-F
+  if (file.exists(ffff) & load_if_present) {
+    load(ffff)
+  } else {
+    t00<-Sys.time()
+    res <- corenks( argv, y_env, fg_env, env, dir_plot=dir_plot)
+    print(Sys.time()-t00)
+    save(file=ffff, argv, fg_env, u_env, env, y_env)
+    cat( paste( "written file", ffff,"\n"))
+  }
+
+
+q()
 #..............................................................................
 # ===>  Wavelet statistical interpolation  <===
 } else if (argv$mode=="wise") {

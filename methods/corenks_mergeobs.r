@@ -1,5 +1,18 @@
-#
+#+ Merge different observation data sources
 corenks_mergeobs <- function( argv, y_env, u_env, env) {
+#
+# output
+#  env$mergeobs$value - merged obs values (cover the same region as the "background")
+#  env$mergeobs$idi - integral data influence (=1 dense obs region; =0 obs void region; set to NAs where number of nearby obs is less than pmax)
+#  env$mergeobs$obs_errvar - estimated "observation" error variance at gridpoints (covers the same region as idi)
+#  env$mergeobs$mergedobs_errvar - estimated merged observation error variance at gridpoints (covers the same region as idi)
+# similar output for y_env
+#  y_env$yo(v)$mergeobs_value 
+#  y_env$yo(v)$mergeobs_idi 
+#  y_env$yo(v)$mergeobs_obs_errvar 
+#  y_env$yo(v)$mergeobs_mergedobs_errvar 
+#  
+#..............................................................................
 
   t0a <- Sys.time()
 
@@ -60,15 +73,12 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
     res[,1][res[,1]<argv$corenks_mergeobs_range[1]] <- argv$corenks_mergeobs_range[1]  
   if (!is.na(argv$corenks_mergeobs_range[2])) 
     res[,1][res[,1]>argv$corenks_mergeobs_range[2]] <- argv$corenks_mergeobs_range[2]  
+
   # output
   env$mergeobs <- list()
-  # merged obs values (cover the same region as the "background")
   env$mergeobs$value <- res[,1]
-  # integral data influence (=1 dense obs region; =0 obs void region; set to NAs where number of nearby obs is less than pmax)
   env$mergeobs$idi    <- res[,2]
-  # estimated "observation" error variance at gridpoints (covers the same region as idi)
   env$mergeobs$obs_errvar <- res[,3]
-  # estimated merged observation error variance at gridpoints (covers the same region as idi)
   env$mergeobs$mergedobs_errvar <- res[,4]
   
   # extract point values (crossvalidation)
@@ -77,6 +87,10 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
     y_env$yov$mergeobs_value <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
     r[] <- env$mergeobs$idi 
     y_env$yov$mergeobs_idi <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
+    r[] <- env$mergeobs$obs_errvar 
+    y_env$yov$mergeobs_obs_errvar <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
+    r[] <- env$mergeobs$mergedobs_errvar 
+    y_env$yov$mergeobs_mergedobs_errvar <- extract( r, cbind( y_env$yov$x, y_env$yov$y))
   }
     
   # extract point values (analysis)
@@ -84,6 +98,10 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
   y_env$yo$mergeobs_value <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
   r[] <- env$mergeobs$idi 
   y_env$yo$mergeobs_idi <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+  r[] <- env$mergeobs$obs_errvar 
+  y_env$yo$mergeobs_obs_errvar <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
+  r[] <- env$mergeobs$mergedobs_errvar 
+  y_env$yo$mergeobs_mergedobs_errvar <- extract( r, cbind( y_env$yo$x, y_env$yo$y))
 
   t1a <- Sys.time()
   cat( paste( "\n", "mergeobs .", "dim =", m_dim, ".", "range =", 

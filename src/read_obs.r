@@ -352,7 +352,7 @@ read_obs <- function( argv, env, y_env) {
       y_env$yov$idi[c_xy] <- t( mapply( mapply_idi, 1:length(c_xy), SIMPLIFY = T))
     }
     t1 <- Sys.time()
-    cat( paste("cv_mode_calcidiv time=", round(t1-t0,1), attr(t1-t0,"unit")))
+    cat( paste("cv_mode_calcidiv time=", round(t1-t0,1), attr(t1-t0,"unit"),"\n"))
   }
 
 #  #
