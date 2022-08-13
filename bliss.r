@@ -287,7 +287,9 @@ if (argv$mode=="rasterize") {
     load(ffff)
   } else {
     t00<-Sys.time()
+    envtmp <- new.env( parent = emptyenv())
     res <- corenks( argv, y_env, fg_env, env, dir_plot=dir_plot)
+    rm(envtmp)
     print(Sys.time()-t00)
     save(file=ffff, argv, fg_env, u_env, env, y_env)
     cat( paste( "written file", ffff,"\n"))

@@ -11,7 +11,11 @@ corenks <- function( argv, y_env, fg_env, env, dir_plot=NA) {
 # then i=1 is the finest resolution and i=n_levs_mx the coarser
 #
 #------------------------------------------------------------------------------
+
 argv$corenks_ididense <- 0.8
+argv$corenks_pmax <- 30
+argv$corenks_corrfun <- "toar"
+
   t0a <- Sys.time()
 
   cat( "-- corenks --\n")
@@ -39,43 +43,101 @@ argv$corenks_ididense <- 0.8
   robsidi[is.na(robsidi)] <- 0
   mrobs <- list()
   for (j in 1:jmax) {
-    if ( j == 1) {
-      robs_j <- robs
-      robsidi_j <- robsidi
-    } else {
-      robs_j <- aggregate( robs_jprev, fact=2, fun="mean", expand=T, na.rm=T)
-      robsidi_j <- aggregate( robsidi_jprev, fact=2, fun="mean", expand=T, na.rm=T)
-    }
-    ix <- which( getValues(robsidi_j) >= argv$corenks_ididense)
-    if ( length(ix) == 0) { jstop <- j; break }
-    xy <- xyFromCell( robs_j, 1:ncell(robs_j))
     mrobs$rval[[j]] <- list()
     mrobs$ridi[[j]] <- list()
-    mrobs$rval[[j]]$r <- robs_j
-    mrobs$ridi[[j]]$r <- robsidi_j
-    mrobs$val[[j]] <- getValues(robs_j)[ix]
-    mrobs$idi[[j]] <- getValues(robsidi_j)[ix]
+    if ( j == 1) {
+      mrobs$rval[[j]]$r <- robs
+      mrobs$ridi[[j]]$r <- robsidi
+    } else {
+      mrobs$rval[[j]]$r <- aggregate( mrobs$rval[[j-1]]$r, fact=2, fun="mean", expand=T, na.rm=T)
+      mrobs$ridi[[j]]$r <- aggregate( mrobs$ridi[[j-1]]$r, fact=2, fun="mean", expand=T, na.rm=T)
+    }
+    ix <- which( getValues(mrobs$ridi[[j]]$r) >= argv$corenks_ididense & 
+                 !is.na(getValues(mrobs$ridi[[j]]$r)) &
+                 !is.na(getValues(mrobs$rval[[j]]$r)))
+    if ( length(ix) == 0) { jstop <- j-1; break }
+    xy <- xyFromCell( mrobs$ridi[[j]]$r, 1:ncell(mrobs$ridi[[j]]$r))
+    mrobs$val[[j]] <- getValues(mrobs$rval[[j]]$r)[ix]
+    mrobs$idi[[j]] <- getValues(mrobs$ridi[[j]]$r)[ix]
     mrobs$ix[[j]] <- ix
     mrobs$d_dim[[j]] <- length(ix)
     mrobs$x[[j]] <- xy[ix,1]
     mrobs$y[[j]] <- xy[ix,2]
-    robs_jprev <- robs_j
-    robsidi_jprev <- robsidi_j
   }
   if (jstop == 1) return(NULL)
 
 # Background
+  mrbkg <- list()
+  mraenkf <- list()
   for (j in 1:jstop) {
-    if ( j == 1) {
-
-      Xb <- robs
-    } else {
-      robs_j <- aggregate( robs_jprev, fact=2, fun="mean", expand=T, na.rm=T)
-      robsidi_j <- aggregate( robsidi_jprev, fact=2, fun="mean", expand=T, na.rm=T)
+print(j)
+    mrbkg$rval[[j]] <- list()
+    mrbkg$data[[j]] <- list()
+    mraenkf$data[[j]] <- list()
+    for (e in 1:env$k_dim) {
+      if ( j == 1) {
+        i <- fg_env$ixs[e]
+        mrbkg$rval[[j]]$r <- subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i])
+      } else {
+#        mrbkg$rval[[j-1]]$r[] <- mrbkg$data[[j-1]]$Eb[,e]
+#        mrbkg$rval[[j]]$r <- aggregate( mrbkg$rval[[j-1]]$r, fact=2, fun="mean", expand=T, na.rm=T)
+        mrbkg$rval[[j-1]]$r[] <- mraenkf$data[[j-1]]$Ea[,e]
+        mrbkg$rval[[j]]$r <- aggregate( mrbkg$rval[[j-1]]$r, fact=2, fun="mean", expand=T, na.rm=T)
+      }
+      if ( e == 1) {
+        mrbkg$data[[j]]$Eb <- array( data=NA, dim=c(ncell(mrbkg$rval[[j]]$r),env$k_dim))
+        mrbkg$data[[j]]$Xb <- array( data=NA, dim=c(ncell(mrbkg$rval[[j]]$r),env$k_dim))
+        mrbkg$data[[j]]$Y <- array( data=NA, dim=c(mrobs$d_dim[[j]],env$k_dim))
+        mrbkg$data[[j]]$HEb <- array( data=NA, dim=c(mrobs$d_dim[[j]],env$k_dim))
+      }
+      mrbkg$data[[j]]$Eb[,e] <- getValues(mrbkg$rval[[j]]$r)
+      mrbkg$data[[j]]$HEb[,e] <- extract( mrbkg$rval[[j]]$r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
     }
+    mrbkg$data[[j]]$xb <- rowMeans(mrbkg$data[[j]]$Eb)
+    for (e in 1:env$k_dim) { 
+      mrbkg$data[[j]]$Xb[,e] <- 1/sqrt(env$k_dim-1) * (mrbkg$data[[j]]$Eb[,e] - mrbkg$data[[j]]$xb)
+      mrbkg$rval[[j]]$r[] <- mrbkg$data[[j]]$Xb[,e]
+      mrbkg$data[[j]]$Y[,e] <- extract( mrbkg$rval[[j]]$r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
+    }
+    if (  (mrbkg$m_dim[[j]] <- length( ix <- which( !is.na( mrbkg$data[[j]]$xb)))) == 0) return(NULL)
+    xy <- xyFromCell( mrbkg$rval[[j]]$r, 1:ncell(mrbkg$rval[[j]]$r))
+    envtmp$x <- xy[ix,1]
+    envtmp$y <- xy[ix,2]
+    dh <- mean(res(mrbkg$rval[[j]]$r))
+    envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
+                       query = cbind(envtmp$x,envtmp$y), 
+                       k = min(c(argv$corenks_pmax,mrobs$d_dim[[j]])), searchtype = "radius", 
+                       radius = (7*dh))
+    envtmp$m_dim <- mrbkg$m_dim[[j]]
+    envtmp$k_dim <- env$k_dim
+    envtmp$obs_x <- mrobs$x[[j]]
+    envtmp$obs_y <- mrobs$y[[j]]
+    envtmp$obs_val <- mrobs$val[[j]]
+    envtmp$Eb <- mrbkg$data[[j]]$Eb
+    envtmp$HEb <- mrbkg$data[[j]]$HEb
+    envtmp$eps2 <- rep(0.1,envtmp$m_dim)
+    envtmp$D <- envtmp$obs_val - envtmp$HEb
 
+    # run oi gridpoint by gridpoint (idi the first time only)
+    if (!is.na(argv$cores)) {
+      res <- t( mcmapply( enkf_analysis_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          mc.cores=argv$cores,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$corenks_corrfun, dh=dh)))
+    # no-multicores
+    } else {
+      res <- t( mapply( enkf_analysis_gridpoint_by_gridpoint,
+                        1:envtmp$m_dim,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$corenks_corrfun, dh=dh)))
+    }
+   print(dim(res)) 
+y_env$rain<-0.1
+    if (!is.na(y_env$rain)) res[res<y_env$rain] <- 0
+    mraenkf$data[[j]]$Ea <- res
   }
-save(file="tmp.rdata",mrobs)
+save(file="tmp.rdata",mrobs,mrbkg,mraenkf)
 q()
   ixb <- which( getValues(rfidi) >= argv$wise_preproc_idisparse)
   ixa <- which( getValues(rfidi) >= argv$wise_preproc_ididense)
