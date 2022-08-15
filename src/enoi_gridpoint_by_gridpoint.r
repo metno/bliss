@@ -1,11 +1,12 @@
-#+ optimal interpolation 
-enkf_analysis_gridpoint_by_gridpoint<-function( i,
-                                                corr="soar",
-                                                dh=10000,
-                                                uncertainty=F) {
+#+ ensemble optimal interpolation 
+enoi_gridpoint_by_gridpoint<-function( i,
+                                       corr = "soar",
+                                       dh = 10000,
+                                       idi = F,
+                                       uncertainty = F) {
 # returned values: analysis, observation error var, analysis error var
 #------------------------------------------------------------------------------
-#  Ea <- rep(NA, envtmp$k_dim); o_errvar <- NA; xa_errvar <- NA
+  xidi <- NA; #o_errvar <- NA; xa_errvar <- NA
 
   if( i%%(round(envtmp$m_dim/10)) == 0) cat(".")
 
@@ -23,8 +24,6 @@ enkf_analysis_gridpoint_by_gridpoint<-function( i,
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- envtmp$obs_x[ixa]
     y <- envtmp$obs_y[ixa]
-#    yo <- envtmp$obs_val[ixa]
-#    yb <- envtmp$HEb[ixa,]
     di <- envtmp$D[ixa,]
     eps2 <- envtmp$eps2[i]
 
@@ -56,12 +55,13 @@ enkf_analysis_gridpoint_by_gridpoint<-function( i,
     SRinv <- chol2inv(chol( (S+diag(x=eps2,p)) ))
     SRinv_di <- crossprod(SRinv,di)       
     Ea <- envtmp$Eb[i,] + crossprod( rloc, SRinv_di)
-    if (uncertainty) {
-      o_errvar  <- mean( di * ( di - crossprod(S,SRinv_di)))
-      xa_errvar <- ( o_errvar/ eps2) * 
-                   ( 1 - sum( as.vector( crossprod( rloc, SRinv)) * rloc))
-    }
+    if (idi) xidi <- sum(rloc*as.vector(rowSums(SRinv)))
+#    if (uncertainty) {
+#      o_errvar  <- mean( di * ( di - crossprod(S,SRinv_di)))
+#      xa_errvar <- ( o_errvar/ eps2) * 
+#                   ( 1 - sum( as.vector( crossprod( rloc, SRinv)) * rloc))
+#    }
   }
-  return( Ea)
+  return( c( Ea, xidi))
 }
 

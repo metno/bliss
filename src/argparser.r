@@ -1433,6 +1433,8 @@ if (argv$mode=="wise") {
   y_env$rain <- argv$wise_rain_yo
 } else if (argv$mode=="corenks") {
   env$k_dim <- argv$corenks_k_dim
+  u_env$rain <- argv$wise_rain_uo
+  y_env$rain <- argv$wise_rain_yo
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim
