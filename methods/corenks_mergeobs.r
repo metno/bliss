@@ -69,10 +69,10 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
   # res: 1 xa, 2 xidi, 3 o_errvar, 4 xa_errvar
 
   # Safe checks
-  if (!is.na(argv$corenks_mergeobs_range[1])) 
-    res[,1][res[,1]<argv$corenks_mergeobs_range[1]] <- argv$corenks_mergeobs_range[1]  
-  if (!is.na(argv$corenks_mergeobs_range[2])) 
-    res[,1][res[,1]>argv$corenks_mergeobs_range[2]] <- argv$corenks_mergeobs_range[2]  
+  if (!is.na(argv$corenks_range[1])) 
+    res[,1][res[,1]<argv$corenks_range[1]] <- argv$corenks_range[1]  
+  if (!is.na(argv$corenks_range[2])) 
+    res[,1][res[,1]>argv$corenks_range[2]] <- argv$corenks_range[2]  
 
   # output
   env$mergeobs <- list()

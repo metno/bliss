@@ -91,8 +91,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-#                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"hyletkf\",\"letkf\",\"ensip\")",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"wise\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corenks\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1179,119 +1178,6 @@ p <- add_argument(p, "--oi_corrfun",
                   type="character",
                   default="gaussian")
 
-p <- add_argument(p, "--wise_oi_pmax",
-                  help="maximum number of observations to use in the surrounding of a grid point",
-                  type="integer",
-                  default=50)
-p <- add_argument(p, "--wise_oi_range",
-                  help="range of allowed values",
-                  type="numeric",
-                  nargs=2,
-                  default=c(NA,NA))
-p <- add_argument(p, "--wise_oi_dh",
-                  help="horizontal decorrelation lenght scale",
-                  type="numeric",
-                  default=10000)
-p <- add_argument(p, "--wise_oi_eps2",
-                  help="ration observation and background error variances",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--wise_oi_corrfun",
-                  help="correlation functions (\"gaussian\",\"soar\",\"toar\",\"powerlaw\")",
-                  type="character",
-                  default="gaussian")
-
-
-#------------------------------------------------------------------------------
-p <- add_argument(p, "--wise_rain_uo",
-                  help="rain yes/no threshold for alignment (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--wise_align_mode",
-                  help="strategy used for alignment ('ets','maxoverlap')",
-                  type="character",
-                  default="maxoverlap")
-p <- add_argument(p, "--wise_rain_yo",
-                  help="rain yes/no threshold for interpolation (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--wise_k_dim",
-                  help="number of background ensemble members",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--wise_a_resample",
-                  help="should we resample the analysis members from the posterior PDF? If yes, then use wise_a_dim to define the number of anlysis members, otherwise use wise_k_dim",
-                  flag=T)
-p <- add_argument(p, "--wise_a_resample_setseed",
-                  help="set seed when resampling (useful when testing)",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--wise_a_dim",
-                  help="number of analysis ensemble members",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--wise_wf",
-                  help="wavelet type",
-                  type="character",
-                  default="bl20")
-p <- add_argument(p, "--wise_boundary",
-                  help="strategy adopted to avoid boundary effects (\"periodic\", \"reflection\"",
-                  type="character",
-                  default="periodic")
-p <- add_argument(p, "--wise_n_levs_mx",
-                  help="number of coarsest level to consider",
-                  type="integer",
-                  default=8)
-p <- add_argument(p, "--wise_n_levs_mn",
-                  help="number of finest level to consider",
-                  type="integer",
-                  default=1)
-p <- add_argument(p, "--wise_supob_nobs",
-                  help="Wise Superobbing, max number of observations considered in the neighbourhhod of a grid point",
-                  type="integer",
-                  default=50)
-p <- add_argument(p, "--wise_supob_radius",
-                  help="Wise Superobbing, radius defining the neighbourhhod of a grid point",
-                  type="numeric",
-                  default=1500)
-p <- add_argument(p, "--wise_supob_mode",
-                  help="Wise Superobbing strategy ('quantile', 'mean')",
-                  type="character",
-                  default="mean")
-p <- add_argument(p, "--wise_supob_q",
-                  help="Wise Superobbing, quantile used for superobbing",
-                  type="numeric",
-                  default=0.99)
-p <- add_argument(p, "--wise_opt_maxit",
-                  help="Wise Optimization, maximum number of iterations in the main loop",
-                  type="integer",
-                  default=100)
-p <- add_argument(p, "--wise_opt_opttol",
-                  help="Wise Optimization, tolerance threshold used to break out from the main loop",
-                  type="numeric",
-                  default=0.02)
-p <- add_argument(p, "--wise_En2_adj_fun",
-                  help="Wise adjustment function to avoid abrupt variations is the energy specturm between two consecutive iterations of the analysis loop (\"Gaussian\",\"SOAR\",\"powerlaw\",\"TOAR\")",
-                  type="character",
-                  default="Gaussian")
-p <- add_argument(p, "--wise_En2_adj_min",
-                  help="lower boundary for the adjustment function",
-                  type="numeric",
-                  default=0.)
-p <- add_argument(p, "--wise_rescale_min_obs",
-                  help="minimum number of observations in an event to apply wise",
-                  type="integer",
-                  default=100)
-p <- add_argument(p, "--wise_rescale_min_cells",
-                  help="minimum number of cells for the extent of a precipitation event to be considered significative enough to apply wise",
-                  type="integer",
-                  default=100)
-
-p <- add_argument(p, "--wise_agg_qprob",
-                  help="define the quantile to use during the aggregation (0-1)",
-                  type="numeric",
-                  default=0.75)
-
 #------------------------------------------------------------------------------
 # Change-of-Resolution Ensemble Kalman Smoother
 
@@ -1299,6 +1185,19 @@ p <- add_argument(p, "--corenks_k_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
+p <- add_argument(p, "--corenks_rain_uo",
+                  help="rain yes/no threshold for alignment (mm)",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--corenks_rain_yo",
+                  help="rain yes/no threshold for interpolation (mm)",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--corenks_range",
+                  help="range check for corenks",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
 
 # corenks - mergeobs
 p <- add_argument(p, "--corenks_mergeobs_eps2",
@@ -1317,21 +1216,24 @@ p <- add_argument(p, "--corenks_mergeobs_corrfun",
                   help="correlation function for corenks mergeobs (gaussian, soar, powerlaw, toar)",
                   type="character",
                   default="toar")
-p <- add_argument(p, "--corenks_mergeobs_range",
-                  help="range check for corenks mergeobs",
-                  type="numeric",
-                  nargs=2,
-                  default=c(NA,NA))
-
 # corenks - selens
-
 p <- add_argument(p, "--corenks_selens_mode",
                   help="selection of ensemble members (ets, maxoverlap)",
                   type="character",
                   default="maxoverlap")
-
-#------------------------------------------------------------------------------
-
+# corenks - main
+p <- add_argument(p, "--corenks_pmax",
+                  help="max number of observations for corenks",
+                  type="integer",
+                  default=30)
+p <- add_argument(p, "--corenks_corrfun",
+                  help="correlation function for corenks (gaussian, soar, powerlaw, toar)",
+                  type="character",
+                  default="toar")
+p <- add_argument(p, "--corenks_ididense",
+                  help="threshold used to define dense station regions",
+                  type="numeric",
+                  default=0.8)
 
 #------------------------------------------------------------------------------
 #
@@ -1421,20 +1323,10 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
-if (argv$mode=="wise") {
-  env$k_dim <- argv$wise_k_dim
-  env$a_dim <- argv$wise_a_dim
-  if (is.na(env$a_dim) || !argv$wise_a_resample) env$a_dim <- env$k_dim
-  env$wf <- argv$wise_wf
-  env$boundary <- argv$wise_boundary
-  env$n_levs_mx <- argv$wise_n_levs_mx
-  env$n_levs_mn <- argv$wise_n_levs_mn
-  u_env$rain <- argv$wise_rain_uo
-  y_env$rain <- argv$wise_rain_yo
-} else if (argv$mode=="corenks") {
+if (argv$mode=="corenks") {
   env$k_dim <- argv$corenks_k_dim
-  u_env$rain <- argv$wise_rain_uo
-  y_env$rain <- argv$wise_rain_yo
+  u_env$rain <- argv$corenks_rain_uo
+  y_env$rain <- argv$corenks_rain_yo
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim

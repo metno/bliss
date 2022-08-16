@@ -1,6 +1,31 @@
 #+ Read input observations
 read_obs <- function( argv, env, y_env) {
 #
+# Output data structure: y_env is an environment
+# variables for yo (similar structure for yov):
+#  y_env$yo$n
+#  y_env$yo$x
+#  y_env$yo$y
+#  y_env$yo$x_orig
+#  y_env$yo$y_orig
+#  y_env$yo$lat
+#  y_env$yo$lon
+#  y_env$yo$z
+#  y_env$yo$souid
+#  y_env$yo$value
+#  y_env$yo$laf
+#  y_env$yo$prid
+#  y_env$yo$dqc_flag
+#  if y_env$rain is defined
+#    y_env$yo$ixwet
+#    y_env$yo$ixdry
+#    y_env$yo$nwet
+#    y_env$yo$ndry
+#  y_env$yo$nuo
+#  y_env$yo$value_uo
+#  y_env$yo$nfg
+#  y_env$yo$value_fg
+#
 #==============================================================================
 
   #
@@ -17,7 +42,7 @@ read_obs <- function( argv, env, y_env) {
                          argv$iff_obs.y,
                          argv$iff_obs.value),
                          names(dat))
-  if (any(is.na(varidxtmp))) {
+  if ( any( is.na(varidxtmp))) {
     print("ERROR in the specification of the variable names")
     print(paste("        x=",argv$iff_obs.x))
     print(paste("        y=",argv$iff_obs.y))
@@ -39,7 +64,7 @@ read_obs <- function( argv, env, y_env) {
 
   #
   # re-project (x,y) if needed  
-  if (argv$iff_obs.proj4!=argv$grid_master.proj4) {
+  if ( argv$iff_obs.proj4 != argv$grid_master.proj4) {
     xymaster <- spTransform( SpatialPoints( cbind( data$x_orig, data$y_orig),
                                             proj4string = CRS(argv$iff_obs.proj4)),
                           CRS(argv$grid_master.proj4))
@@ -53,7 +78,7 @@ read_obs <- function( argv, env, y_env) {
 
   #
   # lat-lon coords are required by verif
-  if (argv$iff_obs.proj4!=env$proj4.llwgs84) {
+  if ( argv$iff_obs.proj4 != env$proj4.llwgs84) {
     xyll <- spTransform( SpatialPoints( cbind( data$x_orig, data$y_orig),
                                     proj4string=CRS(argv$iff_obs.proj4)) ,
                       CRS(env$proj4.llwgs84))
@@ -67,7 +92,7 @@ read_obs <- function( argv, env, y_env) {
   
   #
   # read z (vertical coordinate / altitude / elevation)
-  if (argv$iff_obs.z!="none") {
+  if ( argv$iff_obs.z != "none") {
     varidxtmp <- which( argv$iff_obs.z == names(dat))
     if ( length(varidxtmp) == 0) {
       print("ERROR in the specification of the variable names")
@@ -84,7 +109,7 @@ read_obs <- function( argv, env, y_env) {
 
   #
   # read sourceId 
-  if (argv$iff_obs.sourceId!="none") {
+  if ( argv$iff_obs.sourceId != "none") {
     varidxtmp<-which(argv$iff_obs.sourceId==names(dat))
     if (length(varidxtmp)==0) {
       print("ERROR in the specification of the variable names")
@@ -94,14 +119,14 @@ read_obs <- function( argv, env, y_env) {
       print(names(dat))
       quit(status=1)
     }
-    data$sourceId<-dat[,varidxtmp]
+    data$sourceId <- dat[,varidxtmp]
   } else {
-    data$sourceId<-1:length(data$x)
+    data$sourceId <- 1:length(data$x)
   }
 
   #
   # read prId 
-  if (argv$iff_obs.prId!="none") {
+  if ( argv$iff_obs.prId != "none") {
     varidxtmp<-which(argv$iff_obs.prId==names(dat))
     if (length(varidxtmp)==0) {
       print("ERROR in the specification of the variable names")
@@ -111,14 +136,14 @@ read_obs <- function( argv, env, y_env) {
       print(names(dat))
       quit(status=1)
     }
-    data$prId<-dat[,varidxtmp]
+    data$prId <- dat[,varidxtmp]
   } else {
-    data$prId<-rep(0,length(data$x))
+    data$prId <- rep(0,length(data$x))
   }
   
   #
   # read dqc flag 
-  if (argv$iff_obs.dqc!="none") {
+  if ( argv$iff_obs.dqc != "none") {
     varidxtmp<-which(argv$iff_obs.dqc==names(dat))
     if (length(varidxtmp)==0) {
       print("ERROR in the specification of the variable names")
@@ -128,9 +153,9 @@ read_obs <- function( argv, env, y_env) {
       print(names(dat))
       quit(status=1)
     }
-    data$dqc<-dat[,varidxtmp]
+    data$dqc <- dat[,varidxtmp]
   } else {
-    data$dqc<-rep(0,length(data$x))
+    data$dqc <- rep(0,length(data$x))
   }
 
   # so far:
@@ -257,9 +282,9 @@ read_obs <- function( argv, env, y_env) {
     y_env$yov$value  <- data$value[ixcv]
     if (file.exists(argv$iff_laf)) y_env$yov$laf <-extract( env$rlaf, cbind( y_env$yov$x, y_env$yov$y), na.rm=T)
     y_env$yov$prid   <- data$prId[ixcv]
-    if ( !is.na( argv$rrinf)) {
-      y_env$yov$ixwet <- which( y_env$yov$value >= argv$rrinf)
-      y_env$yov$ixdry <- which( y_env$yov$value <  argv$rrinf)
+    if ( !is.na( y_env$rain)) {
+      y_env$yov$ixwet <- which( y_env$yov$value >= y_env$rain)
+      y_env$yov$ixdry <- which( y_env$yov$value <  y_env$rain)
       y_env$yov$nwet  <- length( y_env$yov$ixwet)
       y_env$yov$ndry  <- length( y_env$yov$ixdry)
     }
@@ -308,9 +333,9 @@ read_obs <- function( argv, env, y_env) {
   if (file.exists(argv$iff_laf)) y_env$yo$laf <- extract( env$rlaf, cbind( y_env$yo$x, y_env$yo$y), na.rm=T)
   y_env$yo$prid   <- data$prId[ix0]
   y_env$yo$dqc_flag <- rep( 0, length=y_env$yo$n)
-  if ( !is.na( argv$rrinf)) {
-    y_env$yo$ixwet <- which( y_env$yo$value >= argv$rrinf)
-    y_env$yo$ixdry <- which( y_env$yo$value <  argv$rrinf)
+  if ( !is.na( y_env$rain)) {
+    y_env$yo$ixwet <- which( y_env$yo$value >= y_env$rain)
+    y_env$yo$ixdry <- which( y_env$yo$value <  y_env$rain)
     y_env$yo$nwet  <- length( y_env$yo$ixwet)
     y_env$yo$ndry  <- length( y_env$yo$ixdry)
   }
@@ -440,9 +465,9 @@ read_obs <- function( argv, env, y_env) {
 #    if (file.exists(argv$iff_laf)) y_env$yo$laf <- extract( env$rlaf, cbind( y_env$yo$x, y_env$yo$y), na.rm=T)
 #    y_env$yo$prid   <- data$prId[ix0]
 #    y_env$yo$dqc_flag <- rep( 0, length=y_env$yo$n)
-#    if ( !is.na( argv$rrinf)) {
-#      y_env$yo$ixwet <- which( y_env$yo$value >= argv$rrinf)
-#      y_env$yo$ixdry <- which( y_env$yo$value <  argv$rrinf)
+#    if ( !is.na( y_env$rain)) {
+#      y_env$yo$ixwet <- which( y_env$yo$value >= y_env$rain)
+#      y_env$yo$ixdry <- which( y_env$yo$value <  y_env$rain)
 #      y_env$yo$nwet  <- length( y_env$yo$ixwet)
 #      y_env$yo$ndry  <- length( y_env$yo$ixdry)
 #    }
@@ -492,7 +517,7 @@ read_obs <- function( argv, env, y_env) {
 
   if (argv$verbose) {
     print("+---------------------------------------------------------------+")
-    if (!is.na(argv$rrinf)) {
+    if (!is.na(y_env$rain)) {
       print(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")"))
       if (env$cv_mode | env$cv_mode_random) {
         print(paste("#cv-observations (wet/dry) =",y_env$yov$n,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")"))

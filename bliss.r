@@ -23,6 +23,7 @@ suppressPackageStartupMessages( library( "igraph"))
 suppressPackageStartupMessages( library( "rgdal"))
 suppressPackageStartupMessages( library( "ncdf4"))
 suppressPackageStartupMessages( library( "dotnc"))
+suppressPackageStartupMessages( library( "RANN"))
 options( warn = 2, scipen = 999)
 #options(scipen = 999)
 # 
@@ -160,7 +161,7 @@ read_dem( argv, env)
 
 dir_plot <- "/home/cristianl/data/corenks/tests/tmp"
 ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -174,7 +175,7 @@ if (file.exists(ffff) & load_if_present) {
 # Read observations
 
 ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
-load_if_present<-T
+load_if_present<-F
 if (file.exists(ffff) & load_if_present) {
   load(ffff)
 } else {
@@ -195,7 +196,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "hyletkf", "wise", "oi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "hyletkf", "oi", "corenks")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
@@ -236,7 +237,6 @@ if (argv$mode=="rasterize") {
 #..............................................................................
 # ===>  Ensemble-based Statistical Interpolation  <===
 } else if (argv$mode=="oi") {
-  suppressPackageStartupMessages( library( "RANN"))
   envtmp <- new.env( parent = emptyenv())
   res <- fg_u_align( argv, fg_env, u_env, env)
   res <- oi_driver( argv, y_env, fg_env, env)
@@ -248,12 +248,8 @@ if (argv$mode=="rasterize") {
 # ===>  Change of Resolution Ensemble Kalman smoother  <===
 } else if (argv$mode=="corenks") {
   
-  suppressPackageStartupMessages( library( "waveslim"))
-  suppressPackageStartupMessages( library( "RANN"))
-  suppressPackageStartupMessages( library( "smoothie"))
-  
   ffff<- file.path(dir_plot,paste0("tmp_corenks_mergeobs_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
@@ -269,7 +265,7 @@ if (argv$mode=="rasterize") {
   }
 
   ffff<- file.path(dir_plot,paste0("tmp_corenks_selensemble_",argv$date_out,".rdata"))
-  load_if_present<-T
+  load_if_present<-F
   if (file.exists(ffff) & load_if_present) {
     load(ffff)
   } else {
@@ -294,167 +290,6 @@ if (argv$mode=="rasterize") {
     save(file=ffff, argv, fg_env, u_env, env, y_env)
     cat( paste( "written file", ffff,"\n"))
   }
-
-
-q()
-#..............................................................................
-# ===>  Wavelet statistical interpolation  <===
-} else if (argv$mode=="wise") {
-  
-  suppressPackageStartupMessages( library( "waveslim"))
-  suppressPackageStartupMessages( library( "RANN"))
-  suppressPackageStartupMessages( library( "smoothie"))
-  
-  ffff<- file.path(dir_plot,paste0("tmp_wise_mergeobs_",argv$date_out,".rdata"))
-  load_if_present<-T
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    envtmp <- new.env( parent = emptyenv())
-    res <- wise_mergeobs( argv, y_env, u_env, env)
-    rm(envtmp)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-#  env$mergeobs$: r rall idi o_errvar a_errvar
-#  y_env$yov$: mergeobs_a mergeobs_idi 
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
-  load_if_present<-T
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_align( argv, fg_env, env, plot=F, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_preproc_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_preprocessing_loop( argv, y_env, fg_env, env, 
-                                    max_it=argv$wise_opt_maxit,
-                                    plot=plot, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_agg_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_aggregation( argv, y_env, env,
-                             plot=plot, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-  }
-q()
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_oi_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    envtmp <- new.env( parent = emptyenv())
-    res <- wise_oi_driver( argv, y_env, fg_env, env)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-  
-
-  suppressPackageStartupMessages( library( "waveslim"))
-  suppressPackageStartupMessages( library( "RANN"))
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_align_",argv$date_out,".rdata"))
-  load_if_present<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_align( argv, fg_env, u_env, env, plot=F, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_analysis_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_analysis_loop( argv, y_env, fg_env, env, 
-                               supob_nobs=argv$wise_supob_nobs,
-                               supob_radius=argv$wise_supob_radius,
-                               supob_q=argv$wise_supob_q,
-                               max_it=argv$wise_opt_maxit,
-                               opttol=argv$wise_opt_opttol,
-                               En2_adj_fun=argv$wise_En2_adj_fun,
-                               En2_adj_min=argv$wise_En2_adj_min,
-                               rescale_min_obs=argv$wise_rescale_min_obs,
-                               rescale_min_cells=rgv$wise_rescale_min_cells,
-                               plot=plot, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_postpdf_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_sampling_postpdf( argv, y_env, fg_env, u_env, env,
-                                  resample=argv$wise_a_resample, 
-                                  seed=argv$wise_a_resample_setseed,
-                                  plot=plot, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_agg_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- wise_aggregation( argv, y_env, fg_env, u_env, env,
-                             plot=plot, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_wise_oi_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    envtmp <- new.env( parent = emptyenv())
-    res <- wise_oi_driver( argv, y_env, fg_env, env)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-  }
-
-
-#  res <- main_wise_plot( argv, y_env, fg_env, env, dir_plot=dir_plot)
 
 } # end if selection among spatial analysis methods
 #
