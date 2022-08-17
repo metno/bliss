@@ -53,9 +53,13 @@ corenks_selensemble <- function( argv, fg_env, env, plot=F, dir_plot=NA) {
     cat( "\n")
   } 
 
-  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(score),")\n"))
+  cat( paste(" number of background ensemble members (tot) =", env$k_dim,"(",length(ixf),")\n"))
 #  # select only the k fields with the highest scores
-  ixs <- order( score, decreasing=T)[1:env$k_dim]
+  if (argv$corenks_selens_mode == "identity") {
+    ixs <- 1:env$k_dim
+  } else {
+    ixs <- order( score, decreasing=T)[1:env$k_dim]
+  }
 
   # output
   fg_env$score <- score
