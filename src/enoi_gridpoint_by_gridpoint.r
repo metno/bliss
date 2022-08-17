@@ -24,7 +24,11 @@ enoi_gridpoint_by_gridpoint<-function( i,
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- envtmp$obs_x[ixa]
     y <- envtmp$obs_y[ixa]
-    di <- envtmp$D[ixa,]
+    if ( class(envtmp$D) == "matrix") {
+      di <- envtmp$D[ixa,]
+    } else {
+      di <- envtmp$D[ixa]
+    }
     eps2 <- envtmp$eps2[i]
 
     # correlations
@@ -54,8 +58,12 @@ enoi_gridpoint_by_gridpoint<-function( i,
     #
     SRinv <- chol2inv(chol( (S+diag(x=eps2,p)) ))
     SRinv_di <- crossprod(SRinv,di)       
-    Ea <- envtmp$Eb[i,] + crossprod( rloc, SRinv_di)
-    if (idi) xidi <- sum(rloc*as.vector(rowSums(SRinv)))
+    if ( class(envtmp$D) == "matrix") {
+      Ea <- envtmp$Eb[i,] + crossprod( rloc, SRinv_di)
+    } else {
+      Ea <- envtmp$Eb[i,] + sum( rloc * as.vector(SRinv_di))
+    }
+    if (idi) xidi <- sum( rloc * as.vector(rowSums(SRinv)))
 #    if (uncertainty) {
 #      o_errvar  <- mean( di * ( di - crossprod(S,SRinv_di)))
 #      xa_errvar <- ( o_errvar/ eps2) * 

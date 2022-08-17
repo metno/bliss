@@ -109,7 +109,6 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
               round( max( env$mergeobs$value, na.rm=T), 2), "\n"))
     cat( paste( "total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
     cat( "+---------------------------------+\n")
- 
   cat("\n")
 
 }

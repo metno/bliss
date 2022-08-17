@@ -1234,6 +1234,11 @@ p <- add_argument(p, "--corenks_ididense",
                   help="threshold used to define dense station regions",
                   type="numeric",
                   default=0.8)
+p <- add_argument(p, "--corenks_eps2_range",
+                  help="range check for corenks (either two values or just one value). Deafault is 0.5.",
+                  type="numeric",
+                  nargs=Inf,
+                  default=NA)
 
 #------------------------------------------------------------------------------
 #
@@ -1327,6 +1332,7 @@ if (argv$mode=="corenks") {
   env$k_dim <- argv$corenks_k_dim
   u_env$rain <- argv$corenks_rain_uo
   y_env$rain <- argv$corenks_rain_yo
+  if ( any( is.na(argv$corenks_eps2_range))) argv$corenks_eps2_range <- 0.5
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim

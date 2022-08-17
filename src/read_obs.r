@@ -516,16 +516,16 @@ read_obs <- function( argv, env, y_env) {
   }
 
   if (argv$verbose) {
-    print("+---------------------------------------------------------------+")
+    cat("+---------------------------------------------------------------+\n")
     if (!is.na(y_env$rain)) {
-      print(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")"))
+      cat(paste("#observations (wet/dry) =",y_env$yo$n,"(",y_env$yo$nwet,"/",y_env$yo$ndry,")\n"))
       if (env$cv_mode | env$cv_mode_random) {
-        print(paste("#cv-observations (wet/dry) =",y_env$yov$n,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")"))
+        cat(paste("#cv-observations (wet/dry) =",y_env$yov$n,"(",y_env$yov$nwet,"/",y_env$yov$ndry,")\n"))
       }
     } else {
-      print(paste("#observations =",y_env$yo$n))
+      cat(paste("#observations =",y_env$yo$n,"\n"))
     }
-    print("+...............................................................+")
+    cat("+---------------------------------------------------------------+\n")
   }
 
   return (TRUE)

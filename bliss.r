@@ -158,35 +158,13 @@ read_dem( argv, env)
 # fg_env$nfg = number of files where the background fields are stored
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
-
-dir_plot <- "/home/cristianl/data/corenks/tests/tmp"
-ffff<- file.path(dir_plot,paste0("tmp_fg_",argv$date_out,".rdata"))
-load_if_present<-F
-if (file.exists(ffff) & load_if_present) {
-  load(ffff)
-} else {
-  res <- read_fg( argv, fg_env, u_env, env)
-  if (!res) boom( code=1, str="ERROR problems while reading the background")
-  save(file=ffff, argv, fg_env, u_env, env, y_env)
-}
-
+res <- read_fg( argv, fg_env, u_env, env)
+if (!res) boom( code=1, str="ERROR problems while reading the background")
 #
 #------------------------------------------------------------------------------
 # Read observations
-
-ffff<- file.path(dir_plot,paste0("tmp_obs_",argv$date_out,".rdata"))
-load_if_present<-F
-if (file.exists(ffff) & load_if_present) {
-  load(ffff)
-} else {
-  res <- read_obs( argv, env, y_env)
-  if (!res) boom( code=1, str="ERROR problems while reading the observations")
-#  png(file="tmp_obs.png",width=1200,height=1200)
-#  plot(y_env$yo$x,y_env$yo$y,pch=21,bg="gray",col="darkgray")
-#  points(y_env$yov$x,y_env$yov$y,pch=21,bg="red",col="darkred")
-#  dev.off()
-  save(file=ffff, argv, fg_env, u_env, env, y_env)
-}
+res <- read_obs( argv, env, y_env)
+if (!res) boom( code=1, str="ERROR problems while reading the observations")
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
@@ -208,8 +186,8 @@ if (argv$verbose)
   cat("+-------------------------------------------------------+\nAnalysis\n")
 #..............................................................................
 # ===> Rasterize  <===
-if (argv$mode=="rasterize") {
-  source( file.path( bliss_mod_path, "main_rasterize.r"))
+if (argv$mode=="rasterize") { # still to test
+  res <- rasterize_with_bliss( argv, y_env, env)
 #..............................................................................
 # ===> OI with deterministic background  <===
 } else if (argv$mode=="OI_firstguess") {
@@ -231,10 +209,6 @@ if (argv$mode=="rasterize") {
 } else if (argv$mode=="SC_Barnes") {
   source( file.path( bliss_mod_path, "main_sc_barnes.r"))
 #..............................................................................
-# ===>  Hybrid Local Ensemble Transform Kalman Filter  <===
-#} else if (argv$mode=="hyletkf") {
-#  source( file.path( bliss_mod_path, "main_hyletkf.r"))
-#..............................................................................
 # ===>  Ensemble-based Statistical Interpolation  <===
 } else if (argv$mode=="oi") {
   envtmp <- new.env( parent = emptyenv())
@@ -245,80 +219,20 @@ if (argv$mode=="rasterize") {
 } else if (argv$mode=="ensigap") {
   source( file.path( bliss_mod_path, "main_ensigap.r"))
 #..............................................................................
-# ===>  Change of Resolution Ensemble Kalman smoother  <===
+# ===>  Change-of-Resolution Ensemble Kalman smoother  <===
 } else if (argv$mode=="corenks") {
-  
-  ffff<- file.path(dir_plot,paste0("tmp_corenks_mergeobs_",argv$date_out,".rdata"))
-  load_if_present<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    envtmp <- new.env( parent = emptyenv())
-    res <- corenks_mergeobs( argv, y_env, u_env, env)
-    rm(envtmp)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-#  env$mergeobs$: r rall idi o_errvar a_errvar
-#  y_env$yov$: mergeobs_a mergeobs_idi 
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_corenks_selensemble_",argv$date_out,".rdata"))
-  load_if_present<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    res <- corenks_selensemble( argv, fg_env, env, plot=F, dir_plot=dir_plot)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-  }
-
-  ffff<- file.path(dir_plot,paste0("tmp_corenks_",argv$date_out,".rdata"))
-  load_if_present<-F
-  plot<-F
-  if (file.exists(ffff) & load_if_present) {
-    load(ffff)
-  } else {
-    t00<-Sys.time()
-    envtmp <- new.env( parent = emptyenv())
-    res <- corenks( argv, y_env, fg_env, env, dir_plot=dir_plot)
-    rm(envtmp)
-    print(Sys.time()-t00)
-    save(file=ffff, argv, fg_env, u_env, env, y_env)
-    cat( paste( "written file", ffff,"\n"))
-  }
-
+envtmp <- new.env( parent = emptyenv())
+res <- corenks_mergeobs( argv, y_env, u_env, env)
+rm(envtmp)
+res <- corenks_selensemble( argv, fg_env, env)
+envtmp <- new.env( parent = emptyenv())
+res <- corenks( argv, y_env, fg_env, env)
+rm(envtmp)
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------
 if (argv$verbose) 
   cat("+-------------------------------------------------------+\nOutput\n")
-#
-# -- text files --
-# table
-#if (!is.na(argv$off_y_table)) 
-#  source( file.path( bliss_mod_path, "main_off_y_table.r"))
-## table (transformed data)
-#if (!is.na(argv$off_yt_table)) 
-#  source( file.path( bliss_mod_path, "main_off_yt_table.r"))
-## table cross-validation
-#if (!is.na(argv$off_cv_table)) 
-#  source( file.path( bliss_mod_path, "main_off_cv_table.r"))
-## table cross-validation (transformed data)
-#if (!is.na(argv$off_cvt_table)) 
-#  source( file.path( bliss_mod_path, "main_off_cvt_table.r"))
-## table leave-one-out cross-validation
-#if (!is.na(argv$off_lcv_table)) 
-#  source( file.path( bliss_mod_path, "main_off_lcv_table.r"))
-## table leave-one-out cross-validation (transformed data)
-#if (!is.na(argv$off_lcvt_table)) 
-#  source( file.path( bliss_mod_path, "main_off_lcvt_table.r"))
-#
-# -- netcdf - verif --
-#source( file.path( bliss_mod_path, "main_off_verif.r"))
 
 #
 # -- rdata --

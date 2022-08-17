@@ -1,5 +1,5 @@
 #+ Change-of-Resolution Ensemble Kalman Smoother
-corenks <- function( argv, y_env, fg_env, env, dir_plot=NA) {
+corenks <- function( argv, y_env, fg_env, env) {
 #
 #------------------------------------------------------------------------------
 
@@ -48,12 +48,13 @@ corenks <- function( argv, y_env, fg_env, env, dir_plot=NA) {
       raux <- mrtree$raster[[j-1]]$r
       raux[] <- mrobs$val_all[[j-1]]
 #      raux[mrobs$ix[[j-1]]] <- mrobs$val[[j-1]]
-      robs <- aggregate( raux, fact=2, fun="mean", expand=T, na.rm=T)
+      robs <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
+      rerrvar <- aggregate( raux, fact=2, fun=sd, expand=T, na.rm=T)**2/4
       raux[] <- mrobs$idi[[j-1]]
-      ridi <- aggregate( raux, fact=2, fun="mean", expand=T, na.rm=T)
-      raux[] <- mrobs$errvar_all[[j-1]]
+      ridi <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
+#      raux[] <- mrobs$errvar_all[[j-1]]
 #      raux[mrobs$ix[[j-1]]] <- mrobs$errvar[[j-1]]
-      rerrvar <- aggregate( raux, fact=2, fun="mean", expand=T, na.rm=T)
+#      rerrvar <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
       mrtree$raster[[j]]$r <- ridi
       mrtree$raster[[j]]$r[] <- NA
     }
@@ -61,8 +62,7 @@ corenks <- function( argv, y_env, fg_env, env, dir_plot=NA) {
     ix <- which( getValues(ridi) >= argv$corenks_ididense & 
                  !is.na( getValues(robs)))
     # stop if no observations found 
-#    if ( length(ix) == 0) { 
-    if ( length(ix) < 2) { 
+    if ( length(ix) == 0) { 
       jstop <- j-1
       break 
     # else save observations in the tree structure
@@ -78,13 +78,13 @@ corenks <- function( argv, y_env, fg_env, env, dir_plot=NA) {
       # observed values only for selected gridpoints
       mrobs$ix[[j]] <- ix
       mrobs$d_dim[[j]] <- length(ix)
-print(paste("j d_dim",j,mrobs$d_dim[[j]]))
       mrobs$val[[j]] <- getValues(robs)[ix]
       mrobs$errvar[[j]] <- getValues(rerrvar)[ix]
       mrobs$x[[j]] <- xy[ix,1]
       mrobs$y[[j]] <- xy[ix,2]
       mrobs$val_all[[j]] <- getValues(robs)
       mrobs$errvar_all[[j]] <- getValues(rerrvar)
+#      print(paste("j d_dim",j,mrobs$d_dim[[j]]))
     }
   } # end loop over spatal levels
   # safe-check, exit when no ok observations found 
@@ -108,7 +108,7 @@ print(paste("j d_dim",j,mrobs$d_dim[[j]]))
       } else {
         s <- mrtree$raster[[j-1]]$r
         s[] <- mrenkf$data[[j-1]]$Ea[,e]
-        r <- aggregate( s, fact=2, fun="mean", expand=T, na.rm=T)
+        r <- aggregate( s, fact=2, fun=mean, expand=T, na.rm=T)
       }
       # initializations (only once per level)
       if ( e == 1) {
@@ -146,9 +146,14 @@ print(paste("j d_dim",j,mrobs$d_dim[[j]]))
     envtmp$obs_val <- mrobs$val[[j]][iy]
     envtmp$Eb <- mrenkf$data[[j]]$Eb[ix,]
     envtmp$HEb <- mrenkf$data[[j]]$HEb[iy,]
-    eps2 <- max( c( 0.1, min( c( mean(mrobs$errvar[[j]],na.rm=T) / mean(rowMeans(mrenkf$data[[j]]$Xb**2)), 2))))
+    if (length(argv$corenks_eps2_range) == 2) {
+      eps2_guess <- mean( mrobs$errvar[[j]], na.rm=T) / mean( rowMeans( mrenkf$data[[j]]$Xb**2))
+      eps2 <- max( c( argv$corenks_eps2_range[1], min( c( eps2_guess, argv$corenks_eps2_range[2]))))
+    } else {
+      eps2 <- argv$corenks_eps2_range[1]
+    }
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
-    print(paste("eps2",eps2))
+#    print(paste("eps2 guess def:",round(eps2_guess,2),round(eps2,2)))
     envtmp$D <- envtmp$obs_val - envtmp$HEb
     # helper to get the neighbours
     envtmp$nn2 <- nn2( cbind(envtmp$obs_x,envtmp$obs_y), 
@@ -236,9 +241,14 @@ print(paste("j d_dim",j,mrobs$d_dim[[j]]))
     envtmp$obs_val <- mrobs$val[[j]][iy]
     envtmp$Eb <- mrenks$data[[j]]$Eb[ix,]
     envtmp$HEb <- mrenks$data[[j]]$HEb[iy,]
-    eps2 <- max( c( 0.1, min( c( mean(mrobs$errvar[[j]],na.rm=T) / mean(rowMeans(mrenks$data[[j]]$Xb**2)), 2))))
+    if (length(argv$corenks_eps2_range) == 2) {
+      eps2_guess <- mean( mrobs$errvar[[j]], na.rm=T) / mean( rowMeans( mrenkf$data[[j]]$Xb**2))
+      eps2 <- max( c( argv$corenks_eps2_range[1], min( c( eps2_guess, argv$corenks_eps2_range[2]))))
+    } else {
+      eps2 <- argv$corenks_eps2_range[1]
+    }
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
-    print(paste("eps2",eps2))
+#    print(paste("eps2 guess def:",round(eps2_guess,2),round(eps2,2)))
     envtmp$D <- envtmp$obs_val - envtmp$HEb
     # helper to get the neighbours
     envtmp$nn2 <- nn2( cbind(envtmp$obs_x,envtmp$obs_y), 
