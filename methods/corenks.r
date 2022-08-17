@@ -308,6 +308,5 @@ corenks <- function( argv, y_env, fg_env, env) {
     # extract point values (analysis)
     y_env$yo$value_a[,e]  <- extract( r, cbind(  y_env$yo$x, y_env$yo$y), method="simple")
   } # END loop over ensemble members
-save(file="tmp.rdata",mrenkf,mrobs,mrtree,mrenks)
 
 } # END FUNCTION
