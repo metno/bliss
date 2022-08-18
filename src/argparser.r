@@ -627,6 +627,11 @@ p <- add_argument(p, "--iff_obs.dqc",
                   help="data quality control",
                   type="character",
                   default="none")
+p <- add_argument(p, "--iff_obs.dqc_flags_to_keep",
+                  help="data quality control flags to keep",
+                  type="integer",
+                  nargs=Inf,
+                  default=NA)
 #------------------------------------------------------------------------------
 # Master grid definition
 p <- add_argument(p, "--grid_master.x1",

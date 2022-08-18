@@ -154,6 +154,26 @@ read_obs <- function( argv, env, y_env) {
       quit(status=1)
     }
     data$dqc <- dat[,varidxtmp]
+    if ( any( !is.na(argv$iff_obs.dqc_flags_to_keep))) {
+      ixx <- which( data$dqc %in% argv$iff_obs.dqc_flags_to_keep)
+      if ( ( ndata <- length(ixx)) > 0) {
+        data_tmp <- list()
+        data_tmp$x <- data$x[ixx]
+        data_tmp$y <- data$y[ixx]
+        data_tmp$z <- data$z[ixx]
+        data_tmp$x_orig <- data$x_orig[ixx]
+        data_tmp$y_orig <- data$y_orig[ixx]
+        data_tmp$value <- data$value[ixx]
+        data_tmp$sourceId <- data$sourceId[ixx]
+        data_tmp$prId <- data$prId[ixx]
+        data_tmp$dqc <- data$dqc[ixx]
+        rm(data)
+        data <- data_tmp
+        rm(data_tmp)
+      } else {
+        return(NULL) 
+      }
+    }
   } else {
     data$dqc <- rep(0,length(data$x))
   }
@@ -236,7 +256,6 @@ read_obs <- function( argv, env, y_env) {
     if (env$cv_mode) {
       # prId=1 MET-WMO stations
       ixcv <- which( auxflag &
-                     data$dqc == 0               & 
                      data$prId %in% argv$prId.cv & 
                      !is.na( data$value)         &
                      flag_in_master              &
@@ -251,7 +270,7 @@ read_obs <- function( argv, env, y_env) {
       if (!is.na(argv$cv_mode_random_setseed)) set.seed(argv$cv_mode_random_setseed)
       randomize <- sample( ndata, replace=FALSE)
       for (i in randomize) {
-        if ( !(auxflag[i]) | is.na(data$value[i]) | data$dqc[i]!=0 | !flag_in_master[i] | !flag_in_fg[i] ) next
+        if ( !(auxflag[i]) | is.na(data$value[i]) | !flag_in_master[i] | !flag_in_fg[i] ) next
         if ( j == 0) {
           j <- j + 1
           stmp[j] <- data$sourceId[i]
@@ -304,15 +323,13 @@ read_obs <- function( argv, env, y_env) {
   #
   # Select stations to be used as input (exclude some stations if required)
   if ( any( !is.na( argv$prId.exclude))) {
-    ix0 <- which( data$dqc == 0                       &  
-                  !(data$prId %in% argv$prId.exclude) &
+    ix0 <- which( !(data$prId %in% argv$prId.exclude) &
                   flag_in_master                      &
                   flag_in_fg                          &
                   !is.na(data$value)                  &
                   !is.nan(data$value) )
   } else {
-    ix0 <- which( data$dqc==0        &
-                  flag_in_master     &
+    ix0 <- which( flag_in_master     &
                   flag_in_fg         &
                   !is.na(data$value) &
                   !is.nan(data$value) )
