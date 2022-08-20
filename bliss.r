@@ -227,7 +227,7 @@ rm(envtmp)
 res <- corenks_selensemble( argv, fg_env, env)
 envtmp <- new.env( parent = emptyenv())
 res <- corenks( argv, y_env, fg_env, env)
-rm(envtmp)
+rm( envtmp)
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------
