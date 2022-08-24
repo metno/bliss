@@ -5,6 +5,7 @@ enks_down_gridpoint_by_gridpoint<-function( i,
                                             idi = F,
                                             uncertainty = F) {
 # returned values: analysis, observation error var, analysis error var
+# note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------
   xidi <- NA; #o_errvar <- NA; xa_errvar <- NA
 
@@ -17,51 +18,25 @@ enks_down_gridpoint_by_gridpoint<-function( i,
     Ea <- envtmp$Ea[i,]
   } else {
 
-    # observations available
+    # available observations
     ixa  <- envtmp$nn2$nn.idx[i,aux]
 
     # define vectors
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- envtmp$obs_x[ixa]
     y <- envtmp$obs_y[ixa]
-    if ( any( class(envtmp$D) == "matrix")) {
-      di <- envtmp$D[ixa,]
-    } else {
-      di <- envtmp$D[ixa]
-    }
+    di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
+    Xa_j  <- array( data=envtmp$Xa_j[i,],   dim=c(1,envtmp$k_dim))
+    Xa_j1 <- array( data=envtmp$Xa_j1[ixa,], dim=c(p,envtmp$k_dim))
     eps2 <- envtmp$eps2[i]
 
-    # correlations
-#print("===============")
-#print("envtmp$Xa_j[i,]")
-#print(envtmp$Xa_j[i,])
-#print("envtmp$Xa_j1[ixa,]")
-#print(envtmp$Xa_j1[ixa,])
-    rloc <- tcrossprod( envtmp$Xa_j[i,], envtmp$Xa_j1[ixa,])     
-    S    <- tcrossprod( envtmp$Xa_j1[ixa,], envtmp$Xa_j1[ixa,])     
-#print("rloc")
-#print(rloc)
-#print("S")
-#print(S)
-#print("di")
-#print(di)
-
+    Cxx_jj1  <- tcrossprod( Xa_j, Xa_j1)     
+    Cxx_j1j1 <- tcrossprod( Xa_j1, Xa_j1)     
     #
-    SRinv <- chol2inv(chol( (S+diag(x=eps2,p)) ))
-#print("SRinv")
-#print(SRinv)
-    SRinv_di <- crossprod(SRinv,di)       
-    if ( any( class(envtmp$D) == "matrix")) {
-      Ea <- envtmp$Ea[i,] + crossprod( t(rloc), SRinv_di)
-    } else {
-      Ea <- envtmp$Ea[i,] + sum( rloc * as.vector(SRinv_di))
-    }
-    if (idi) xidi <- sum( rloc * as.vector(rowSums(SRinv)))
-#    if (uncertainty) {
-#      o_errvar  <- mean( di * ( di - crossprod(S,SRinv_di)))
-#      xa_errvar <- ( o_errvar/ eps2) * 
-#                   ( 1 - sum( as.vector( crossprod( rloc, SRinv)) * rloc))
-#    }
+    CxxCqq_inv <- chol2inv(chol( ( Cxx_j1j1+diag(x=eps2,p)) ))
+    CxxCqq_inv_di <- crossprod(CxxCqq_inv,di)       
+    Ea <- envtmp$Ea[i,] + crossprod( t(Cxx_jj1), CxxCqq_inv_di)
+    if (idi) xidi <- sum( Cxx_jj1 * as.vector(rowSums(CxxCqq_inv)))
   }
   return( c( Ea, xidi))
 }

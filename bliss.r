@@ -89,7 +89,6 @@ y_env$yov <- list() # list for cv
 # observation environment (alignment)
 u_env    <- new.env( parent=emptyenv())
 u_env$uo <- list()
-
 #
 #-----------------------------------------------------------------------------
 # read command line arguments and/or configuration file
@@ -221,13 +220,13 @@ if (argv$mode=="rasterize") { # still to test
 #..............................................................................
 # ===>  Change-of-Resolution Ensemble Kalman smoother  <===
 } else if (argv$mode=="corenks") {
-envtmp <- new.env( parent = emptyenv())
-res <- corenks_mergeobs( argv, y_env, u_env, env)
-rm(envtmp)
-res <- corenks_selensemble( argv, fg_env, env)
-envtmp <- new.env( parent = emptyenv())
-res <- corenks( argv, y_env, fg_env, env)
-rm( envtmp)
+  envtmp <- new.env( parent = emptyenv())
+  res <- corenks_mergeobs( argv, y_env, u_env, env)
+  rm(envtmp)
+  res <- corenks_selensemble( argv, fg_env, env)
+  envtmp <- new.env( parent = emptyenv())
+  res <- corenks( argv, y_env, fg_env, env)
+  rm( envtmp)
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

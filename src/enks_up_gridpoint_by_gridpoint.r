@@ -2,9 +2,11 @@
 enks_up_gridpoint_by_gridpoint<-function( i,
                                           corr = "soar",
                                           dh = 10000,
+                                          alpha = 0.5,
                                           idi = F,
                                           uncertainty = F) {
 # returned values: analysis, observation error var, analysis error var
+# note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------
   xidi <- NA
 
@@ -14,24 +16,22 @@ enks_up_gridpoint_by_gridpoint<-function( i,
   if ( (p <- length( aux <- which(envtmp$nn2$nn.idx[i,]!=0))) == 0) {
 
     # no observations, analysis=background
-    Ea <- envtmp$Eb[i,]
+    Ea <- envtmp$E[i,]
   } else {
 
-    # observations available
+    # available observations
     ixa  <- envtmp$nn2$nn.idx[i,aux]
 
     # define vectors
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- envtmp$obs_x[ixa]
     y <- envtmp$obs_y[ixa]
-    if ( any( class(envtmp$D) == "matrix")) {
-      di <- envtmp$D[ixa,]
-    } else {
-      di <- envtmp$D[ixa]
-    }
+    di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
+    Zi <- array( data=envtmp$Z[i,],   dim=c(1,envtmp$k_dim))
+    Yi <- array( data=envtmp$Y[ixa,], dim=c(p,envtmp$k_dim))
     eps2 <- envtmp$eps2[i]
 
-    # correlations
+    # static correlations
     if (corr=="gaussian") {
       rloc <- exp( -0.5* (dist*dist) / (dh*dh) )
     } else if (corr=="soar")  {
@@ -43,33 +43,28 @@ enks_up_gridpoint_by_gridpoint<-function( i,
     }
 
     if (corr=="gaussian") {
-      S<-exp(-0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
+      Cyy_s<-exp(-0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
     } else if (corr=="soar")  {
       distnorm<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2) / dh 
-      S<-(1+distnorm)*exp(-distnorm)
+      Cyy_s<-(1+distnorm)*exp(-distnorm)
       rm(distnorm)
     } else if (corr=="powerlaw")  {
-      S<-1 / (1 + 0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
+      Cyy_s<-1 / (1 + 0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
     } else if (corr=="toar")  {
       dist<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)
-      S<- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
+      Cyy_s<- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
       rm(dist)
     }
-    #
-    SRinv <- chol2inv(chol( (S+diag(x=eps2,p)) ))
-    SRinv_di <- crossprod(SRinv,di)       
-    if ( any( class(envtmp$D) == "matrix")) {
-      Ea <- envtmp$Eb[i,] + crossprod( rloc, SRinv_di)
-    } else {
-      Ea <- envtmp$Eb[i,] + sum( rloc * as.vector(SRinv_di))
-    }
+    # combine static and dynamic correlations
+    Cxy <- alpha * rloc + (1-alpha) * rloc * tcrossprod( Zi, Yi)
+    Cyy <- alpha * Cyy_s + (1-alpha) * Cyy_s * tcrossprod( Yi, Yi)
 
-    if (idi) xidi <- sum( rloc * as.vector(rowSums(SRinv)))
-#    if (uncertainty) {
-#      o_errvar  <- mean( di * ( di - crossprod(S,SRinv_di)))
-#      xa_errvar <- ( o_errvar/ eps2) * 
-#                   ( 1 - sum( as.vector( crossprod( rloc, SRinv)) * rloc))
-#    }
+    #
+    CyyCdd_inv <- chol2inv( chol( (Cyy+diag(x=eps2,p)) ))
+    CyyCdd_inv_di <- crossprod( CyyCdd_inv, di)       
+    Ea <- envtmp$E[i,] + crossprod( t(Cxy), CyyCdd_inv_di)
+
+    if (idi) xidi <- sum( Cxy * as.vector(rowSums(CyyCdd_inv)))
   }
   return( c( Ea, xidi))
 }
