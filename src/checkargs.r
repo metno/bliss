@@ -35,8 +35,8 @@ if ( argv$mode == "OI_multiscale") {
   print("chosen mode is ensi")
 } else if ( argv$mode == "ensigap") {
   print("chosen mode is ensigap")
-} else if ( argv$mode == "corenks") {
-  print("chosen mode is corenks")
+} else if ( argv$mode == "corens") {
+  print("chosen mode is corens")
 } else if ( argv$mode == "rasterize") {
   print("chosen mode is rasterize")
 } else {

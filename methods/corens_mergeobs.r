@@ -1,5 +1,5 @@
 #+ Merge different observation data sources
-corenks_mergeobs <- function( argv, y_env, u_env, env) {
+corens_mergeobs <- function( argv, y_env, u_env, env) {
 #
 # output
 #  env$mergeobs$value - merged obs values (cover the same region as the "background")
@@ -16,7 +16,7 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
 
   t0a <- Sys.time()
 
-  cat( "-- corenks mergeobs --\n")
+  cat( "-- corens mergeobs --\n")
 
   # number of observations
   env$p_dim <- length(y_env$yo$x)
@@ -32,11 +32,11 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
   envtmp$m_dim <- m_dim
   envtmp$x <- xy[,1]
   envtmp$y <- xy[,2]
-  envtmp$eps2 <- rep( argv$corenks_mergeobs_eps2, m_dim)
+  envtmp$eps2 <- rep( argv$corens_mergeobs_eps2, m_dim)
   envtmp$nn2 <- nn2( cbind(y_env$yo$x,y_env$yo$y), 
                      query = cbind(envtmp$x,envtmp$y), 
-                     k = argv$corenks_mergeobs_pmax, searchtype = "radius", 
-                     radius = (7*argv$corenks_mergeobs_dh))
+                     k = argv$corens_mergeobs_pmax, searchtype = "radius", 
+                     radius = (7*argv$corens_mergeobs_dh))
   cat( paste( " number of grid points, m dim >", m_dim, "\n"))
   cat( paste( "number of observations, p dim >", env$p_dim, "\n"))
 
@@ -49,9 +49,9 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
                         1:m_dim,
                         mc.cores=argv$cores,
                         SIMPLIFY=T,
-                        pmax=argv$corenks_mergeobs_pmax,
-                        corr=argv$corenks_mergeobs_corrfun,
-                        dh=argv$corenks_mergeobs_dh,
+                        pmax=argv$corens_mergeobs_pmax,
+                        corr=argv$corens_mergeobs_corrfun,
+                        dh=argv$corens_mergeobs_dh,
                         idi=T,
                         uncertainty=T))
     
@@ -60,19 +60,19 @@ corenks_mergeobs <- function( argv, y_env, u_env, env) {
     res <- t( mapply( oi_basic_gridpoint_by_gridpoint,
                       1:m_dim,
                       SIMPLIFY=T,
-                      pmax=argv$corenks_mergeobs_pmax,
-                      corr=argv$corenks_mergeobs_corrfun,
-                      dh=argv$corenks_mergeobs_dh,
+                      pmax=argv$corens_mergeobs_pmax,
+                      corr=argv$corens_mergeobs_corrfun,
+                      dh=argv$corens_mergeobs_dh,
                       idi=T,
                       uncertainty=T))
   }
   # res: 1 xa, 2 xidi, 3 o_errvar, 4 xa_errvar
 
   # Safe checks
-  if (!is.na(argv$corenks_range[1])) 
-    res[,1][res[,1]<argv$corenks_range[1]] <- argv$corenks_range[1]  
-  if (!is.na(argv$corenks_range[2])) 
-    res[,1][res[,1]>argv$corenks_range[2]] <- argv$corenks_range[2]  
+  if (!is.na(argv$corens_range[1])) 
+    res[,1][res[,1]<argv$corens_range[1]] <- argv$corens_range[1]  
+  if (!is.na(argv$corens_range[2])) 
+    res[,1][res[,1]>argv$corens_range[2]] <- argv$corens_range[2]  
 
   # output
   env$mergeobs <- list()

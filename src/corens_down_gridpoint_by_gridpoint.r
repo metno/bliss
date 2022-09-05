@@ -1,9 +1,6 @@
-#+ ensemble optimal interpolation 
-enks_down_gridpoint_by_gridpoint<-function( i,
-                                            corr = "soar",
-                                            dh = 10000,
-                                            idi = F,
-                                            uncertainty = F) {
+#+  Change-Of-Resolution Ensemble Rauch-Tung-Striebel smoother DownSweep (coarse-to-fine)
+corens_down_gridpoint_by_gridpoint<-function( i,
+                                              idi = F) {
 # returned values: analysis, observation error var, analysis error var
 # note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------
@@ -27,11 +24,11 @@ enks_down_gridpoint_by_gridpoint<-function( i,
     y <- envtmp$obs_y[ixa]
     di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
     Xa_j  <- array( data=envtmp$Xa_j[i,],   dim=c(1,envtmp$k_dim))
-    Xa_j1 <- array( data=envtmp$Xa_j1[ixa,], dim=c(p,envtmp$k_dim))
+    X_j1 <- array( data=envtmp$X_j1[ixa,], dim=c(p,envtmp$k_dim))
     eps2 <- envtmp$eps2[i]
 
-    Cxx_jj1  <- tcrossprod( Xa_j, Xa_j1)     
-    Cxx_j1j1 <- tcrossprod( Xa_j1, Xa_j1)     
+    Cxx_jj1  <- tcrossprod( Xa_j, X_j1)     
+    Cxx_j1j1 <- tcrossprod( X_j1, X_j1)     
     #
     CxxCqq_inv <- chol2inv(chol( ( Cxx_j1j1+diag(x=eps2,p)) ))
     CxxCqq_inv_di <- crossprod(CxxCqq_inv,di)       

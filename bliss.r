@@ -121,6 +121,13 @@ if ( !is.na( argv$cores)) {
 # checks on input arguments
 argv <- checkargs( argv, env)
 
+#--------debug or test
+dirdeb<-"/home/cristianl/data/corens/debug"
+ffdeb <- file.path( dirdeb, paste0("debtest_beforecorens_", argv$date_out, ".rdata"))
+if ( file.exists( ffdeb)) {
+  load(ffdeb)
+} else {
+
 #
 #------------------------------------------------------------------------------
 # Create master grid (output env$rmaster)
@@ -173,10 +180,13 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "hyletkf", "oi", "corenks")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "hyletkf", "oi", "corens")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
+}
+#------debug and test
+save( file=ffdeb, argv, env, y_env, fg_env, u_env)
 }
 #
 #------------------------------------------------------------------------------
@@ -218,15 +228,45 @@ if (argv$mode=="rasterize") { # still to test
 } else if (argv$mode=="ensigap") {
   source( file.path( bliss_mod_path, "main_ensigap.r"))
 #..............................................................................
-# ===>  Change-of-Resolution Ensemble Kalman smoother  <===
-} else if (argv$mode=="corenks") {
+# ===>  Change-of-Resolution Ensemble Rauch-Tung-Striebel smoother  <===
+} else if (argv$mode=="corens") {
+#next 4 lines are debug/test
+ffdeb <- file.path( dirdeb, paste0("debtest_corens_", argv$date_out, ".rdata"))
+if ( file.exists( ffdeb)) {
+  load(ffdeb)
+} else {
   envtmp <- new.env( parent = emptyenv())
-  res <- corenks_mergeobs( argv, y_env, u_env, env)
+  res <- corens_mergeobs( argv, y_env, u_env, env)
   rm(envtmp)
-  res <- corenks_selensemble( argv, fg_env, env)
+  res <- corens_selensemble( argv, fg_env, env)
   envtmp <- new.env( parent = emptyenv())
-  res <- corenks( argv, y_env, fg_env, env)
+  res <- corens( argv, y_env, fg_env, env)
   rm( envtmp)
+# next 2 lines are debug/test
+save( file=ffdeb, argv, env, y_env, fg_env, u_env)
+}
+
+source("~/projects/bliss/src/optflow_msa.r")
+source("~/projects/bliss/src/optflow_util.r")
+source("~/projects/bliss/methods/corens.r")
+source("~/projects/bliss/methods/msa.r")
+envtmp <- new.env( parent = emptyenv())
+res <- msa( argv, y_env, fg_env, env)
+rm( envtmp)
+q()
+  ra <- rb <- env$rmaster
+  for (i in 1:5) {
+    for (e in 1:env$k_dim) {
+      ra[] <- env$Xa[,e]
+      rb[] <- env$Xb[,e]
+      of <- optical_flow_HS( rb, ra, nlevel=8, niter=10)
+      rbmod <- warp( rb, -of$u, -of$v)
+      if ( any( is.na( getValues(rbmod)))) rbmod[is.na(rbmod)] <- 0
+      env$Xb[,e] <- getValues(rbmod)
+    }
+    res <- corens( argv, y_env, fg_env, env, use_fg_env=F)
+  }
+q()
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

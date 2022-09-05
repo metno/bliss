@@ -1,8 +1,8 @@
 #+ optimal interpolation 
-enkf_analysis_gridpoint_by_gridpoint<-function( i,
-                                                corr="soar",
-                                                dh=10000,
-                                                uncertainty=F) {
+enkf_analysis_Evensen2003_gridpoint_by_gridpoint<-function( i,
+                                                            corr="soar",
+                                                            dh=10000,
+                                                            uncertainty=F) {
 # returned values: analysis, observation error var, analysis error var
 #------------------------------------------------------------------------------
 #  Ea <- rep(NA, envtmp$k_dim); o_errvar <- NA; xa_errvar <- NA
@@ -16,7 +16,7 @@ enkf_analysis_gridpoint_by_gridpoint<-function( i,
     Ea <- envtmp$Eb[i,]
   } else {
 
-    # available observations
+    # observations available
     ixa  <- envtmp$nn2$nn.idx[i,aux]
 
     # define vectors

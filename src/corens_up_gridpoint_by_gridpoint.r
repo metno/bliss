@@ -1,10 +1,10 @@
-#+ ensemble optimal interpolation 
-enks_up_gridpoint_by_gridpoint<-function( i,
-                                          corr = "soar",
-                                          dh = 10000,
-                                          alpha = 0.5,
-                                          idi = F,
-                                          uncertainty = F) {
+#+ Change-Of-Resolution Ensemble Rauch-Tung-Striebel smoother UpSweep (fine-to-coarse) 
+corens_up_gridpoint_by_gridpoint<-function( i,
+                                            corr = "soar",
+                                            dh = 10000,
+                                            alpha = 0.5,
+                                            k_dim_corr=10,
+                                            idi = F) {
 # returned values: analysis, observation error var, analysis error var
 # note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------
@@ -22,13 +22,21 @@ enks_up_gridpoint_by_gridpoint<-function( i,
     # available observations
     ixa  <- envtmp$nn2$nn.idx[i,aux]
 
+    di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
+    if (envtmp$k_dim>k_dim_corr) {
+      ixb <- order( colMeans( abs(di)))[1:k_dim_corr]
+    } else {
+      ixb <- 1:envtmp$k_dim
+      k_dim_corr <- envtmp$k_dim
+    }
+
     # define vectors
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- envtmp$obs_x[ixa]
     y <- envtmp$obs_y[ixa]
-    di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
-    Zi <- array( data=envtmp$Z[i,],   dim=c(1,envtmp$k_dim))
-    Yi <- array( data=envtmp$Y[ixa,], dim=c(p,envtmp$k_dim))
+#    di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
+    Zi <- array( data=envtmp$Z[i,ixb],   dim=c(1,k_dim_corr))
+    Yi <- array( data=envtmp$Y[ixa,ixb], dim=c(p,k_dim_corr))
     eps2 <- envtmp$eps2[i]
 
     # static correlations
@@ -55,6 +63,7 @@ enks_up_gridpoint_by_gridpoint<-function( i,
       Cyy_s<- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
       rm(dist)
     }
+
     # combine static and dynamic correlations
     Cxy <- alpha * rloc + (1-alpha) * rloc * tcrossprod( Zi, Yi)
     Cyy <- alpha * Cyy_s + (1-alpha) * Cyy_s * tcrossprod( Yi, Yi)

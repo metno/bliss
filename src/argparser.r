@@ -91,7 +91,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corenks\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corens\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -1186,63 +1186,71 @@ p <- add_argument(p, "--oi_corrfun",
 #------------------------------------------------------------------------------
 # Change-of-Resolution Ensemble Kalman Smoother
 
-p <- add_argument(p, "--corenks_k_dim",
+p <- add_argument(p, "--corens_k_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
-p <- add_argument(p, "--corenks_rain_uo",
+p <- add_argument(p, "--corens_rain_uo",
                   help="rain yes/no threshold for alignment (mm)",
                   type="numeric",
                   default=NA)
-p <- add_argument(p, "--corenks_rain_yo",
+p <- add_argument(p, "--corens_rain_yo",
                   help="rain yes/no threshold for interpolation (mm)",
                   type="numeric",
                   default=NA)
-p <- add_argument(p, "--corenks_range",
-                  help="range check for corenks",
+p <- add_argument(p, "--corens_range",
+                  help="range check for corens",
                   type="numeric",
                   nargs=2,
                   default=c(NA,NA))
 
-# corenks - mergeobs
-p <- add_argument(p, "--corenks_mergeobs_eps2",
-                  help="eps2 for corenks mergeobs",
+# corens - mergeobs
+p <- add_argument(p, "--corens_mergeobs_eps2",
+                  help="eps2 for corens mergeobs",
                   type="numeric",
                   default=0.5)
-p <- add_argument(p, "--corenks_mergeobs_pmax",
-                  help="max number of observations for corenks mergeobs",
+p <- add_argument(p, "--corens_mergeobs_pmax",
+                  help="max number of observations for corens mergeobs",
                   type="integer",
                   default=30)
-p <- add_argument(p, "--corenks_mergeobs_dh",
-                  help="horizontal decorrelation length scale for corenks mergeobs",
+p <- add_argument(p, "--corens_mergeobs_dh",
+                  help="horizontal decorrelation length scale for corens mergeobs",
                   type="numeric",
                   default=3)
-p <- add_argument(p, "--corenks_mergeobs_corrfun",
-                  help="correlation function for corenks mergeobs (gaussian, soar, powerlaw, toar)",
+p <- add_argument(p, "--corens_mergeobs_corrfun",
+                  help="correlation function for corens mergeobs (gaussian, soar, powerlaw, toar)",
                   type="character",
                   default="toar")
-# corenks - selens
-p <- add_argument(p, "--corenks_selens_mode",
-                  help="selection of ensemble members (ets, maxoverlap)",
+# corens - selens
+p <- add_argument(p, "--corens_selens_mode",
+                  help="selection of ensemble members (ets, maxoverlap, identity)",
                   type="character",
                   default="maxoverlap")
-# corenks - main
-p <- add_argument(p, "--corenks_pmax",
-                  help="max number of observations for corenks",
+# corens - main
+p <- add_argument(p, "--corens_pmax",
+                  help="max number of observations for corens",
                   type="integer",
                   default=30)
-p <- add_argument(p, "--corenks_corrfun",
-                  help="correlation function for corenks (gaussian, soar, powerlaw, toar)",
+p <- add_argument(p, "--corens_corrfun",
+                  help="correlation function for corens (gaussian, soar, powerlaw, toar)",
                   type="character",
                   default="toar")
-p <- add_argument(p, "--corenks_ididense",
+p <- add_argument(p, "--corens_ididense",
                   help="threshold used to define dense station regions",
                   type="numeric",
                   default=0.8)
-p <- add_argument(p, "--corenks_eps2_range",
-                  help="range check for corenks (either two values or just one value). Deafault is 0.5.",
+p <- add_argument(p, "--corens_eps2_range",
+                  help="range check for corens (either two values or just one value). Deafault is 0.5.",
                   type="numeric",
                   nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--corens_alpha",
+                  help="parameter used to weight the static and dynamical contributions in the definition of the hybrid correlations within corens_up sweep",
+                  type="numeric",
+                  default=0.5)
+p <- add_argument(p, "--corens_k_dim_corr",
+                  help="number of ensemble members considered for the computation of the correlations within corens_up sweep (default is corens_k_dim)",
+                  type="integer",
                   default=NA)
 
 #------------------------------------------------------------------------------
@@ -1333,11 +1341,12 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
-if (argv$mode=="corenks") {
-  env$k_dim <- argv$corenks_k_dim
-  u_env$rain <- argv$corenks_rain_uo
-  y_env$rain <- argv$corenks_rain_yo
-  if ( any( is.na(argv$corenks_eps2_range))) argv$corenks_eps2_range <- 0.5
+if (argv$mode=="corens") {
+  env$k_dim <- argv$corens_k_dim
+  u_env$rain <- argv$corens_rain_uo
+  y_env$rain <- argv$corens_rain_yo
+  if ( any( is.na(argv$corens_eps2_range))) argv$corens_eps2_range <- 0.5
+  if ( is.na(argv$corens_k_dim_corr)) argv$corens_k_dim_corr <- argv$corens_k_dim
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim
