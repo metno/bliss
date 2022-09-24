@@ -12,6 +12,10 @@ optical_flow_HS <- function(r1, r2, nlevel,
   u[] <- v[] <- 0
   ni <- nrow(r1)
   nj <- ncol(r1)
+  if ( nlevel > min( c( floor(log2(ni)), floor(log2(nj))))) {
+    cat( paste("nlevel max allowed value is",min( c( floor(log2(ni)), floor(log2(nj)))),"\n"))
+    return()
+  }
   res_x <- res(r1)[1]
   res_y <- res(r1)[2]
   for (lev in nlevel:0) {
@@ -39,20 +43,24 @@ optical_flow_HS <- function(r1, r2, nlevel,
       vxy <- deriv_xy(dv)
       du <- (w1*ubar2 + w2*(ubar1+vxy))/(w1+w2) - Ix*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
       dv <- (w1*vbar2 + w2*(vbar1+uxy))/(w1+w2) - Iy*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
+#      du = (w1*ubar2 + w2*(ubar1+vxy))/(w1+w2) - Ix*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
+#      dv = (w1*vbar2 + w2*(vbar1+uxy))/(w1+w2) - Iy*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
+#      print(range(du))
+#      print(range(dv))
     }
     rdu <- rdv <- r1c
     rdu[] <- du * 2**lev * res_x
-    rdv[] <- dv * 2**lev * res_y
+    rdv[] <- dv * 2**lev * res_y 
     u <- u + sharpen(rdu, r1, method="bilinear")
     v <- v + sharpen(rdv, r1, method="bilinear")
 #    u <- u + sharpen(rdu, r1, method="ngb")
     if (any(is.na(getValues(u)))) u[is.na(u)] <- 0
 #    v <- v + sharpen(rdv, r1, method="ngb")
     if (any(is.na(getValues(v)))) v[is.na(v)] <- 0
-    cat( paste( "u", round(range(getValues(u))[1]/res_x),
-                     round(range(getValues(u))[2]/res_x),
-                "v", round(range(getValues(v))[1]/res_y),
-                     round(range(getValues(v))[2]/res_y)))
+    cat( paste( "u", round(range(getValues(u))[1]/res_x,1),
+                     round(range(getValues(u))[2]/res_x,1),
+                "v", round(range(getValues(v))[1]/res_y,1),
+                     round(range(getValues(v))[2]/res_y,1)))
 #    print(u)
 #    print(v)
   }
