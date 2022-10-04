@@ -6,11 +6,26 @@ oi_basic_gridpoint_by_gridpoint<-function( i,
                                            dh=10000,
                                            idi=T,
                                            uncertainty=F) {
+# How to call this:
+#  assume that: r is a raster with the background; 
+#               y_env$yo$x/y/value are the observations
+#  m_dim <- ncell(r)
+#  xy <- xyFromCell( r, 1:ncell(r))
+#  envtmp$m_dim <- m_dim
+#  envtmp$x <- xy[,1]
+#  envtmp$y <- xy[,2]
+#  envtmp$eps2 <- rep( 0.5, m_dim)
+#  envtmp$nn2 <- nn2( cbind(y_env$yo$x,y_env$yo$y), 
+#                     query = cbind(envtmp$x,envtmp$y), 
+#                     k = argv$mergeobs_pmax, searchtype = "radius", 
+#                     radius = (7*argv$mergeobs_dh))
+#
 # returned values: analysis, IDI, observation error var, analysis error var
 #------------------------------------------------------------------------------
   xa <- NA; xidi <- NA; o_errvar <- NA; xa_errvar <- NA
-
-  if( i%%(round(envtmp$m_dim/10)) == 0) cat(".")
+  
+  # print some stuff now and then
+  if( i %% (round(envtmp$m_dim/10)) == 0) cat(".")
 
   # select the observations to use
   if ( (p <- length( aux <- which(envtmp$nn2$nn.idx[i,]!=0))) == 0) {
@@ -19,43 +34,21 @@ oi_basic_gridpoint_by_gridpoint<-function( i,
     xa <- envtmp$xb[i]
   } else {
 
-    # observations available
+    # selected observations
     ixa  <- envtmp$nn2$nn.idx[i,aux]
 
     # define vectors
     dist <- envtmp$nn2$nn.dists[i,aux]
     x <- y_env$yo$x[ixa]
     y <- y_env$yo$y[ixa]
-    yo <- y_env$yo$value[ixa]
-    yb <- envtmp$yb[ixa]
-    di <- yo - yb
+    di <- y_env$yo$value[ixa] - envtmp$yb[ixa]
     eps2 <- envtmp$eps2[i]
 
-    # correlations
-    if (corr=="gaussian") {
-      rloc <- exp( -0.5* (dist*dist) / (dh*dh) )
-    } else if (corr=="soar")  {
-      rloc <- (1+dist/dh)*exp(-dist/dh)
-    } else if (corr=="powerlaw")  {
-      rloc <- 1 / (1 + 0.5*(dist*dist)/(dh*dh))
-    } else if (corr=="toar")  {
-      rloc <- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
-    }
+    # compute correlations
+    rloc <- corr1d( dist, dh, corr) 
+    S    <- corr2d( cbind(x,y), dh, corr)
 
-    if (corr=="gaussian") {
-      S<-exp(-0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
-    } else if (corr=="soar")  {
-      distnorm<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2) / dh 
-      S<-(1+distnorm)*exp(-distnorm)
-      rm(distnorm)
-    } else if (corr=="powerlaw")  {
-      S<-1 / (1 + 0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
-    } else if (corr=="toar")  {
-      dist<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)
-      S<- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
-      rm(dist)
-    }
-    #
+    # OI equations
     SRinv <- chol2inv(chol( (S+diag(x=eps2,p)) ))
     SRinv_di <- crossprod(SRinv,di)       
     xa <- envtmp$xb[i] + sum( rloc * as.vector(SRinv_di))
@@ -66,6 +59,8 @@ oi_basic_gridpoint_by_gridpoint<-function( i,
                    ( 1 - sum( as.vector( crossprod( rloc, SRinv)) * rloc))
     }
   }
+
+  # Exit
   return( c( xa, xidi, o_errvar, xa_errvar))
 }
 

@@ -12,13 +12,15 @@ warp <- function( r, u, v, method="simple") {
   s
 }
 
-plot_arrows <- function( u, v, fact=1, length=0.25,angle=30) {
+plot_arrows <- function( u, v, fact=1, length=0.25, angle=30) {
   xy <- xyFromCell( u, 1:ncell(u))
   x0 <- xy[,1] 
   y0 <- xy[,2]
   x1 <- xy[,1] + fact * getValues(u)
   y1 <- xy[,2] + fact * getValues(v)
-  arrows(x0=x0,y0=y0,x1=x1,y1=y1,length=length,angle=angle)
+  ix <- which( x0 != x1 | y0 != y1 )
+  if ( length(ix) > 0) 
+    arrows( x0=x0[ix], y0=y0[ix], x1=x1[ix], y1=y1[ix], length=length, angle=angle)
 }
 
 coarsen <- function( r, level) {

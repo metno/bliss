@@ -10,7 +10,7 @@ read_fg <- function( argv, fg_env, u_env, env) {
 
   #
   #----------------------------------------------------------------------------
-
+  # u_env$uo configuration file to read observations (not in-situ)
   if ( ( u_env$nuo <- length( u_env$uo)) == 1) {
 
     if (argv$verbose) cat("Read observations for alignment ...")

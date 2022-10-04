@@ -109,6 +109,29 @@ p <- add_argument(p, "--time_bnds_string",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
+# preproc - mergeobs
+p <- add_argument(p, "--mergeobs_eps2",
+                  help="eps2 for corens mergeobs",
+                  type="numeric",
+                  default=0.5)
+p <- add_argument(p, "--mergeobs_pmax",
+                  help="max number of observations for corens mergeobs",
+                  type="integer",
+                  default=30)
+p <- add_argument(p, "--mergeobs_dh",
+                  help="horizontal decorrelation length scale for corens mergeobs",
+                  type="numeric",
+                  default=3)
+p <- add_argument(p, "--mergeobs_corrfun",
+                  help="correlation function for corens mergeobs (gaussian, soar, powerlaw, toar)",
+                  type="character",
+                  default="toar")
+p <- add_argument(p, "--mergeobs_range",
+                  help="range check for mergeobs",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
+#------------------------------------------------------------------------------
 # rasterize
 # output variables in the netcdf are "mean_raster", "sd_raster",
 #  "n_raster", "q_raster_XX" (e.g. XX=01 stands for 1st percentile).
@@ -1204,23 +1227,7 @@ p <- add_argument(p, "--corens_range",
                   nargs=2,
                   default=c(NA,NA))
 
-# corens - mergeobs
-p <- add_argument(p, "--corens_mergeobs_eps2",
-                  help="eps2 for corens mergeobs",
-                  type="numeric",
-                  default=0.5)
-p <- add_argument(p, "--corens_mergeobs_pmax",
-                  help="max number of observations for corens mergeobs",
-                  type="integer",
-                  default=30)
-p <- add_argument(p, "--corens_mergeobs_dh",
-                  help="horizontal decorrelation length scale for corens mergeobs",
-                  type="numeric",
-                  default=3)
-p <- add_argument(p, "--corens_mergeobs_corrfun",
-                  help="correlation function for corens mergeobs (gaussian, soar, powerlaw, toar)",
-                  type="character",
-                  default="toar")
+
 # corens - selens
 p <- add_argument(p, "--corens_selens_mode",
                   help="selection of ensemble members (ets, maxoverlap, identity)",

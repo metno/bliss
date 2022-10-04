@@ -245,28 +245,13 @@ if ( file.exists( ffdeb)) {
 # next 2 lines are debug/test
 save( file=ffdeb, argv, env, y_env, fg_env, u_env)
 }
-
-source("~/projects/bliss/src/optflow_msa.r")
-source("~/projects/bliss/src/optflow_util.r")
-source("~/projects/bliss/methods/corens.r")
-source("~/projects/bliss/methods/msa.r")
-envtmp <- new.env( parent = emptyenv())
-res <- msa( argv, y_env, fg_env, env)
-rm( envtmp)
-q()
-  ra <- rb <- env$rmaster
-  for (i in 1:5) {
-    for (e in 1:env$k_dim) {
-      ra[] <- env$Xa[,e]
-      rb[] <- env$Xb[,e]
-      of <- optical_flow_HS( rb, ra, nlevel=8, niter=10)
-      rbmod <- warp( rb, -of$u, -of$v)
-      if ( any( is.na( getValues(rbmod)))) rbmod[is.na(rbmod)] <- 0
-      env$Xb[,e] <- getValues(rbmod)
-    }
-    res <- corens( argv, y_env, fg_env, env, use_fg_env=F)
-  }
-q()
+#..............................................................................
+# ===>  Multiscale Alignment Ensemble Statistical Interpolation  <===
+} else if (argv$mode=="msaensi") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  res <- msaensi( argv, y_env, fg_env, env)
+  rm( envtmp)
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------
