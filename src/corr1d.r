@@ -5,13 +5,13 @@ corr1d <- function( values, par, label) {
   if ( length( par == 1)) {
     dist <- values
     dh   <- par
-    if (corr=="gaussian") {
+    if (label == "gaussian") {
       res <- exp( -0.5* (dist*dist) / (dh*dh) )
-    } else if (corr=="soar")  {
+    } else if (label == "soar")  {
       res <- (1+dist/dh)*exp(-dist/dh)
-    } else if (corr=="powerlaw")  {
+    } else if (label == "powerlaw")  {
     res <- 1 / (1 + 0.5*(dist*dist)/(dh*dh))
-    } else if (corr=="toar")  {
+    } else if (label == "toar")  {
       res <- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
     } else {
       res <- rep( NA, length(dist))

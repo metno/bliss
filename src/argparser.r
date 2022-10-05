@@ -132,6 +132,46 @@ p <- add_argument(p, "--mergeobs_range",
                   nargs=2,
                   default=c(NA,NA))
 #------------------------------------------------------------------------------
+# preproc - selensemblemblee
+p <- add_argument(p, "--selens_mode",
+                  help="selection of ensemble members (ets, maxoverlap, identity)",
+                  type="character",
+                  default="identity")
+#------------------------------------------------------------------------------
+# parameters common to several interpolation methods
+p <- add_argument(p, "--k_dim",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
+p <- add_argument(p, "--rain_uo",
+                  help="rain yes/no threshold for gridded observations (mm)",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--rain_yo",
+                  help="rain yes/no threshold for in-situ observations (mm)",
+                  type="numeric",
+                  default=NA)
+p <- add_argument(p, "--range",
+                  help="range check",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
+p <- add_argument(p, "--corrfun",
+                  help="correlation functions (\"gaussian\",\"soar\",\"toar\",\"powerlaw\")",
+                  type="character",
+                  default="gaussian")
+p <- add_argument(p, "--pmax",
+                  help="maximum number of observations in the neighbourhood of a gridpoint for OI",
+                  type="numeric",
+                  default=200)
+#------------------------------------------------------------------------------
+# MSA-EnSI
+p <- add_argument(p, "--msaensi_ididense",
+                  help="MSA-EnSI IDI threshold for defining data dense regions (IDI is defined with respect to preproc-mergeobs OI",
+                  type="numeric",
+                  default=0.8)
+
+#------------------------------------------------------------------------------
 # rasterize
 # output variables in the netcdf are "mean_raster", "sd_raster",
 #  "n_raster", "q_raster_XX" (e.g. XX=01 stands for 1st percentile).
@@ -148,14 +188,6 @@ p <- add_argument(p, "--rasterize_q",
                   nargs=Inf)
 #------------------------------------------------------------------------------
 # OI shared
-p <- add_argument(p, "--corrfun",
-                  help="correlation functions (\"gaussian\",\"soar\")",
-                  type="character",
-                  default="gaussian")
-p <- add_argument(p, "--pmax",
-                  help="maximum number of observations in the neighbourhood of a gridpoint for OI",
-                  type="numeric",
-                  default=200)
 # OI_multiscale / OI_firstguess parameters
 p <- add_argument(p, "--eps2",
                   help="ratio of observation to background error covariance",
@@ -1354,6 +1386,12 @@ if (argv$mode=="corens") {
   y_env$rain <- argv$corens_rain_yo
   if ( any( is.na(argv$corens_eps2_range))) argv$corens_eps2_range <- 0.5
   if ( is.na(argv$corens_k_dim_corr)) argv$corens_k_dim_corr <- argv$corens_k_dim
+} else if (argv$mode=="msaensi") {
+  env$k_dim <- argv$k_dim
+  u_env$rain <- argv$rain_uo
+  y_env$rain <- argv$rain_yo
+#  if ( any( is.na(argv$msaensi_eps2_range))) argv$msaensi_eps2_range <- 0.5
+#  if ( is.na(argv$msaensi_k_dim_corr)) argv$msaensi_k_dim_corr <- argv$msaensi_k_dim
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim

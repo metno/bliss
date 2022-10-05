@@ -20,7 +20,8 @@ msaensi <- function( argv, y_env, fg_env, env, use_fg_env=T) {
 # Ying, Y. (2019). A Multiscale Alignment Method for Ensemble Filtering with 
 #  Displacement Errors, Monthly Weather Review, 147(12), 4553-4565.
 #------------------------------------------------------------------------------
-library(smoothie)
+  library(smoothie)
+
   t0a <- Sys.time()
 
   cat( "-- MSA-EnSI --\n")
@@ -51,7 +52,7 @@ library(smoothie)
       ridi[] <- env$mergeobs$idi
       ridi[is.na(ridi)] <- 0
       ridi[ridi>1]      <- 1
-    # j-th level has a grid of approximately (nx/2**j,ny/2**j)
+    # j-th level has a grid of approximately (nx/[2**(j-1)],ny/[2**(j-1)]; approx because the coarser domain is expanded to cover the finer one)
     } else {
       raux    <- mrtree$raster[[j-1]]$r
       raux[]  <- mrobs$val_all[[j-1]]
@@ -96,19 +97,20 @@ library(smoothie)
   # multi-resolution background, tree-structured data model
   mrbkg <- list()
 
-  # Can this be made faster?
-env$k_dim <- 3
-  for (j in jstop:1) {
+  for (j in 1:jstop) {
     mrbkg$data[[j]] <- list()
-    mrbkg$data[[j]]$E <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
-    mrbkg$data[[j]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+    mrbkg$data[[j]]$E <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
     mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
     # loop over ensemble members
     for (e in 1:env$k_dim) {
-      i <- fg_env$ixs[e]
-      r <- subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i])
-      Ee <- gauss2dsmooth( x=matrix(getValues(r),ncol=ny,nrow=nx), lambda=2**j, nx=nx, ny=ny)
-      r[] <- t(Ee)
+      if ( j == 1) {
+        r <- subset( fg_env$fg[[fg_env$ixf[fg_env$ixs[e]]]]$r_main, subset=fg_env$ixe[fg_env$ixs[e]])
+      } else {
+        raux    <- mrtree$raster[[j-1]]$r
+        raux[]  <- mrbkg$data[[j-1]]$E[,e]
+        r       <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
+      }
       mrbkg$data[[j]]$HE[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
       mrbkg$data[[j]]$E[,e] <- getValues(r)
       mrbkg$data[[j]]$Eor[,e] <- getValues(r)
@@ -116,6 +118,116 @@ env$k_dim <- 3
     if (!is.na(y_env$rain)) mrbkg$data[[j]]$E[mrbkg$data[[j]]$E<y_env$rain] <- 0
     if (!is.na(y_env$rain)) mrbkg$data[[j]]$HE[mrbkg$data[[j]]$HE<y_env$rain] <- 0
   }
+
+  # Initializations
+  envtmp$x <- mrtree$x[[1]]
+  envtmp$y <- mrtree$y[[1]]
+  envtmp$m_dim <- mrtree$m_dim[[1]]
+  ra <- mrtree$raster[[1]]$r
+  rb <- mrtree$raster[[1]]$r
+
+  # Loop over spatial scales
+  for (j in jstop:1) {
+    envtmp$x <- mrtree$x[[j]]
+    envtmp$y <- mrtree$y[[j]]
+    envtmp$m_dim <- mrtree$m_dim[[j]]
+    ra <- mrtree$raster[[j]]$r
+    rb <- mrtree$raster[[j]]$r
+    envtmp$obs_x <- mrobs$x[[j]]
+    envtmp$obs_y <- mrobs$y[[j]]
+    envtmp$k_dim <- env$k_dim
+    envtmp$obs_val <- mrobs$val[[j]]
+    envtmp$Eb <- mrbkg$data[[j]]$E
+    envtmp$HE <- mrbkg$data[[j]]$HE
+    envtmp$D <- envtmp$obs_val - envtmp$HE
+    envtmp$eps2 <- rep( .1, envtmp$m_dim) # 1? is that ok?
+    envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
+                       query = cbind(mrtree$x[[j]],mrtree$y[[j]]), 
+                       k = min( c(argv$pmax,mrobs$d_dim[[j]])), 
+                       searchtype = "radius", 
+                       radius = (7*mrtree$mean_res[[j]]))
+    # run EnKF/EnOI gridpoint by gridpoint
+    if (!is.na(argv$cores)) {
+# see corens_up_gridpoint_by_gridpoint
+      res <- t( mcmapply( enoi_basic_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          mc.cores=argv$cores,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$corrfun,
+                                           dh=mrtree$mean_res[[j]],
+                                           idi=F)))
+    # no-multicores
+    } else {
+      res <- t( mapply( enoi_basic_gridpoint_by_gridpoint,
+                        1:envtmp$m_dim,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$corrfun, 
+                                         dh=mrtree$mean_res[[j]],
+                                         idi=F)))
+    }
+    Ea <- res[,1:env$k_dim]
+save(file="tmp.rdata",envtmp,env,Ea,ra,mrtree,mrobs,mrbkg,y_env)
+q()
+    if (!is.na(y_env$rain)) Ea[Ea<y_env$rain] <- 0
+    if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
+
+    # Align smaller scales
+    if (j>1) {
+      # Loop over ensembles
+      for (e in 1:env$k_dim) {
+        ra[] <- Ea[,e]
+        rb[] <- mrbkg$data[[j]]$E[,e]
+match_rasters <- function(a) { of <- optical_flow_HS( rb, ra, nlevel=4, niter=a[1], w1=a[2], w2=a[3]); rbmod <- warp( rb, -of$u, -of$v); if ( any( is.na( getValues(rbmod)))) rbmod[is.na(rbmod)] <- 0; costf <- sqrt(mean( getValues(ra-rbmod)**2)); costf}
+om <- optim(c(100,0.25,0.03),match_rasters,method="Nelder-Mead",control=list(maxit=100,parscale=c(1,.1,.1)))
+of <- optical_flow_HS( rb, ra, nlevel=4, niter=om$par[1], w1=om$par[2], w2=om$par[3])
+rbmod <- warp( rb, -of$u, -of$v)
+image(rb,breaks=c(0,0.1,1,2,4,8,16,32),col=c("gray",rev(rainbow(6))));plot_arrows(of$u, of$v, fact=1, length=0.03)
+dev.new()
+image(ra,breaks=c(0,0.1,1,2,4,8,16,32),col=c("gray",rev(rainbow(6))))
+dev.new()
+image(rbmod,breaks=c(0,0.1,1,2,4,8,16,32),col=c("gray",rev(rainbow(6))))
+
+        of <- optical_flow_HS( rb, ra, nlevel=j, niter=100, w1=0.25, w2=0.03)
+        # Loop over scales
+        for (jj in (j-1):1) {
+          rb[] <- mrbkg$data[[jj]]$E[,e]
+          rbmod <- warp( rb, -of$u, -of$v)
+
+
+          if ( any( is.na( getValues(rbmod)))) rbmod[is.na(rbmod)] <- 0
+#          mrbkg$data[[jj]]$E[,e] <- getValues(rbmod)
+#          Ee <- gauss2dsmooth( x=matrix(getValues(rbmod),ncol=ny,nrow=nx), lambda=2, nx=nx, ny=ny)
+#          r[] <- t(Ee)
+          r<-rbmod
+          mrbkg$data[[jj]]$HE[,e] <- extract( r, cbind( mrobs$x[[jj]], mrobs$y[[jj]]))
+          mrbkg$data[[jj]]$E[,e] <- getValues(r)
+          if (!is.na(y_env$rain)) mrbkg$data[[jj]]$E[mrbkg$data[[jj]]$E<y_env$rain] <- 0
+          if (!is.na(y_env$rain)) mrbkg$data[[jj]]$HE[mrbkg$data[[jj]]$HE<y_env$rain] <- 0
+        } # END - Loop over scales
+      } # END - Loop over ensembles
+    } # END - Align smaller scales
+    save(file=paste0("tmp_",j,".rdata"),mrobs,mrtree,mrbkg,env,Ea)
+    print(paste0("tmp_",j,".rdata"))
+  } # END - Loop over spatial scales
+#  # Can this be made faster?
+#  for (j in jstop:1) {
+#    mrbkg$data[[j]] <- list()
+#    mrbkg$data[[j]]$E <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+#    mrbkg$data[[j]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+#    mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
+#    # loop over ensemble members
+#    for (e in 1:env$k_dim) {
+#      i <- fg_env$ixs[e]
+#      r <- subset( fg_env$fg[[fg_env$ixf[i]]]$r_main, subset=fg_env$ixe[i])
+#      Ee <- gauss2dsmooth( x=matrix(getValues(r),ncol=ny,nrow=nx), lambda=2**j, nx=nx, ny=ny)
+#      r[] <- t(Ee)
+#      mrbkg$data[[j]]$HE[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
+#      mrbkg$data[[j]]$E[,e] <- getValues(r)
+#      mrbkg$data[[j]]$Eor[,e] <- getValues(r)
+#    }
+#    if (!is.na(y_env$rain)) mrbkg$data[[j]]$E[mrbkg$data[[j]]$E<y_env$rain] <- 0
+#    if (!is.na(y_env$rain)) mrbkg$data[[j]]$HE[mrbkg$data[[j]]$HE<y_env$rain] <- 0
+#  }
 
   # --- MSA-EnSI ---
 

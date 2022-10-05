@@ -122,8 +122,8 @@ if ( !is.na( argv$cores)) {
 argv <- checkargs( argv, env)
 
 #--------debug or test
-dirdeb<-"/home/cristianl/data/corens/debug"
-ffdeb <- file.path( dirdeb, paste0("debtest_beforecorens_", argv$date_out, ".rdata"))
+dirdeb <- "/home/cristianl/data/msaensi/debug"
+ffdeb  <- file.path( dirdeb, paste0("debtest_beforemsaensi_", argv$date_out, ".rdata"))
 if ( file.exists( ffdeb)) {
   load(ffdeb)
 } else {
@@ -180,7 +180,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "hyletkf", "oi", "corens")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "hyletkf", "oi", "corens", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
@@ -248,10 +248,22 @@ save( file=ffdeb, argv, env, y_env, fg_env, u_env)
 #..............................................................................
 # ===>  Multiscale Alignment Ensemble Statistical Interpolation  <===
 } else if (argv$mode=="msaensi") {
+#next 4 lines are debug/test
+ffdeb <- file.path( dirdeb, paste0("debtest_msaensi_", argv$date_out, ".rdata"))
+if ( file.exists( ffdeb)) {
+  load(ffdeb)
+  envtmp <- new.env( parent = emptyenv())
+  res <- msaensi( argv, y_env, fg_env, env)
+} else {
   envtmp <- new.env( parent = emptyenv())
   res <- preproc_mergeobs( argv, y_env, u_env, env)
-  res <- msaensi( argv, y_env, fg_env, env)
-  rm( envtmp)
+  res <- preproc_selensemble( argv, fg_env, env)
+  save( file=ffdeb, argv, env, y_env, fg_env, u_env)
+q()
+#  res <- msaensi( argv, y_env, fg_env, env)
+}
+rm( envtmp)
+q()
 } # end if selection among spatial analysis methods
 #
 #------------------------------------------------------------------------------

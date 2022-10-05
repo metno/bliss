@@ -32,8 +32,10 @@ preproc_mergeobs <- function( argv, y_env, u_env, env) {
   envtmp$x <- xy[,1]
   envtmp$y <- xy[,2]
   envtmp$eps2 <- rep( argv$mergeobs_eps2, m_dim)
-  envtmp$nn2 <- nn2( cbind(y_env$yo$x,y_env$yo$y), 
-                     query = cbind(envtmp$x,envtmp$y), 
+  envtmp$obs_x <- y_env$yo$x
+  envtmp$obs_y <- y_env$yo$y
+  envtmp$nn2 <- nn2( cbind( envtmp$obs_x, envtmp$obs_y), 
+                     query = cbind( envtmp$x, envtmp$y), 
                      k = argv$mergeobs_pmax, searchtype = "radius", 
                      radius = (7*argv$mergeobs_dh))
   cat( paste( "         number of grid points, m dim >", m_dim, "\n"))
@@ -50,29 +52,29 @@ preproc_mergeobs <- function( argv, y_env, u_env, env) {
     envtmp$yb <- rep( 0, y_env$yo$n)
     cat( paste( "warning: no gridded observations provided, then merging is actually OI with a background field equal to 0 everywhere \n"))
   }
+  envtmp$d <- y_env$yo$value - envtmp$yb
 
   # run oi gridpoint by gridpoint (idi the first time only)
+  cat("running OI")
   if (!is.na(argv$cores)) {
     res <- t( mcmapply( oi_basic_gridpoint_by_gridpoint,
                         1:m_dim,
                         mc.cores=argv$cores,
                         SIMPLIFY=T,
-                        pmax=argv$mergeobs_pmax,
-                        corr=argv$mergeobs_corrfun,
-                        dh=argv$mergeobs_dh,
-                        idi=T,
-                        uncertainty=T))
+                        MoreArgs=list( corr=argv$mergeobs_corrfun,
+                                       dh=argv$mergeobs_dh,
+                                       idi=T,
+                                       uncertainty=T)))
     
   # no-multicores
   } else {
     res <- t( mapply( oi_basic_gridpoint_by_gridpoint,
                       1:m_dim,
                       SIMPLIFY=T,
-                      pmax=argv$mergeobs_pmax,
-                      corr=argv$mergeobs_corrfun,
-                      dh=argv$mergeobs_dh,
-                      idi=T,
-                      uncertainty=T))
+                        MoreArgs=list( corr=argv$mergeobs_corrfun,
+                                       dh=argv$mergeobs_dh,
+                                       idi=T,
+                                       uncertainty=T)))
   }
   # res: 1 xa, 2 xidi, 3 o_errvar, 4 xa_errvar
 
