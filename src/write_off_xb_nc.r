@@ -26,7 +26,13 @@ write_off_xb_nc <- function( argv,  y_env, fg_env, u_env, env) {
       xout <- uo[env$mask]
     } else if (argv$off_xb.variables[i]=="obs_raster") {
       xout <- array( data=NA, dim=c( env$ngrid, 1))
-      r <- resample( env$rfobs, env$rmaster, method="ngb")
+      r <- env$rmaster
+      r[] <- env$mergeobs$value
+      xout <- getValues( r)[env$mask]
+    } else if (argv$off_xb.variables[i]=="obs_idi_raster") {
+      xout <- array( data=NA, dim=c( env$ngrid, 1))
+      r <- env$rmaster
+      r[] <- env$mergeobs$idi
       xout <- getValues( r)[env$mask]
 #    } else if (argv$off_xb.variables[i]=="rel_an") {
 #      if (!exists("xrela")) {xrela<-aix;xrela[]<-NA}

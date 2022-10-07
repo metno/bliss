@@ -66,20 +66,14 @@ rm(zvalues,xy)
 
 # debug info
 if (argv$verbose) {
-  print("+---------------------------------------------------------------+")
-  print("+ master grid parameters")
-  print(paste("nx ny dx dy",
-    as.integer(nx),
-    as.integer(ny),
-    round(xres(rmaster),2),
-    round(yres(rmaster),2)))
-  print(paste("xmn xmx ymn ymx",
-    round(xmn,2),
-    round(xmx,2),
-    round(ymn,2),
-    round(ymx,2)))
-  print(paste("# grid points=",as.integer(ng)))
-  print(paste("# unmasked grid points=",as.integer(ngrid)))
+  cat( "+---------------------------------------------------------------+\n")
+  cat( "+ master grid parameters\n")
+  cat( paste("nx ny dx dy", as.integer(nx), as.integer(ny),
+       round(xres(rmaster),2), round(yres(rmaster),2),"\n"))
+  cat( paste("xmn xmx ymn ymx", round(xmn,2), round(xmx,2),
+       round(ymn,2), round(ymx,2),"\n"))
+  cat( paste("# grid points=",as.integer(ng),"\n"))
+  cat( paste("# unmasked grid points=",as.integer(ngrid),"\n"))
 }
 
 env$rmaster <- rmaster

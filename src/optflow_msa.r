@@ -1,7 +1,9 @@
 #alignment techniques
 #+ compute optical flow in observed space using hierarchical HS algorithm
 optical_flow_HS <- function(r1, r2, nlevel,
-                            niter=100, w1=100, w2=0) {
+                            niter=100, w1=100, w2=0, 
+                            tol=0.0001,
+                            verbose=F) {
 # Adapted From Yue (Michael) Ying repository on github
 # https://github.com/myying/QG_Multiscale_DA/blob/master/demo_optical_flow.py
 # Main modifications are for making this work in R and for using raster
@@ -13,13 +15,13 @@ optical_flow_HS <- function(r1, r2, nlevel,
   ni <- nrow(r1)
   nj <- ncol(r1)
   if ( nlevel > min( c( floor(log2(ni)), floor(log2(nj))))) {
-    cat( paste("nlevel max allowed value is",min( c( floor(log2(ni)), floor(log2(nj)))),"\n"))
+    if (verbose) cat( paste("nlevel max allowed value is",min( c( floor(log2(ni)), floor(log2(nj)))),"\n"))
     return()
   }
   res_x <- res(r1)[1]
   res_y <- res(r1)[2]
   for (lev in nlevel:0) {
-    cat(paste(" ** lev=",lev," "))
+    if (verbose) cat(paste(" ** lev=",lev," "))
 #    r1warp <- warp( r1, -u, -v, method="simple")
     r1warp <- warp( r1, -u, -v, method="bilinear")
     if (any(is.na(getValues(r1warp)))) r1warp[is.na(r1warp)] <- 0
@@ -34,15 +36,21 @@ optical_flow_HS <- function(r1, r2, nlevel,
     du <- dv <- Ix
     du[] <- dv[] <- 0
     for (k in 1:niter) {
-      if ((k %% 20)==0) cat(".")
+      if ((k %% 20)==0) if (verbose) cat(".")
       ubar2 <- laplacian(du) + du
       vbar2 <- laplacian(dv) + dv
       ubar1 <- deriv_xx(du) + du
       vbar1 <- deriv_yy(dv) + dv
       uxy <- deriv_xy(du)
       vxy <- deriv_xy(dv)
+      duk <- du
+      dvk <- dv
       du <- (w1*ubar2 + w2*(ubar1+vxy))/(w1+w2) - Ix*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
       dv <- (w1*vbar2 + w2*(vbar1+uxy))/(w1+w2) - Iy*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
+      if ( (error <- mean( (du-duk)^2 + (dv-dvk)^2 )) < (tol*tol)) { 
+#        print(paste(k,error,tol))
+        break 
+      }
 #      du = (w1*ubar2 + w2*(ubar1+vxy))/(w1+w2) - Ix*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
 #      dv = (w1*vbar2 + w2*(vbar1+uxy))/(w1+w2) - Iy*((w1*(Ix*ubar2 + Iy*vbar2) + w2*((ubar1+vxy)*Ix + (vbar1+uxy)*Iy))/(w1+w2) + It)/(w1 + w2 + Ix**2 + Iy**2)
 #      print(range(du))
@@ -57,14 +65,14 @@ optical_flow_HS <- function(r1, r2, nlevel,
     if (any(is.na(getValues(u)))) u[is.na(u)] <- 0
 #    v <- v + sharpen(rdv, r1, method="ngb")
     if (any(is.na(getValues(v)))) v[is.na(v)] <- 0
-    cat( paste( "u", round(range(getValues(u))[1]/res_x,1),
-                     round(range(getValues(u))[2]/res_x,1),
-                "v", round(range(getValues(v))[1]/res_y,1),
-                     round(range(getValues(v))[2]/res_y,1)))
+    if (verbose)  cat( paste( "u", round(range(getValues(u))[1]/res_x,1),
+                       round(range(getValues(u))[2]/res_x,1),
+                  "v", round(range(getValues(v))[1]/res_y,1),
+                       round(range(getValues(v))[2]/res_y,1)))
 #    print(u)
 #    print(v)
   }
-  cat("\n")
+  if (verbose) cat("\n")
   return( list( u=u, v=v))
 }
 

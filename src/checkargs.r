@@ -13,7 +13,7 @@ if (!(file.exists(argv$iff_obs))) boom(paste0("file not found ",argv$iff_obs))
 if ( argv$mode == "OI_multiscale") {
   if (argv$verbose) {
     if (!(file.exists(argv$iff_rf))) 
-      print("warning: file not found",argv$iff_rf)
+      cat( paste("warning: file not found",argv$iff_rf,"\n"))
   }
 } else if ( argv$mode == "OI_firstguess") {
   if (!(file.exists(argv$iff_fg))) 
@@ -21,28 +21,28 @@ if ( argv$mode == "OI_multiscale") {
 } else if ( argv$mode == "OI_twosteptemperature") {
   if (argv$verbose) {
     if (!(file.exists(argv$iff_dem))) 
-      print("warning: file not found",argv$iff_dem)
+      cat( paste("warning: file not found",argv$iff_dem,"\n"))
   }
 } else if ( argv$mode == "hyletkf") {
-  print("chosen mode is Hybrid Local Ensemble Transform Kalman Filter")
+  cat("chosen mode is Hybrid Local Ensemble Transform Kalman Filter\n")
 } else if ( argv$mode == "letkf") {
-  print("chosen mode is Local Ensemble Transform Kalman Filter")
+  cat("chosen mode is Local Ensemble Transform Kalman Filter\n")
 } else if ( argv$mode == "OI_Bratseth") {
-  print("chosen mode is OI_Bratseth")
+  cat("chosen mode is OI_Bratseth\n")
 } else if ( argv$mode == "oi") {
-  print("chosen mode is oi")
+  cat("chosen mode is oi\n")
 } else if ( argv$mode == "ensi") {
-  print("chosen mode is ensi")
+  cat("chosen mode is ensi\n")
 } else if ( argv$mode == "ensigap") {
-  print("chosen mode is ensigap")
+  cat("chosen mode is ensigap\n")
 } else if ( argv$mode == "corens") {
-  print("chosen mode is corens")
-} else if ( argv$mode == "msaensi") {
-  print("chosen mode is msaensi")
+  cat("chosen mode is corens\n")
+} else if ( argv$mode == "msa") {
+  cat("chosen mode is msa\n")
 } else if ( argv$mode == "rasterize") {
-  print("chosen mode is rasterize")
+  cat("chosen mode is rasterize\n")
 } else {
-  boom("error statistical interpolation scheme undefined")
+  cat("error statistical interpolation scheme undefined\n")
 }
 
 # define/check paths and load external functions

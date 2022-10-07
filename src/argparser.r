@@ -165,11 +165,15 @@ p <- add_argument(p, "--pmax",
                   type="numeric",
                   default=200)
 #------------------------------------------------------------------------------
-# MSA-EnSI
-p <- add_argument(p, "--msaensi_ididense",
-                  help="MSA-EnSI IDI threshold for defining data dense regions (IDI is defined with respect to preproc-mergeobs OI",
+# MSA
+p <- add_argument(p, "--msa_ididense",
+                  help="MSA IDI threshold for defining data dense regions (IDI is defined with respect to preproc-mergeobs OI",
                   type="numeric",
                   default=0.8)
+p <- add_argument(p, "--msa_eps2",
+                  help="MSA ration between observation and background error variances (0.1-1)",
+                  type="numeric",
+                  default=0.1)
 
 #------------------------------------------------------------------------------
 # rasterize
@@ -1386,12 +1390,10 @@ if (argv$mode=="corens") {
   y_env$rain <- argv$corens_rain_yo
   if ( any( is.na(argv$corens_eps2_range))) argv$corens_eps2_range <- 0.5
   if ( is.na(argv$corens_k_dim_corr)) argv$corens_k_dim_corr <- argv$corens_k_dim
-} else if (argv$mode=="msaensi") {
+} else if (argv$mode=="msa") {
   env$k_dim <- argv$k_dim
   u_env$rain <- argv$rain_uo
   y_env$rain <- argv$rain_yo
-#  if ( any( is.na(argv$msaensi_eps2_range))) argv$msaensi_eps2_range <- 0.5
-#  if ( is.na(argv$msaensi_k_dim_corr)) argv$msaensi_k_dim_corr <- argv$msaensi_k_dim
 } else if (argv$mode=="oi") {
   env$k_dim <- argv$oi_k_dim
   env$a_dim <- argv$oi_a_dim
