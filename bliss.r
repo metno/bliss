@@ -180,7 +180,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "rasterize", "hyletkf", "oi", "corens", "msa")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "rasterize", "hyletkf", "oi", "corensi", "msa", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
@@ -229,28 +229,13 @@ if (argv$mode=="rasterize") { # still to test
   source( file.path( bliss_mod_path, "main_ensigap.r"))
 #..............................................................................
 # ===>  Change-of-Resolution Ensemble Rauch-Tung-Striebel smoother  <===
-} else if ( argv$mode == "corens") {
-#next 4 lines are debug/test
-#ffdeb <- file.path( dirdeb, paste0("debtest_corens_", argv$date_out, ".rdata"))
-#if ( file.exists( ffdeb)) {
-#  load(ffdeb)
-#} else {
-#  envtmp <- new.env( parent = emptyenv())
-#  res <- corens_mergeobs( argv, y_env, u_env, env)
-#  rm(envtmp)
-#  res <- corens_selensemble( argv, fg_env, env)
-#  envtmp <- new.env( parent = emptyenv())
-#  res <- corens( argv, y_env, fg_env, env)
-#  rm( envtmp)
-## next 2 lines are debug/test
-#save( file=ffdeb, argv, env, y_env, fg_env, u_env)
-
+} else if ( argv$mode == "corensi") {
   envtmp <- new.env( parent = emptyenv())
   res <- preproc_mergeobs( argv, y_env, u_env, env)
   rm(envtmp)
   res <- preproc_selensemble( argv, fg_env, env)
   envtmp <- new.env( parent = emptyenv())
-  res <- corens( argv, y_env, fg_env, env)
+  res <- corensi( argv, y_env, fg_env, env)
   rm(envtmp)
 #..............................................................................
 # ===>  Multiscale Alignment as a pre-proc for Ensemble Statistical Interpolation  <===
@@ -261,6 +246,16 @@ if (argv$mode=="rasterize") { # still to test
   res <- preproc_selensemble( argv, fg_env, env)
   envtmp <- new.env( parent = emptyenv())
   res <- msa( argv, y_env, fg_env, env)
+  rm(envtmp)
+#..............................................................................
+# ===>  Multiscale Alignment Ensemble Statistical Interpolation  <===
+} else if ( argv$mode == "msaensi") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  rm(envtmp)
+  res <- preproc_selensemble( argv, fg_env, env)
+  envtmp <- new.env( parent = emptyenv())
+  res <- msaensi( argv, y_env, fg_env, env)
   rm(envtmp)
 } # end if selection among spatial analysis methods
 #

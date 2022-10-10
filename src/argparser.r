@@ -91,7 +91,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corens\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -111,19 +111,19 @@ p <- add_argument(p, "--time_bnds_string",
 #------------------------------------------------------------------------------
 # preproc - mergeobs
 p <- add_argument(p, "--mergeobs_eps2",
-                  help="eps2 for corens mergeobs",
+                  help="eps2 for mergeobs",
                   type="numeric",
                   default=0.5)
 p <- add_argument(p, "--mergeobs_pmax",
-                  help="max number of observations for corens mergeobs",
+                  help="max number of observations for mergeobs",
                   type="integer",
                   default=30)
 p <- add_argument(p, "--mergeobs_dh",
-                  help="horizontal decorrelation length scale for corens mergeobs",
+                  help="horizontal decorrelation length scale for mergeobs",
                   type="numeric",
                   default=3)
 p <- add_argument(p, "--mergeobs_corrfun",
-                  help="correlation function for corens mergeobs (gaussian, soar, powerlaw, toar)",
+                  help="correlation function for mergeobs (gaussian, soar, powerlaw, toar)",
                   type="character",
                   default="toar")
 p <- add_argument(p, "--mergeobs_range",
@@ -171,9 +171,27 @@ p <- add_argument(p, "--msa_ididense",
                   type="numeric",
                   default=0.8)
 p <- add_argument(p, "--msa_eps2",
-                  help="MSA ration between observation and background error variances (0.1-1)",
+                  help="MSA ratio between observation and background error variances (0.1-1)",
                   type="numeric",
                   default=0.1)
+#------------------------------------------------------------------------------
+# MSA
+p <- add_argument(p, "--msaensi_ididense",
+                  help="MSA-EnSI IDI threshold for defining data dense regions (IDI is defined with respect to preproc-mergeobs OI",
+                  type="numeric",
+                  default=0.8)
+p <- add_argument(p, "--msaensi_eps2",
+                  help="MSA-EnSI ratio between observation and background error variances (0.1-1)",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--msaensi_wf",
+                  help="MSA-EnSI name of the wavelet filter to use in the decomposition",
+                  type="character",
+                  default="haar")
+p <- add_argument(p, "--msaensi_boundary",
+                  help="MSA-EnSI boundary",
+                  type="character",
+                  default="periodic")
 
 #------------------------------------------------------------------------------
 # rasterize
@@ -1245,54 +1263,20 @@ p <- add_argument(p, "--oi_corrfun",
 #------------------------------------------------------------------------------
 # Change-of-Resolution Ensemble Kalman Smoother
 
-p <- add_argument(p, "--corens_k_dim",
-                  help="number of background ensemble members",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--corens_rain_uo",
-                  help="rain yes/no threshold for alignment (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--corens_rain_yo",
-                  help="rain yes/no threshold for interpolation (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--corens_range",
-                  help="range check for corens",
-                  type="numeric",
-                  nargs=2,
-                  default=c(NA,NA))
-
-
-# corens - selens
-p <- add_argument(p, "--corens_selens_mode",
-                  help="selection of ensemble members (ets, maxoverlap, identity)",
-                  type="character",
-                  default="maxoverlap")
-# corens - main
-p <- add_argument(p, "--corens_pmax",
-                  help="max number of observations for corens",
-                  type="integer",
-                  default=30)
-p <- add_argument(p, "--corens_corrfun",
-                  help="correlation function for corens (gaussian, soar, powerlaw, toar)",
-                  type="character",
-                  default="toar")
-p <- add_argument(p, "--corens_ididense",
+p <- add_argument(p, "--corensi_ididense",
                   help="threshold used to define dense station regions",
                   type="numeric",
                   default=0.8)
-p <- add_argument(p, "--corens_eps2_range",
-                  help="range check for corens (either two values or just one value). Deafault is 0.5.",
+p <- add_argument(p, "--corensi_eps2",
+                  help="ratio between observation and background error variances (0.1-1)",
                   type="numeric",
-                  nargs=Inf,
-                  default=NA)
-p <- add_argument(p, "--corens_alpha",
-                  help="parameter used to weight the static and dynamical contributions in the definition of the hybrid correlations within corens_up sweep",
+                  default=0.1)
+p <- add_argument(p, "--corensi_alpha",
+                  help="parameter used to weight the static and dynamical contributions in the definition of the hybrid correlations within corensi_up sweep",
                   type="numeric",
                   default=0.5)
-p <- add_argument(p, "--corens_k_dim_corr",
-                  help="number of ensemble members considered for the computation of the correlations within corens_up sweep (default is corens_k_dim)",
+p <- add_argument(p, "--corensi_k_dim_corr",
+                  help="number of ensemble members considered for the computation of the correlations within corensi_up sweep (default is k_dim)",
                   type="integer",
                   default=NA)
 
@@ -1384,13 +1368,16 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
-if (argv$mode=="corens") {
-  env$k_dim <- argv$corens_k_dim
-  u_env$rain <- argv$corens_rain_uo
-  y_env$rain <- argv$corens_rain_yo
-  if ( any( is.na(argv$corens_eps2_range))) argv$corens_eps2_range <- 0.5
-  if ( is.na(argv$corens_k_dim_corr)) argv$corens_k_dim_corr <- argv$corens_k_dim
+if (argv$mode=="corensi") {
+  env$k_dim <- argv$k_dim
+  u_env$rain <- argv$rain_uo
+  y_env$rain <- argv$rain_yo
+  if ( is.na(argv$corensi_k_dim_corr)) argv$corensi_k_dim_corr <- argv$k_dim
 } else if (argv$mode=="msa") {
+  env$k_dim <- argv$k_dim
+  u_env$rain <- argv$rain_uo
+  y_env$rain <- argv$rain_yo
+} else if (argv$mode=="msaensi") {
   env$k_dim <- argv$k_dim
   u_env$rain <- argv$rain_uo
   y_env$rain <- argv$rain_yo

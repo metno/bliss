@@ -1,10 +1,10 @@
 #+ Change-Of-Resolution Ensemble Rauch-Tung-Striebel smoother UpSweep (fine-to-coarse) 
-corens_up_gridpoint_by_gridpoint<-function( i,
-                                            corr = "soar",
-                                            dh = 10000,
-                                            alpha = 0.5,
-                                            k_dim_corr=10,
-                                            idi = F) {
+corensi_up_gridpoint_by_gridpoint<-function( i,
+                                             corr = "soar",
+                                             dh = 10000,
+                                             alpha = 0.5,
+                                             k_dim_corr=10,
+                                             idi = F) {
 # returned values: analysis, observation error var, analysis error var
 # note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------

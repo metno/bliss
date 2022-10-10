@@ -35,10 +35,12 @@ if ( argv$mode == "OI_multiscale") {
   cat("chosen mode is ensi\n")
 } else if ( argv$mode == "ensigap") {
   cat("chosen mode is ensigap\n")
-} else if ( argv$mode == "corens") {
-  cat("chosen mode is corens\n")
+} else if ( argv$mode == "corensi") {
+  cat("chosen mode is corensi\n")
 } else if ( argv$mode == "msa") {
   cat("chosen mode is msa\n")
+} else if ( argv$mode == "msaensi") {
+  cat("chosen mode is msaensi\n")
 } else if ( argv$mode == "rasterize") {
   cat("chosen mode is rasterize\n")
 } else {

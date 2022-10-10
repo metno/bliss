@@ -1,6 +1,6 @@
 #+  Change-Of-Resolution Ensemble Rauch-Tung-Striebel smoother DownSweep (coarse-to-fine)
-corens_down_gridpoint_by_gridpoint<-function( i,
-                                              idi = F) {
+corensi_down_gridpoint_by_gridpoint<-function( i,
+                                               idi = F) {
 # returned values: analysis, observation error var, analysis error var
 # note: the call ‘t(x) %*% y’ (‘crossprod’) or ‘x %*% t(y)’ (‘tcrossprod’)
 #------------------------------------------------------------------------------

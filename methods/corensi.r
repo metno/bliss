@@ -1,11 +1,11 @@
 #+ Change-of-Resolution Ensemble Rauch-Tung-Striebel Smoother
-corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
+corensi <- function( argv, y_env, fg_env, env, use_fg_env=T) {
 #
 #------------------------------------------------------------------------------
 
   t0a <- Sys.time()
 
-  cat( "-- corens --\n")
+  cat( "-- corensi --\n")
 
   # set domain
   nx <- ncol( env$rmaster)
@@ -33,26 +33,20 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
       ridi[] <- env$mergeobs$idi
       ridi[is.na(ridi)] <- 0
       ridi[ridi>1] <- 1
-      rerrvar <- mrtree$raster[[j]]$r
-      rerrvar[] <- env$mergeobs$mergedobs_errvar
     # j-th level has a grid of approximately (nx/2**j,ny/2**j)
     } else {
       raux <- mrtree$raster[[j-1]]$r
       raux[] <- mrobs$val_all[[j-1]]
 #      raux[mrobs$ix[[j-1]]] <- mrobs$val[[j-1]]
       robs <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
-      rerrvar <- aggregate( raux, fact=2, fun=sd, expand=T, na.rm=T)**2/4
       raux[] <- mrobs$idi[[j-1]]
       ridi <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
-#      raux[] <- mrobs$errvar_all[[j-1]]
-#      raux[mrobs$ix[[j-1]]] <- mrobs$errvar[[j-1]]
-#      rerrvar <- aggregate( raux, fact=2, fun=mean, expand=T, na.rm=T)
       mrtree$raster[[j]]$r <- ridi
       mrtree$raster[[j]]$r[] <- NA
     }
     # select only gridpoints where observations are ok (IDI is larger than a threshold)
-    ix <- which( getValues(ridi) >= argv$corens_ididense & 
-                 !is.na( getValues(robs)))
+    ix <- which( getValues(ridi) >= argv$corensi_ididense & !is.na( getValues(robs)))
+
     # stop if no observations found 
     if ( length(ix) == 0) { 
       jstop <- j-1
@@ -71,19 +65,17 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
       mrobs$ix[[j]] <- ix
       mrobs$d_dim[[j]] <- length(ix)
       mrobs$val[[j]] <- getValues(robs)[ix]
-      mrobs$errvar[[j]] <- getValues(rerrvar)[ix]
       mrobs$x[[j]] <- xy[ix,1]
       mrobs$y[[j]] <- xy[ix,2]
       mrobs$val_all[[j]] <- getValues(robs)
-      mrobs$errvar_all[[j]] <- getValues(rerrvar)
 #      print(paste("j d_dim",j,mrobs$d_dim[[j]]))
     }
   } # end loop over spatal levels
   # safe-check, exit when no ok observations found 
   if (jstop == 0) return(NULL)
 
-  # -~- Fine-to-Coarse corens sweep -~-
-  cat("Fine-to-Coarse corens sweep \n")
+  # -~- Fine-to-Coarse corensi sweep -~-
+  cat("Fine-to-Coarse corensi sweep \n")
   # tree-structured data model (we identify this sweep with filtering step in EnKS)
   mrup <- list()
   # loop over spatial levels, from fine (j=1) to coarse (j=jstop, i.e. coarsest level with observations we can trust)
@@ -133,9 +125,9 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     # background ensemble anomalies 
     mrup$data[[j]]$Esd <- apply( mrup$data[[j]]$E, FUN=function(x){sd(x)}, MAR=1)
     for (e in 1:env$k_dim) { 
-# covariances
+      # covariances
       mrup$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (mrup$data[[j]]$E[,e] - mrup$data[[j]]$x)
-# correlations
+      # correlations
       mrup$data[[j]]$Z[,e] <- 1/sqrt(env$k_dim-1) * (mrup$data[[j]]$E[,e] - mrup$data[[j]]$x) / mrup$data[[j]]$Esd
       mrup$data[[j]]$Z[,e][!is.finite(mrup$data[[j]]$Z[,e])] <- 1/sqrt(env$k_dim) 
       r[] <- mrup$data[[j]]$Z[,e]
@@ -151,46 +143,41 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     envtmp$obs_val <- mrobs$val[[j]]
     envtmp$E <- mrup$data[[j]]$E
     envtmp$HE <- mrup$data[[j]]$HE
-    if (length(argv$corens_eps2_range) == 2) {
-      eps2_guess <- mean( mrobs$errvar[[j]], na.rm=T) / mean( rowMeans( mrup$data[[j]]$X**2))
-      eps2 <- max( c( argv$corens_eps2_range[1], min( c( eps2_guess, argv$corens_eps2_range[2]))))
-    } else {
-      eps2 <- argv$corens_eps2_range[1]
-    }
+    eps2 <- argv$corensi_eps2
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
     envtmp$Z <- mrup$data[[j]]$Z
     envtmp$Y <- mrup$data[[j]]$Y
 #    print(paste("eps2 guess def:",round(eps2_guess,2),round(eps2,2)))
     envtmp$D <- envtmp$obs_val - envtmp$HE
-    sig2b <- mean( apply( envtmp$HE, FUN=function(x){sd(x)}, MAR=1)**2)
-    sig2o_sig2b <- mean( (envtmp$obs_val - rowMeans(envtmp$HE))**2)
-    print( paste("j eps2",j,round(sig2o_sig2b,3),round(sig2b,3),round(sig2o_sig2b/sig2b-1,3)))
+#    sig2b <- mean( apply( envtmp$HE, FUN=function(x){sd(x)}, MAR=1)**2)
+#    sig2o_sig2b <- mean( (envtmp$obs_val - rowMeans(envtmp$HE))**2)
+#    print( paste("j eps2",j,round(sig2o_sig2b,3),round(sig2b,3),round(sig2o_sig2b/sig2b-1,3)))
     # helper to get the neighbours
     envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
                        query = cbind(mrtree$x[[j]],mrtree$y[[j]]), 
-                       k = min( c(argv$corens_pmax,mrobs$d_dim[[j]])), 
+                       k = min( c(argv$pmax,mrobs$d_dim[[j]])), 
                        searchtype = "radius", 
                        radius = (7*mrtree$mean_res[[j]]))
     # run EnKF/EnOI gridpoint by gridpoint
     if (!is.na(argv$cores)) {
-      res <- t( mcmapply( corens_up_gridpoint_by_gridpoint,
+      res <- t( mcmapply( corensi_up_gridpoint_by_gridpoint,
                           1:envtmp$m_dim,
                           mc.cores=argv$cores,
                           SIMPLIFY=T,
-                          MoreArgs = list( corr=argv$corens_corrfun,
+                          MoreArgs = list( corr=argv$corrfun,
                                            dh=mrtree$mean_res[[j]],
-                                           alpha=argv$corens_alpha,
-                                           k_dim_corr=argv$corens_k_dim_corr,
+                                           alpha=argv$corensi_alpha,
+                                           k_dim_corr=argv$corensi_k_dim_corr,
                                            idi=T)))
     # no-multicores
     } else {
-      res <- t( mapply( corens_up_gridpoint_by_gridpoint,
+      res <- t( mapply( corensi_up_gridpoint_by_gridpoint,
                         1:envtmp$m_dim,
                         SIMPLIFY=T,
-                        MoreArgs = list( corr=argv$corens_corrfun, 
+                        MoreArgs = list( corr=argv$corrfun, 
                                          dh=mrtree$mean_res[[j]],
-                                         alpha=argv$corens_alpha,
-                                         k_dim_corr=argv$corens_k_dim_corr,
+                                         alpha=argv$corensi_alpha,
+                                         k_dim_corr=argv$corensi_k_dim_corr,
                                          idi=T)))
     }
     mrup$data[[j]]$Ea  <- res[,1:env$k_dim]
@@ -200,10 +187,10 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     mrup$data[[j]]$xa <- rowMeans(mrup$data[[j]]$Ea)
     mrup$data[[j]]$Xa <- 1/sqrt(env$k_dim-1) * (mrup$data[[j]]$Ea - mrup$data[[j]]$xa)
     cat("\n")
-  } # END loop over spatial levels Fine-to-Coarse corens sweep
+  } # END loop over spatial levels Fine-to-Coarse corensi sweep
 
-  # -~- Coarse-to-fine corens sweep -~-
-  cat("Coarse-to-fine corens sweep \n")
+  # -~- Coarse-to-fine corensi sweep -~-
+  cat("Coarse-to-fine corensi sweep \n")
   # tree-structured data model (we identify this sweep with smoothing step in EnKS)
   mrdw <- list()
   mrdw$data[[jstop]] <- list()
@@ -221,7 +208,7 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     envtmp$Xa_j  <- mrup$data[[j]]$Xa
     envtmp$X_j1 <- mrup$data[[j+1]]$X
     envtmp$E  <- mrup$data[[j+1]]$E
-    eps2 <- argv$corens_eps2_range[1]
+    eps2 <- argv$corensi_eps2
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
     envtmp$D <- mrdw$data[[j+1]]$Ea - mrup$data[[j+1]]$E
     print( paste("j qq2",j,round( 
@@ -229,18 +216,18 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     # helper to get the neighbours
     envtmp$nn2 <- nn2( cbind(envtmp$obs_x,envtmp$obs_y), 
                        query = cbind(envtmp$x,envtmp$y), 
-                       k = min( c(argv$corens_pmax,mrtree$m_dim[[j+1]])), 
+                       k = min( c(argv$pmax,mrtree$m_dim[[j+1]])), 
                        searchtype = "radius", 
                        radius = (7*mrtree$mean_res[[j]]))
     # run EnKF/EnOI gridpoint by gridpoint
     if (!is.na(argv$cores)) {
-      res <- t( mcmapply( corens_down_gridpoint_by_gridpoint,
+      res <- t( mcmapply( corensi_down_gridpoint_by_gridpoint,
                           1:envtmp$m_dim,
                           mc.cores=argv$cores,
                           SIMPLIFY=T))
     # no-multicores
     } else {
-      res <- t( mapply( corens_down_gridpoint_by_gridpoint,
+      res <- t( mapply( corensi_down_gridpoint_by_gridpoint,
                         1:envtmp$m_dim,
                         SIMPLIFY=T))
     }
@@ -248,7 +235,7 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     if (!is.na(y_env$rain)) 
       mrdw$data[[j]]$Ea[mrdw$data[[j]]$Ea<y_env$rain] <- 0
     cat("\n")
-  } # END loop over spatial levels Coarse-to-fine corens sweep
+  } # END loop over spatial levels Coarse-to-fine corensi sweep
 #save(file="tmp.rdata",mrdw,mrup,mrtree,mrobs,argv,env)
 #all<-T; j<-1; r<-mrtree$raster[[j]]$r; r[]<-NA; if (all) { r[] <- mrobs$val_all[[j]] } else { r[mrobs$ix[[j]]] <- mrobs$val[[j]] }; image(r,breaks=c(0,seq(0.1,45,length=10)),col=c("gray",rev(rainbow(9))))
 #a<-T; e<-12; j<-1; r<-mrtree$raster[[j]]$r; if (a) { r[]<-mrdw$data[[j]]$Ea[,e] } else { r[]<-mrup$data[[j]]$E[,e] }; image(r,breaks=c(0,seq(0.1,45,length=10)),col=c("gray",rev(rainbow(9))))
@@ -258,10 +245,10 @@ corens <- function( argv, y_env, fg_env, env, use_fg_env=T) {
   env$Xb <- mrup$data[[1]]$E
   env$Xidi <- mrobs$idi[[1]]
   # Safe checks
-  if (!is.na(argv$corens_range[1])) 
-    env$Xa[env$Xa<argv$corens_range[1]] <- argv$corens_range[1]
-  if (!is.na(argv$corens_range[2])) 
-    env$Xa[env$Xa>argv$corens_range[2]] <- argv$corens_range[2]
+  if (!is.na(argv$range[1])) 
+    env$Xa[env$Xa<argv$range[1]] <- argv$range[1]
+  if (!is.na(argv$range[2])) 
+    env$Xa[env$Xa>argv$range[2]] <- argv$range[2]
 
   # save IDI at observation locations
   r <- env$rmaster

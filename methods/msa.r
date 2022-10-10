@@ -25,7 +25,7 @@ msa <- function( argv, y_env, fg_env, env, use_fg_env=T) {
 
   t0a <- Sys.time()
 
-  cat( "-- MSA-EnSI --\n")
+  cat( "-- MSA --\n")
 
   # set domain
   nx <- ncol( env$rmaster)
@@ -123,19 +123,12 @@ msa <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     if (!is.na(y_env$rain)) mrbkg$data[[j]]$HE[mrbkg$data[[j]]$HE<y_env$rain] <- 0
   } # end loop over spatial scales to get the multi-resolution background
 
-  # Initializations
-  envtmp$x <- mrtree$x[[1]]
-  envtmp$y <- mrtree$y[[1]]
-  envtmp$m_dim <- mrtree$m_dim[[1]]
-  ra <- mrtree$raster[[1]]$r
-  rb <- mrtree$raster[[1]]$r
-
   # Loop over spatial scales
   for (j in jstop:1) {
     cat( paste( "alligning spatial level", j))
     t0b <- Sys.time()
 
-    # Spatial anal
+    # Spatial analysis
     envtmp$x <- mrtree$x[[j]]
     envtmp$y <- mrtree$y[[j]]
     envtmp$m_dim <- mrtree$m_dim[[j]]
