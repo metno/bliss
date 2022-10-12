@@ -8,7 +8,8 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #                                plot=F, dir_plot=NA) {
 #
 #------------------------------------------------------------------------------
-library(waveslim)
+  library(waveslim)
+
   t0a <- Sys.time()
 
   cat( "-- MSA-EnSI --\n")
@@ -48,7 +49,7 @@ library(waveslim)
 
   # loop over the spatial levels in the tree-structured data model
   for (j in 1:jmax) {
-print(paste("j jmax",j,jmax))
+    print( paste( "j jmax", j, jmax))
     mrtree$raster[[j]] <- list()
     # j=1 -> finest level has the same grid as the master grid (nx,ny)
     if ( j == 1) {
@@ -107,23 +108,37 @@ print(paste("j jmax",j,jmax))
   # safe-check, exit when no ok observations found 
   if (jstop == 0) return(NULL)
 
+  mrbkg <- list()
+
   # Loop over spatial scales
-  for (j in jstop:1) {
+  for (j in jstop:2) {
     cat( paste( "alligning spatial level", j))
     t0b <- Sys.time()
-  
+    jw <- j-1
+
+    mrbkg$data[[j]] <- list()
+    mrbkg$data[[j]]$E <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+    mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
+
     # prepare the background 
     dwt <- list() 
     for (e in 1:env$k_dim) {
       if ( j == jstop ) {
         r <- resample( subset( fg_env$fg[[fg_env$ixf[fg_env$ixs[e]]]]$r_main, subset=fg_env$ixe[fg_env$ixs[e]]), rdyad, method="bilinear")
-    
+        mrbkg$data[[j]]$Eor[,e] <- getValues(r) 
       } else {
+##### this needs to be changed ###########
         r <- r 
       }
-      dwt[[e]] <- dwt.2d( as.matrix(r), wf=argv$msaensi_wf, J=jstop, boundary=argv$msaensi_boundary)
+      dwt[[e]] <- dwt.2d( as.matrix(r), wf=argv$msaensi_wf, J=jw, boundary=argv$msaensi_boundary)
+      # father wavelet as the approximated field at the j-th level
+      r <- mrtree$raster[[j]]$r
+      r[] <- dwt[[e]][[3*jw+1]] / 2**jw
+      mrbkg$data[[j]]$E[,e] <- getValues(r)
+      mrbkg$data[[j]]$HE[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
     }
-save(file="tmp.rdata",dwt,r,mrobs,fg_env,env,argv,mrtree,jstop)
+save(file="tmp.rdata",r,env,dwt,mrbkg,envtmp,j,jw,mrtree,mrobs,argv,y_env)
 q()
     # Spatial analysis
     envtmp$x <- mrtree$x[[j]]
@@ -171,11 +186,39 @@ q()
       ra[] <- Ea[,e]
       rb[] <- mrbkg$data[[j]]$E[,e]
       of_nlevel <- min( c( floor(log2(nrow(rb))), floor(log2(ncol(rb)))))
+      if ( floor(log2(nrow(rb))) == of_nlevel & floor(log2(ncol(rb))) == of_nlevel) 
+        of_nlevel <- of_nlevel - 1
       of <- optical_flow_HS( rb, ra, nlevel=of_nlevel, niter=100, w1=100, w2=0, tol=0.00001)
 #        print( paste( "j e of_par",j,e,of_par$par[1],of_par$par[2],of_par$par[3],
 #                      round(range(getValues(of$u))[1],0),round(range(getValues(of$u))[2],0),
 #                      round(range(getValues(of$v))[1],0),round(range(getValues(of$v))[2],0)))
       # Align smaller scales
+      of_u <- of$u
+      of_v <- of$v
+      # Loop over scales
+      for (jj in j:2) {
+        print(jj)
+        jjw <- jj-1
+        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="bilinear")
+        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="bilinear")
+        rb_finer <- mrtree$raster[[jj]]$r
+        for (ww in 1:3) {
+          rb_finer[] <- dwt[[e]][[3*(jjw-1)+ww]]
+          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="bilinear")
+          if ( any( is.na(getValues(rbmod_finer)))) 
+            rbmod_finer[is.na(rbmod_finer)] <- 0
+          dwt[[e]][[3*(jjw-1)+ww]][] <- as.matrix(rbmod_finer)
+        }
+      }  # END - Loop over scales
+      r <- mrtree$raster[[j]]$r  
+      r[] <- Ea[,e] * 2**jw
+      dwt[[e]][[3*jw+1]][] <- as.matrix(r)
+#      rm( rb_finer, of_u, of_v, rbmod_finer)
+      Eaj <- idwt.2d( dwt[[e]])
+      r <- mrtree$raster[[1]]$r
+      r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
+image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4)))) 
+
       if (j>1) {
         of_u <- of$u
         of_v <- of$v
