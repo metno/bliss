@@ -9,6 +9,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #
 #------------------------------------------------------------------------------
   library(waveslim)
+  library(smoothie)
 
   t0a <- Sys.time()
 
@@ -110,6 +111,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 
   mrbkg <- list()
 
+  dwt <- list() 
   # Loop over spatial scales
   for (j in jstop:2) {
     cat( paste( "alligning spatial level", j))
@@ -122,14 +124,25 @@ msaensi <- function( argv, y_env, fg_env, env) {
     mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
 
     # prepare the background 
-    dwt <- list() 
     for (e in 1:env$k_dim) {
       if ( j == jstop ) {
         r <- resample( subset( fg_env$fg[[fg_env$ixf[fg_env$ixs[e]]]]$r_main, subset=fg_env$ixe[fg_env$ixs[e]]), rdyad, method="bilinear")
+        if (!is.na(y_env$rain)) r[r<y_env$rain] <- 0
         mrbkg$data[[j]]$Eor[,e] <- getValues(r) 
       } else {
-##### this needs to be changed ###########
-        r <- r 
+        aux <- idwt.2d( dwt[[e]])
+#        if (!is.na(y_env$rain)) aux[aux<y_env$rain] <- 0
+        if (any(is.na(aux))) aux[is.na(aux)] <- 0
+#        aux <- mrbkg$data[[j]]$Eor[,e] + mrobs$idi[[1]] * gauss2dsmooth(x=aux,lambda=2,nx=sqrt(mrtree$m_dim[1]),ny=sqrt(mrtree$m_dim[1])) *
+        r <- mrtree$raster[[1]]$r
+        r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
+        s <- mrtree$raster[[1]]$r
+        s[] <- mrbkg$data[[jstop]]$Eor[,e]
+        t <- r - s
+#        t[abs(getValues(t))<=0.5]<-0
+        aux <- gauss2dsmooth(x=as.matrix(t),lambda=2,nx=sqrt(mrtree$m_dim[1]),ny=sqrt(mrtree$m_dim[1]))
+        t[] <- aux
+        r <- s + t 
       }
       dwt[[e]] <- dwt.2d( as.matrix(r), wf=argv$msaensi_wf, J=jw, boundary=argv$msaensi_boundary)
       # father wavelet as the approximated field at the j-th level
@@ -138,8 +151,6 @@ msaensi <- function( argv, y_env, fg_env, env) {
       mrbkg$data[[j]]$E[,e] <- getValues(r)
       mrbkg$data[[j]]$HE[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
     }
-save(file="tmp.rdata",r,env,dwt,mrbkg,envtmp,j,jw,mrtree,mrobs,argv,y_env)
-q()
     # Spatial analysis
     envtmp$x <- mrtree$x[[j]]
     envtmp$y <- mrtree$y[[j]]
@@ -178,7 +189,7 @@ q()
                                          idi=F)))
     }
     Ea <- res[,1:env$k_dim]
-    if (!is.na(y_env$rain)) Ea[Ea<y_env$rain] <- 0
+#    if (!is.na(y_env$rain)) Ea[Ea<y_env$rain] <- 0
     if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
 
     # Loop over ensembles
@@ -195,16 +206,23 @@ q()
       # Align smaller scales
       of_u <- of$u
       of_v <- of$v
+      of_u[mrobs$idi[[j]]==0] <- 0
+      of_v[mrobs$idi[[j]]==0] <- 0
+#of_u[]<-0
+#of_v[]<-0
       # Loop over scales
       for (jj in j:2) {
-        print(jj)
+#        print(jj)
         jjw <- jj-1
-        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="bilinear")
-        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="bilinear")
+#        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="bilinear")
+#        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="bilinear")
+        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="ngb")
+        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="ngb")
         rb_finer <- mrtree$raster[[jj]]$r
         for (ww in 1:3) {
           rb_finer[] <- dwt[[e]][[3*(jjw-1)+ww]]
-          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="bilinear")
+#          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="bilinear")
+          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="simple")
           if ( any( is.na(getValues(rbmod_finer)))) 
             rbmod_finer[is.na(rbmod_finer)] <- 0
           dwt[[e]][[3*(jjw-1)+ww]][] <- as.matrix(rbmod_finer)
@@ -212,42 +230,23 @@ q()
       }  # END - Loop over scales
       r <- mrtree$raster[[j]]$r  
       r[] <- Ea[,e] * 2**jw
+#r[] <- mrbkg$data[[j]]$E[,e] * 2**jw
       dwt[[e]][[3*jw+1]][] <- as.matrix(r)
 #      rm( rb_finer, of_u, of_v, rbmod_finer)
-      Eaj <- idwt.2d( dwt[[e]])
-      r <- mrtree$raster[[1]]$r
-      r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
-image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4)))) 
-
-      if (j>1) {
-        of_u <- of$u
-        of_v <- of$v
-        # Loop over scales
-        for (jj in (j-1):1) {
-          rb_finer <- mrtree$raster[[jj]]$r
-          rb_finer[] <- mrbkg$data[[jj]]$E[,e]
-          of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="bilinear")
-          of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="bilinear")
-          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="bilinear")
-          rbmod_finer[is.na(rbmod_finer)] <- 0
-          if (!is.na(y_env$rain)) rbmod_finer[rbmod_finer<y_env$rain] <- 0
-          mrbkg$data[[jj]]$E[,e] <- getValues( rbmod_finer)
-          mrbkg$data[[jj]]$HE[,e] <- extract( rbmod_finer, cbind( mrobs$x[[jj]], mrobs$y[[jj]]))
-        }  # END - Loop over scales 
-        rm( rb_finer, of_u, of_v, rbmod_finer)
-      # Align the smallest scale
-      } else {
-        rbmod <- warp( rb, -of$u, -of$v, method="bilinear")
-        rbmod[is.na(rbmod)] <- 0
-        if (!is.na(y_env$rain)) rbmod[rbmod<y_env$rain] <- 0
-        mrbkg$data[[1]]$E[,e] <- getValues( rbmod)
-        mrbkg$data[[1]]$HE[,e] <- extract( rbmod, cbind( mrobs$x[[1]], mrobs$y[[1]]))
-        rm(rbmod)
-      } # END IF - Align smaller scales 
+#      Eaj <- idwt.2d( dwt[[e]])
+#      r <- mrtree$raster[[1]]$r
+#      r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
+#png(file="test.png",width=1200,height=1200)
+#image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4)))) 
+#save(file="tmp.rdata",r,env,dwt,mrbkg,envtmp,j,jw,mrtree,mrobs,argv,y_env)
+#dev.off()
+#q()
     } # END - Loop over ensembles
     t1b <- Sys.time()
     cat( paste( "total time", round(t1b-t0b,1), attr(t1b-t0b,"unit"), "\n"))
   } # END - Loop over spatial scales
+save(file="tmp.rdata",r,env,dwt,mrbkg,envtmp,j,jw,mrtree,mrobs,argv,y_env)
+q()
   if ( exists( "ra" ))     rm(ra)
   if ( exists( "rb" ))     rm(rb)
   if ( exists( "mrobs" ))  rm(mrobs)
