@@ -132,7 +132,7 @@ p <- add_argument(p, "--mergeobs_range",
                   nargs=2,
                   default=c(NA,NA))
 #------------------------------------------------------------------------------
-# preproc - selensemblemblee
+# preproc - selensemblemble
 p <- add_argument(p, "--selens_mode",
                   help="selection of ensemble members (ets, maxoverlap, identity)",
                   type="character",
@@ -164,6 +164,14 @@ p <- add_argument(p, "--pmax",
                   help="maximum number of observations in the neighbourhood of a gridpoint for OI",
                   type="numeric",
                   default=200)
+p <- add_argument(p, "--area_small_clumps",
+                  help="max area (units m**2) of those small clumps of connected cells that we want to remove from the analysis (e.g. small precipitation events, most likely interpolation artifacts)",
+                  type="numeric",
+                  default=6250000)
+p <- add_argument(p, "--alpha",
+                  help="parameter used to weight the static and dynamical contributions in the definition of the hybrid correlations",
+                  type="numeric",
+                  default=0.5)
 #------------------------------------------------------------------------------
 # MSA
 p <- add_argument(p, "--msa_ididense",

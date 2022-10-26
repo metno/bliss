@@ -135,9 +135,9 @@ msaensi <- function( argv, y_env, fg_env, env) {
         r <- s <- mrtree$raster[[1]]$r 
         r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
         s[] <- mrbkg$data[[1]]$Eor[,e]
-        r <- clean_and_smooth_the_field( r, y_env, s, 
+        r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                          mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
-                                         lambda=2, area_small_clumps=100)
+                                         lambda=2, area_small_clumps=argv$area_small_clumps)
       }
       #discrete wavelet transformation
       dwt[[e]] <- dwt.2d( as.matrix(r), wf=argv$msaensi_wf, J=jw, boundary=argv$msaensi_boundary)
@@ -192,7 +192,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
                           MoreArgs = list( corr=argv$corrfun,
                                            dh=mrtree$mean_res[[j]],
                                            dh_loc=(2*mrtree$mean_res[[j]]),
-                                           alpha=0.5,
+                                           alpha=argv$alpha,
                                            k_dim_corr=envtmp$k_dim,
                                            idi=F)))
     # no-multicores
@@ -203,12 +203,11 @@ msaensi <- function( argv, y_env, fg_env, env) {
                         MoreArgs = list( corr=argv$corrfun, 
                                          dh=mrtree$mean_res[[j]],
                                          dh_loc=(2*mrtree$mean_res[[j]]),
-                                         alpha=0.5,
+                                         alpha=argv$alpha,
                                          k_dim_corr=envtmp$k_dim,
                                          idi=F)))
     }
     Ea <- res[,1:env$k_dim]
-#    if (!is.na(y_env$rain)) Ea[Ea<y_env$rain] <- 0
     if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
 
     # Loop over ensembles
@@ -277,9 +276,9 @@ msaensi <- function( argv, y_env, fg_env, env) {
     r <- s <- mrtree$raster[[1]]$r 
     r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
     s[] <- mrbkg$data[[1]]$Eor[,e]
-    r <- clean_and_smooth_the_field( r, y_env, s, 
+    r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                      mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
-                                     lambda=2, area_small_clumps=100)
+                                     lambda=2, area_small_clumps=argv$area_small_clumps)
     t <- resample( r, env$rmaster, method="ngb")
     env$Xa[,e] <- getValues(t)
     if (env$cv_mode | env$cv_mode_random) 
