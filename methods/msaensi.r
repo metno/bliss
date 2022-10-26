@@ -112,14 +112,22 @@ msaensi <- function( argv, y_env, fg_env, env) {
     jw <- j-1
 
     mrbkg$data[[j]] <- list()
-    mrbkg$data[[j]]$E <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$E  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
     mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
     mrbkg$data[[j]]$X  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
-    mrbkg$data[[j]]$Z   <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
-    mrbkg$data[[j]]$Y   <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Z  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Y  <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
     if (j == jstop) { 
       mrbkg$data[[1]] <- list()
       mrbkg$data[[1]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+    } else {
+      mrbkg$data[[j+1]]$E  <- NULL
+      mrbkg$data[[j+1]]$HE <- NULL 
+      mrbkg$data[[j+1]]$X  <- NULL
+      mrbkg$data[[j+1]]$Z  <- NULL
+      mrbkg$data[[j+1]]$Y  <- NULL
+      mrbkg$data[[j+1]]$x  <- NULL
+      mrbkg$data[[j+1]]$Esd  <- NULL
     }
 
     # loop over ensemble members - prepare the background 
@@ -171,12 +179,12 @@ msaensi <- function( argv, y_env, fg_env, env) {
     envtmp$obs_x <- mrobs$x[[j]]
     envtmp$obs_y <- mrobs$y[[j]]
     envtmp$k_dim <- env$k_dim
-    envtmp$obs_val <- mrobs$val[[j]]
+#    envtmp$obs_val <- mrobs$val[[j]]
     envtmp$Eb <- mrbkg$data[[j]]$E
-    envtmp$HE <- mrbkg$data[[j]]$HE
+#    envtmp$HE <- mrbkg$data[[j]]$HE
     envtmp$Y <- mrbkg$data[[j]]$Y
     envtmp$Z <- mrbkg$data[[j]]$Z
-    envtmp$D <- envtmp$obs_val - envtmp$HE
+    envtmp$D <-  mrobs$val[[j]] - mrbkg$data[[j]]$HE
     envtmp$eps2 <- rep( argv$msa_eps2, envtmp$m_dim) 
     envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
                        query = cbind(mrtree$x[[j]],mrtree$y[[j]]), 
@@ -209,6 +217,10 @@ msaensi <- function( argv, y_env, fg_env, env) {
     }
     Ea <- res[,1:env$k_dim]
     if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
+    envtmp$Eb <- NULL 
+    envtmp$Y <- NULL 
+    envtmp$Z <- NULL 
+    envtmp$D <- NULL 
 
     # Loop over ensembles
     for (e in 1:env$k_dim) {
