@@ -133,7 +133,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
       } else {
         aux <- idwt.2d( dwt[[e]])
         r <- s <- mrtree$raster[[1]]$r 
-        r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
+        r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[[1]]),sqrt(mrtree$m_dim[[1]])))
         s[] <- mrbkg$data[[1]]$Eor[,e]
         r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                          mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
