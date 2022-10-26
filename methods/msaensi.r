@@ -217,6 +217,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
     }
     Ea <- res[,1:env$k_dim]
     if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
+    rm(res)
     envtmp$Eb <- NULL 
     envtmp$Y <- NULL 
     envtmp$Z <- NULL 
