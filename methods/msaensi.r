@@ -272,6 +272,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #dev.off()
 #q()
     } # END - Loop over ensembles
+    rm(Ea)
     t1b <- Sys.time()
     cat( paste( "total time", round(t1b-t0b,1), attr(t1b-t0b,"unit"), "\n"))
   } # END - Loop over spatial scales
