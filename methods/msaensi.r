@@ -250,7 +250,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
       dwt[[e]][[3*jw+1]][] <- as.matrix(r)
       rm(r)
 #      rm( rb_finer, of_u, of_v, rbmod_finer)
-#e<-1;Eaj <- idwt.2d( dwt[[e]]);r <- mrtree$raster[[1]]$r;r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])));r[r<0.1]<-0;image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
+#e<-1;Eaj <- idwt.2d( dwt[[e]]);r <- mrtree$raster[[1]]$r;r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[[1]]),sqrt(mrtree$m_dim[[1]])));r[r<0.1]<-0;image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
 #s<-r;s[]<-mrbkg$data[[1]]$Eor[,e]; image(s,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
 #t<-r;t[]<-mrobs$idi[[1]]; image(t,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
 #png(file="test.png",width=1200,height=1200)
@@ -276,7 +276,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
   for (e in 1:env$k_dim) {
     aux <- idwt.2d( dwt[[e]])
     r <- s <- mrtree$raster[[1]]$r 
-    r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
+    r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[[1]]),sqrt(mrtree$m_dim[[1]])))
     s[] <- Eor[,e]
     r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                      mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
