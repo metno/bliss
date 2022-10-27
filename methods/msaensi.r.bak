@@ -19,8 +19,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
   nx <- ncol( env$rmaster)
   ny <- nrow( env$rmaster)
 
-#  n <- ceiling( log( max(nx,ny), 2))
-  n <- ceiling( log( min(nx,ny), 2))
+  n <- ceiling( log( max(nx,ny), 2))
   rdyad <- raster( extent( xmn, xmx, ymn, ymx), 
                    ncol=2**n, nrow=2**n, crs=argv$grid_master.proj4)
   rdyad[] <- 0
@@ -103,20 +102,33 @@ msaensi <- function( argv, y_env, fg_env, env) {
   # safe-check, exit when no ok observations found 
   if (jstop == 0) return(NULL)
 
+  mrbkg <- list()
+
   dwt <- list() 
-  envtmp$k_dim <- env$k_dim
   # Loop over spatial scales
   for (j in jstop:2) {
     cat( paste( "alligning spatial level", j))
     t0b <- Sys.time()
     jw <- j-1
 
-    envtmp$Eb  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
-    envtmp$D <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
-    envtmp$Z  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
-    envtmp$Y  <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
-    if (j == jstop) 
-      Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+    mrbkg$data[[j]] <- list()
+    mrbkg$data[[j]]$E  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$HE <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$X  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Z  <- array( data=NA, dim=c( mrtree$m_dim[[j]], env$k_dim))
+    mrbkg$data[[j]]$Y  <- array( data=NA, dim=c( mrobs$d_dim[[j]], env$k_dim))
+    if (j == jstop) { 
+      mrbkg$data[[1]] <- list()
+      mrbkg$data[[1]]$Eor <- array( data=NA, dim=c( mrtree$m_dim[[1]], env$k_dim))
+    } else {
+      mrbkg$data[[j+1]]$E  <- NULL
+      mrbkg$data[[j+1]]$HE <- NULL 
+      mrbkg$data[[j+1]]$X  <- NULL
+      mrbkg$data[[j+1]]$Z  <- NULL
+      mrbkg$data[[j+1]]$Y  <- NULL
+      mrbkg$data[[j+1]]$x  <- NULL
+      mrbkg$data[[j+1]]$Esd  <- NULL
+    }
 
     # loop over ensemble members - prepare the background 
     for (e in 1:env$k_dim) {
@@ -124,17 +136,16 @@ msaensi <- function( argv, y_env, fg_env, env) {
       if ( j == jstop ) {
         r <- resample( subset( fg_env$fg[[fg_env$ixf[fg_env$ixs[e]]]]$r_main, subset=fg_env$ixe[fg_env$ixs[e]]), rdyad, method="bilinear")
         if (!is.na(y_env$rain)) r[r<y_env$rain] <- 0
-        Eor[,e] <- getValues(r)
+        mrbkg$data[[1]]$Eor[,e] <- getValues(r) 
       # 2nd,3rd,... iterations, background is from the previous iteration
       } else {
         aux <- idwt.2d( dwt[[e]])
         r <- s <- mrtree$raster[[1]]$r 
         r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[[1]]),sqrt(mrtree$m_dim[[1]])))
-        s[] <- Eor[,e]
+        s[] <- mrbkg$data[[1]]$Eor[,e]
         r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                          mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
                                          lambda=2, area_small_clumps=argv$area_small_clumps)
-        rm(s)
       }
       #discrete wavelet transformation
       dwt[[e]] <- dwt.2d( as.matrix(r), wf=argv$msaensi_wf, J=jw, boundary=argv$msaensi_boundary)
@@ -142,33 +153,38 @@ msaensi <- function( argv, y_env, fg_env, env) {
       r   <- mrtree$raster[[j]]$r
       r[] <- dwt[[e]][[3*jw+1]] / 2**jw
       # store the background in the multiresolution tree
-      envtmp$Eb[,e]  <- getValues(r)
-      envtmp$D[,e] <- mrobs$val[[j]] - extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
+      mrbkg$data[[j]]$E[,e]  <- getValues(r)
+      mrbkg$data[[j]]$HE[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]))
     } # end loop over ensemble members
-    if ( j == jstop ) rm(rdyad) 
-    rm(r)
-
-    # background ensemble correlation matrices 
-    Emean <- rowMeans(envtmp$Eb)
-    Esd <- apply( envtmp$Eb, FUN=function(x){sd(x)}, MAR=1)
+    mrbkg$data[[j]]$x <- rowMeans(mrbkg$data[[j]]$E)
+    # background ensemble anomalies 
+    mrbkg$data[[j]]$Esd <- apply( mrbkg$data[[j]]$E, FUN=function(x){sd(x)}, MAR=1)
     for (e in 1:env$k_dim) { 
       # covariances
-#      mrbkg$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean)
+      mrbkg$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (mrbkg$data[[j]]$E[,e] - mrbkg$data[[j]]$x)
       # correlations
-      envtmp$Z[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean) / Esd
-      envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim) 
+      mrbkg$data[[j]]$Z[,e] <- 1/sqrt(env$k_dim-1) * (mrbkg$data[[j]]$E[,e] - mrbkg$data[[j]]$x) / mrbkg$data[[j]]$Esd
+      mrbkg$data[[j]]$Z[,e][!is.finite(mrbkg$data[[j]]$Z[,e])] <- 1/sqrt(env$k_dim) 
       r   <- mrtree$raster[[j]]$r
-      r[] <- envtmp$Z[,e]
-      envtmp$Y[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]), method="simple")
+      r[] <- mrbkg$data[[j]]$Z[,e]
+      mrbkg$data[[j]]$Y[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]), method="simple")
     }
-    rm( r, Emean, Esd)
 
     # Spatial analysis with multiresolution background and observations
     envtmp$x <- mrtree$x[[j]]
     envtmp$y <- mrtree$y[[j]]
     envtmp$m_dim <- mrtree$m_dim[[j]]
+    ra <- mrtree$raster[[j]]$r
+    rb <- mrtree$raster[[j]]$r
     envtmp$obs_x <- mrobs$x[[j]]
     envtmp$obs_y <- mrobs$y[[j]]
+    envtmp$k_dim <- env$k_dim
+#    envtmp$obs_val <- mrobs$val[[j]]
+    envtmp$Eb <- mrbkg$data[[j]]$E
+#    envtmp$HE <- mrbkg$data[[j]]$HE
+    envtmp$Y <- mrbkg$data[[j]]$Y
+    envtmp$Z <- mrbkg$data[[j]]$Z
+    envtmp$D <-  mrobs$val[[j]] - mrbkg$data[[j]]$HE
     envtmp$eps2 <- rep( argv$msa_eps2, envtmp$m_dim) 
     envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
                        query = cbind(mrtree$x[[j]],mrtree$y[[j]]), 
@@ -200,18 +216,17 @@ msaensi <- function( argv, y_env, fg_env, env) {
                                          idi=F)))
     }
     Ea <- res[,1:env$k_dim]
-    rm(res)
     if (any(is.na(Ea))) Ea[is.na(Ea)] <- 0
-    envtmp$Y <- envtmp$Z <- envtmp$D <- envtmp$x <- envtmp$y <- NULL 
-    envtmp$m_dim <- envtmp$obs_x <- envtmp$obs_y <- envtmp$eps2 <- NULL
-    envtmp$nn2 <- NULL 
+    rm(res)
+    envtmp$Eb <- NULL 
+    envtmp$Y <- NULL 
+    envtmp$Z <- NULL 
+    envtmp$D <- NULL 
 
     # Loop over ensembles
-    ra <- mrtree$raster[[j]]$r
-    rb <- mrtree$raster[[j]]$r
     for (e in 1:env$k_dim) {
       ra[] <- Ea[,e]
-      rb[] <- envtmp$Eb[,e]
+      rb[] <- mrbkg$data[[j]]$E[,e]
       of_nlevel <- min( c( floor(log2(nrow(rb))), floor(log2(ncol(rb)))))
       if ( floor(log2(nrow(rb))) == of_nlevel & floor(log2(ncol(rb))) == of_nlevel) 
         of_nlevel <- of_nlevel - 1
@@ -222,7 +237,6 @@ msaensi <- function( argv, y_env, fg_env, env) {
       # Align smaller scales
       of_u <- of$u
       of_v <- of$v
-      rm(of)
       # do not align when idi is 0
       # note: idi is calculated by mergeobs
       of_u[mrobs$idi[[j]]==0] <- 0
@@ -244,11 +258,9 @@ msaensi <- function( argv, y_env, fg_env, env) {
           dwt[[e]][[3*(jjw-1)+ww]][] <- as.matrix(rbmod_finer)
         }
       }  # END - Loop over scales
-      rm(rb_finer,rbmod_finer)
       r <- mrtree$raster[[j]]$r  
       r[] <- Ea[,e] * 2**jw
       dwt[[e]][[3*jw+1]][] <- as.matrix(r)
-      rm(r)
 #      rm( rb_finer, of_u, of_v, rbmod_finer)
 #e<-1;Eaj <- idwt.2d( dwt[[e]]);r <- mrtree$raster[[1]]$r;r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])));r[r<0.1]<-0;image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
 #s<-r;s[]<-mrbkg$data[[1]]$Eor[,e]; image(s,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
@@ -260,7 +272,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #dev.off()
 #q()
     } # END - Loop over ensembles
-    rm(Ea,ra,rb)
+    rm(Ea)
     t1b <- Sys.time()
     cat( paste( "total time", round(t1b-t0b,1), attr(t1b-t0b,"unit"), "\n"))
   } # END - Loop over spatial scales
@@ -277,19 +289,16 @@ msaensi <- function( argv, y_env, fg_env, env) {
     aux <- idwt.2d( dwt[[e]])
     r <- s <- mrtree$raster[[1]]$r 
     r[] <- array(data=as.matrix(aux),dim=c(sqrt(mrtree$m_dim[1]),sqrt(mrtree$m_dim[1])))
-    s[] <- Eor[,e]
+    s[] <- mrbkg$data[[1]]$Eor[,e]
     r <- clean_and_smooth_the_field( r, y_env$rain, s, 
                                      mrobs$val[[1]], mrobs$x[[1]], mrobs$y[[1]], 
                                      lambda=2, area_small_clumps=argv$area_small_clumps)
-    rm(s)
     t <- resample( r, env$rmaster, method="ngb")
-    rm(r)
     env$Xa[,e] <- getValues(t)
     if (env$cv_mode | env$cv_mode_random) 
       y_env$yov$value_a[,e] <- extract( t, cbind( y_env$yov$x, y_env$yov$y), method="simple")
     # extract point values (analysis)
     y_env$yo$value_a[,e]  <- extract( t, cbind(  y_env$yo$x, y_env$yo$y), method="simple")
-    rm(t)
   } # END loop over ensemble members
 
 } # END FUNCTION
