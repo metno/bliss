@@ -156,7 +156,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #      mrbkg$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean)
       # correlations
       envtmp$Z[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean) / Esd
-      envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim) 
+      envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim-1) 
       r   <- mrtree$raster[[j]]$r
       r[] <- envtmp$Z[,e]
       envtmp$Y[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]), method="simple")
@@ -185,7 +185,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
                                            dh=mrtree$mean_res[[j]],
                                            dh_loc=(2*mrtree$mean_res[[j]]),
                                            alpha=argv$alpha,
-                                           k_dim_corr=envtmp$k_dim,
+                                           k_dim_corr=argv$k_dim_cor,
                                            idi=F)))
     # no-multicores
     } else {
@@ -196,7 +196,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
                                          dh=mrtree$mean_res[[j]],
                                          dh_loc=(2*mrtree$mean_res[[j]]),
                                          alpha=argv$alpha,
-                                         k_dim_corr=envtmp$k_dim,
+                                         k_dim_corr=argv$k_dim_cor,
                                          idi=F)))
     }
     Ea <- res[,1:env$k_dim]

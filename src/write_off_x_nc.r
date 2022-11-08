@@ -13,6 +13,8 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
 #    } else if (argv$off_x.variables[i]=="analysis_errsd") {
 #      if (!exists("xa_errsd")) {xa_errsd<-aix;xa_errsd[]<-NA}
 #      xout<-xa_errsd
+    } else if (argv$off_x.variables[i] == "idi") {
+      xout <- as.vector(env$Xidi)
     } else if (argv$off_x.variables[i] == "background") {
 #      if (!exists("xb")) {xb<-aix;xb[]<-NA}
 #      xout <- xb

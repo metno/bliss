@@ -180,7 +180,7 @@ if (argv$mode=="OI_multiscale")
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "rasterize", "hyletkf", "oi", "corensi", "msa", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+if ( !(argv$mode %in% c( "rasterize", "ensi", "oi", "corensi", "msa", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
   Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
   Disth <- ( outer(VecY,VecY,FUN="-")**2.+
              outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
@@ -218,11 +218,25 @@ if (argv$mode=="rasterize") { # still to test
 } else if (argv$mode=="SC_Barnes") {
   source( file.path( bliss_mod_path, "main_sc_barnes.r"))
 #..............................................................................
-# ===>  Ensemble-based Statistical Interpolation  <===
+# ===>  OI applied to an Ensemble (static covariances) <===
 } else if (argv$mode=="oi") {
   envtmp <- new.env( parent = emptyenv())
-  res <- fg_u_align( argv, fg_env, u_env, env)
+  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  rm(envtmp)
+  res <- preproc_selensemble( argv, fg_env, env)
+  envtmp <- new.env( parent = emptyenv())
   res <- oi_driver( argv, y_env, fg_env, env)
+  rm(envtmp)
+#..............................................................................
+# ===>  Ensemble-based Statistical Interpolation (hybrid covariances)  <===
+} else if (argv$mode=="ensi") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  rm(envtmp)
+  res <- preproc_selensemble( argv, fg_env, env)
+  envtmp <- new.env( parent = emptyenv())
+  res <- ensi_driver( argv, y_env, fg_env, env)
+  rm(envtmp)
 #..............................................................................
 # ===>  EnSI with Gaussian Anamorphosis for Precipitation  <===
 } else if (argv$mode=="ensigap") {

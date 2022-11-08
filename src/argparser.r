@@ -143,6 +143,10 @@ p <- add_argument(p, "--k_dim",
                   help="number of background ensemble members",
                   type="integer",
                   default=NA)
+p <- add_argument(p, "--k_dim_corr",
+                  help="number of background ensemble members",
+                  type="integer",
+                  default=NA)
 p <- add_argument(p, "--rain_uo",
                   help="rain yes/no threshold for gridded observations (mm)",
                   type="numeric",
@@ -164,6 +168,11 @@ p <- add_argument(p, "--pmax",
                   help="maximum number of observations in the neighbourhood of a gridpoint for OI",
                   type="numeric",
                   default=200)
+p <- add_argument(p, "--analysis_range",
+                  help="range of allowed values for the analysis",
+                  type="numeric",
+                  nargs=2,
+                  default=c(NA,NA))
 p <- add_argument(p, "--area_small_clumps",
                   help="max area (units m**2) of those small clumps of connected cells that we want to remove from the analysis (e.g. small precipitation events, most likely interpolation artifacts)",
                   type="numeric",
@@ -172,6 +181,18 @@ p <- add_argument(p, "--alpha",
                   help="parameter used to weight the static and dynamical contributions in the definition of the hybrid correlations",
                   type="numeric",
                   default=0.5)
+p <- add_argument(p, "--dh",
+                  help="horizontal decorrelation lenght scale",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--dhloc",
+                  help="horizontal decorrelation lenght scale (used for localization)",
+                  type="numeric",
+                  default=100000)
+p <- add_argument(p, "--eps2",
+                  help="ration observation and background error variances",
+                  type="numeric",
+                  default=0.1)
 #------------------------------------------------------------------------------
 # MSA
 p <- add_argument(p, "--msa_ididense",
@@ -219,14 +240,6 @@ p <- add_argument(p, "--rasterize_q",
 #------------------------------------------------------------------------------
 # OI shared
 # OI_multiscale / OI_firstguess parameters
-p <- add_argument(p, "--eps2",
-                  help="ratio of observation to background error covariance",
-                  type="numeric",
-                  default=1)
-p <- add_argument(p, "--Dh",
-                  help="horizontal de-corellation length scale (km)",
-                  type="numeric",
-                  default=NULL)
 p <- add_argument(p, "--oimult.eps2_idi",
                   help="OI multiscale, optional, eps2 for the IDI",
                   type="numeric",
@@ -1226,48 +1239,6 @@ p <- add_argument(p, "--off_obspp",
                   type="character",
                   default=NA)
 
-p <- add_argument(p, "--oi_k_dim",
-                  help="number of background ensemble members",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--oi_a_dim",
-                  help="number of background ensemble members",
-                  type="integer",
-                  default=NA)
-p <- add_argument(p, "--oi_rain_uo",
-                  help="rain yes/no threshold for alignment (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--oi_align_mode",
-                  help="strategy used for alignment ('ets','maxoverlap')",
-                  type="character",
-                  default="maxoverlap")
-p <- add_argument(p, "--oi_rain_yo",
-                  help="rain yes/no threshold for interpolation (mm)",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--oi_pmax",
-                  help="maximum number of observations to use in the surrounding of a grid point",
-                  type="integer",
-                  default=50)
-p <- add_argument(p, "--oi_range",
-                  help="range of allowed values",
-                  type="numeric",
-                  nargs=2,
-                  default=c(NA,NA))
-p <- add_argument(p, "--oi_dh",
-                  help="horizontal decorrelation lenght scale",
-                  type="numeric",
-                  default=10000)
-p <- add_argument(p, "--oi_eps2",
-                  help="ration observation and background error variances",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--oi_corrfun",
-                  help="correlation functions (\"gaussian\",\"soar\",\"toar\",\"powerlaw\")",
-                  type="character",
-                  default="gaussian")
-
 #------------------------------------------------------------------------------
 # Change-of-Resolution Ensemble Kalman Smoother
 
@@ -1376,25 +1347,14 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
-if (argv$mode=="corensi") {
+if ( argv$mode %in% c( "corensi", "msa", "msaensi", "oi", "ensi")) {
   env$k_dim <- argv$k_dim
   u_env$rain <- argv$rain_uo
   y_env$rain <- argv$rain_yo
-  if ( is.na(argv$corensi_k_dim_corr)) argv$corensi_k_dim_corr <- argv$k_dim
-} else if (argv$mode=="msa") {
-  env$k_dim <- argv$k_dim
-  u_env$rain <- argv$rain_uo
-  y_env$rain <- argv$rain_yo
-} else if (argv$mode=="msaensi") {
-  env$k_dim <- argv$k_dim
-  u_env$rain <- argv$rain_uo
-  y_env$rain <- argv$rain_yo
-} else if (argv$mode=="oi") {
-  env$k_dim <- argv$oi_k_dim
-  env$a_dim <- argv$oi_a_dim
-  if ( is.na(env$a_dim)) env$a_dim <- env$k_dim
-  u_env$rain <- argv$oi_rain_uo
-  y_env$rain <- argv$oi_rain_yo
+  if ( is.na(argv$k_dim_corr)) argv$k_dim_corr <- argv$k_dim
+  if (argv$mode == "corensi") {
+    if ( is.na(argv$corensi_k_dim_corr)) argv$corensi_k_dim_corr <- argv$k_dim
+  }
 }
 
 #

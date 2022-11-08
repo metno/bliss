@@ -1,8 +1,8 @@
 #+
-oi_driver <- function( argv, y_env, fg_env, env) {
+ensi_driver <- function( argv, y_env, fg_env, env) {
 #------------------------------------------------------------------------------
   t0a <- Sys.time()
-  cat( "-- OI --\n")
+  cat( "-- EnSI --\n")
 
   # number of background ensemble members
   if ( ( nfg <- length( fg_env$ixs)) == 0) return( FALSE)
@@ -27,9 +27,12 @@ oi_driver <- function( argv, y_env, fg_env, env) {
       if (length( ixb <- which( !is.na( aux))) == 0) boom()
       env$m_dim <- length( ixb)
       xy <- xyFromCell( rb, 1:ncell(rb))
-      envtmp$m_dim <- length( ixb)
+      envtmp$m_dim <- env$m_dim 
+      envtmp$k_dim <- env$k_dim
       envtmp$Eb <- array( data=NA, dim=c(env$m_dim,env$k_dim))
-      envtmp$HE <- array( data=NA, dim=c(env$p_dim,env$k_dim))
+      envtmp$D <- array( data=NA, dim=c(env$p_dim,env$k_dim))
+      envtmp$Z <- array( data=NA, dim=c(env$m_dim,env$k_dim))
+      envtmp$Y <- array( data=NA, dim=c(env$p_dim,env$k_dim))
       envtmp$x <- xy[ixb,1]
       envtmp$y <- xy[ixb,2]
       envtmp$eps2 <- rep( argv$eps2, env$m_dim)
@@ -41,36 +44,57 @@ oi_driver <- function( argv, y_env, fg_env, env) {
       cat( paste( "number of observations, p dim >", env$p_dim, "\n"))
     }
     envtmp$Eb[,e] <- getValues(rb)[ixb]
-    envtmp$HE[,e] <- extract( rb, cbind(y_env$yo$x, y_env$yo$y))
+    envtmp$D[,e] <- y_env$yo$value - extract( rb, cbind(y_env$yo$x, y_env$yo$y))
   }
   rm(rb)
-  envtmp$D <- y_env$yo$value - envtmp$HE
-  envtmp$HE <- NULL
+
+  # background ensemble correlation matrices 
+  Emean <- rowMeans(envtmp$Eb)
+  Esd <- apply( envtmp$Eb, FUN=function(x){sd(x)}, MAR=1)
+  r[] <- NA
+  for (e in 1:env$k_dim) { 
+    # covariances
+#    mrbkg$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean)
+    # correlations
+    envtmp$Z[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean) / Esd
+    envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim-1) 
+    r[] <- envtmp$Z[,e]
+    envtmp$Y[,e] <- extract( r, cbind(y_env$yo$x,y_env$yo$y), method="simple")
+  }
+  rm( Emean, Esd)
+
   envtmp$obs_x <- y_env$yo$x
   envtmp$obs_y <- y_env$yo$y
   # run oi gridpoint by gridpoint (idi only the first time)
   if (!is.na(argv$cores)) {
-    res <- t( mcmapply( enoi_basic_gridpoint_by_gridpoint,
-                        1:env$m_dim,
+    res <- t( mcmapply( enoi_Evensen2003_gridpoint_by_gridpoint,
+                        1:envtmp$m_dim,
                         mc.cores=argv$cores,
                         SIMPLIFY=T,
                         MoreArgs = list( corr=argv$corrfun,
                                          dh=argv$dh,
+                                         dh_loc=argv$dhloc,
+                                         alpha=argv$alpha,
+                                         k_dim_corr=argv$k_dim_cor,
                                          idi=T)))
       
   # no-multicores
   } else {
-    res <- t( mapply( enoi_basic_gridpoint_by_gridpoint,
-                      1:env$m_dim,
+    res <- t( mapply( enoi_Evensen2003_gridpoint_by_gridpoint,
+                      1:envtmp$m_dim,
                       SIMPLIFY=T,
-                      MoreArgs = list( corr=argv$corrfun,
+                      MoreArgs = list( corr=argv$corrfun, 
                                        dh=argv$dh,
+                                       dh_loc=argv$dhloc,
+                                       alpha=argv$alpha,
+                                       k_dim_corr=argv$k_dim_corr,
                                        idi=T)))
+
   }
   env$Xa[ixb,1:env$k_dim] <- res[,1:env$k_dim]
   env$Xidi[ixb,1] <- res[,env$k_dim+1]
   rm(res)
-  envtmp$Eb <- NULL
+  envtmp$Eb <- envtmp$Z <- envtmp$Y <- NULL
   if (any(is.na(env$Xa))) env$Xa[is.na(env$Xa)] <- 0
   # Safe checks
   if (!is.na(argv$analysis_range[1])) 
@@ -94,5 +118,5 @@ oi_driver <- function( argv, y_env, fg_env, env) {
   y_env$yo$idi  <- extract( r, cbind(  y_env$yo$x, y_env$yo$y), method="simple")
   
   t1a <- Sys.time()
-  cat( paste( "OI total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
+  cat( paste( "EnSI total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
 }
