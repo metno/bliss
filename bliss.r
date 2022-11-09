@@ -272,6 +272,7 @@ if (argv$mode=="rasterize") { # still to test
   res <- msaensi( argv, y_env, fg_env, env)
   rm(envtmp)
 } # end if selection among spatial analysis methods
+
 #
 #------------------------------------------------------------------------------
 if (argv$verbose) 

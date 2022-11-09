@@ -156,7 +156,7 @@ msaensi <- function( argv, y_env, fg_env, env) {
 #      mrbkg$data[[j]]$X[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean)
       # correlations
       envtmp$Z[,e] <- 1/sqrt(env$k_dim-1) * (envtmp$Eb[,e] - Emean) / Esd
-      envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim-1) 
+      envtmp$Z[,e][!is.finite(envtmp$Z[,e])] <- 1/sqrt(env$k_dim) 
       r   <- mrtree$raster[[j]]$r
       r[] <- envtmp$Z[,e]
       envtmp$Y[,e] <- extract( r, cbind( mrobs$x[[j]], mrobs$y[[j]]), method="simple")
