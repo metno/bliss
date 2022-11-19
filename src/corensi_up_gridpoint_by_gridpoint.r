@@ -2,6 +2,7 @@
 corensi_up_gridpoint_by_gridpoint<-function( i,
                                              corr = "soar",
                                              dh = 10000,
+                                             dh_loc = 10000,
                                              alpha = 0.5,
                                              k_dim_corr=10,
                                              idi = F) {
@@ -39,34 +40,17 @@ corensi_up_gridpoint_by_gridpoint<-function( i,
     Yi <- array( data=envtmp$Y[ixa,ixb], dim=c(p,k_dim_corr))
     eps2 <- envtmp$eps2[i]
 
-    # static correlations
-    if (corr=="gaussian") {
-      rloc <- exp( -0.5* (dist*dist) / (dh*dh) )
-    } else if (corr=="soar")  {
-      rloc <- (1+dist/dh)*exp(-dist/dh)
-    } else if (corr=="powerlaw")  {
-      rloc <- 1 / (1 + 0.5*(dist*dist)/(dh*dh))
-    } else if (corr=="toar")  {
-      rloc <- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
-    }
+    # localization
+    loc1d <- corr1d( dist, dh_loc, corr)
+    loc2d <- corr2d( cbind(x,y), dh_loc, corr)
 
-    if (corr=="gaussian") {
-      Cyy_s<-exp(-0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
-    } else if (corr=="soar")  {
-      distnorm<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2) / dh 
-      Cyy_s<-(1+distnorm)*exp(-distnorm)
-      rm(distnorm)
-    } else if (corr=="powerlaw")  {
-      Cyy_s<-1 / (1 + 0.5*(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)/(dh*dh))
-    } else if (corr=="toar")  {
-      dist<-sqrt(outer(y,y,FUN="-")**2. + outer(x,x,FUN="-")**2)
-      Cyy_s<- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
-      rm(dist)
-    }
+    # static correlations
+    rloc <- corr1d( dist, dh, corr)
+    Cyy_s <- corr2d( cbind(x,y), dh, corr)
 
     # combine static and dynamic correlations
-    Cxy <- alpha * rloc + (1-alpha) * rloc * tcrossprod( Zi, Yi)
-    Cyy <- alpha * Cyy_s + (1-alpha) * Cyy_s * tcrossprod( Yi, Yi)
+    Cxy <- alpha * rloc + (1-alpha) * loc1d * tcrossprod( Zi, Yi)
+    Cyy <- alpha * Cyy_s + (1-alpha) * loc2d * tcrossprod( Yi, Yi)
 
     #
     CyyCdd_inv <- chol2inv( chol( (Cyy+diag(x=eps2,p)) ))

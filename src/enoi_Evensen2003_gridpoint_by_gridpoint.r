@@ -22,6 +22,7 @@ enoi_Evensen2003_gridpoint_by_gridpoint <- function( i,
 
     # available observations
     ixa  <- envtmp$nn2$nn.idx[i,aux]
+
     di <- array( data=envtmp$D[ixa,], dim=c(p,envtmp$k_dim))
     if (envtmp$k_dim>k_dim_corr) {
       ixb <- order( colMeans( abs(di)))[1:k_dim_corr]

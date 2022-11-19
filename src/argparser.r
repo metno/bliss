@@ -138,6 +138,19 @@ p <- add_argument(p, "--selens_mode",
                   type="character",
                   default="identity")
 #------------------------------------------------------------------------------
+p <- add_argument(p, "--obs_perturb",
+                  help="should we perturb the observations?",
+                  flag=T)
+p <- add_argument(p, "--obs_perturb_rmin",
+                  help="Perturb the observations with random factors from a uniform distribution",
+                  type="numeric",
+                  default=0.5)
+p <- add_argument(p, "--obs_perturb_rmax",
+                  help="Perturb the observations with random factors from a uniform distribution",
+                  type="numeric",
+                  default=1.5)
+
+#------------------------------------------------------------------------------
 # parameters common to several interpolation methods
 p <- add_argument(p, "--k_dim",
                   help="number of background ensemble members",

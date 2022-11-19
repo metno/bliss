@@ -141,7 +141,7 @@ corensi <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     envtmp$m_dim <- mrtree$m_dim[[j]]
     envtmp$k_dim <- env$k_dim
     envtmp$obs_val <- mrobs$val[[j]]
-    envtmp$E <- mrup$data[[j]]$E
+    envtmp$Eb <- mrup$data[[j]]$E
     envtmp$HE <- mrup$data[[j]]$HE
     eps2 <- argv$corensi_eps2
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
@@ -160,24 +160,26 @@ corensi <- function( argv, y_env, fg_env, env, use_fg_env=T) {
                        radius = (7*mrtree$mean_res[[j]]))
     # run EnKF/EnOI gridpoint by gridpoint
     if (!is.na(argv$cores)) {
-      res <- t( mcmapply( corensi_up_gridpoint_by_gridpoint,
+      res <- t( mcmapply( enoi_Evensen2003_gridpoint_by_gridpoint,
                           1:envtmp$m_dim,
                           mc.cores=argv$cores,
                           SIMPLIFY=T,
                           MoreArgs = list( corr=argv$corrfun,
                                            dh=mrtree$mean_res[[j]],
-                                           alpha=argv$corensi_alpha,
-                                           k_dim_corr=argv$corensi_k_dim_corr,
+                                           dh_loc=(2*mrtree$mean_res[[j]]),
+                                           alpha=argv$alpha,
+                                           k_dim_corr=argv$k_dim_corr,
                                            idi=T)))
     # no-multicores
     } else {
-      res <- t( mapply( corensi_up_gridpoint_by_gridpoint,
+      res <- t( mapply( enoi_Evensen2003_gridpoint_by_gridpoint,
                         1:envtmp$m_dim,
                         SIMPLIFY=T,
                         MoreArgs = list( corr=argv$corrfun, 
                                          dh=mrtree$mean_res[[j]],
-                                         alpha=argv$corensi_alpha,
-                                         k_dim_corr=argv$corensi_k_dim_corr,
+                                         dh_loc=(2*mrtree$mean_res[[j]]),
+                                         alpha=argv$alpha,
+                                         k_dim_corr=argv$k_dim_corr,
                                          idi=T)))
     }
     mrup$data[[j]]$Ea  <- res[,1:env$k_dim]
@@ -207,12 +209,12 @@ corensi <- function( argv, y_env, fg_env, env, use_fg_env=T) {
     envtmp$Ea <- mrup$data[[j]]$Ea
     envtmp$Xa_j  <- mrup$data[[j]]$Xa
     envtmp$X_j1 <- mrup$data[[j+1]]$X
-    envtmp$E  <- mrup$data[[j+1]]$E
+    envtmp$Eb  <- mrup$data[[j+1]]$E
     eps2 <- argv$corensi_eps2
     envtmp$eps2 <- rep( eps2, envtmp$m_dim)
     envtmp$D <- mrdw$data[[j+1]]$Ea - mrup$data[[j+1]]$E
-    print( paste("j qq2",j,round( 
-      mean( apply( mrdw$data[[j+1]]$Ea, FUN=function(x){sd(x)}, MAR=1)**2),3)))
+#    print( paste("j qq2",j,round( 
+#      mean( apply( mrdw$data[[j+1]]$Ea, FUN=function(x){sd(x)}, MAR=1)**2),3)))
     # helper to get the neighbours
     envtmp$nn2 <- nn2( cbind(envtmp$obs_x,envtmp$obs_y), 
                        query = cbind(envtmp$x,envtmp$y), 

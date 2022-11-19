@@ -42,9 +42,23 @@ oi_driver <- function( argv, y_env, fg_env, env) {
     }
     envtmp$Eb[,e] <- getValues(rb)[ixb]
     envtmp$HE[,e] <- extract( rb, cbind(y_env$yo$x, y_env$yo$y))
+    # perturb the observations
+    obs <- y_env$yo$value
+    if (argv$obs_perturb) {
+      if (!is.na(y_env$rain)) {
+        ixo <- which( y_env$yo$value >= y_env$rain)
+      } else {
+        ixo <- 1:y_env$yo$n
+      }
+      if ( length(ixo) > 0)
+        obs[ixo] <- obs[ixo] * runif( length(ixo), min=argv$obs_perturb_rmin, max=argv$obs_perturb_rmax)
+      rm(ixo) 
+    }
+    envtmp$D[,e] <- obs - extract( rb, cbind(y_env$yo$x, y_env$yo$y))
+    rm(obs)
   }
   rm(rb)
-  envtmp$D <- y_env$yo$value - envtmp$HE
+#  envtmp$D <- y_env$yo$value - envtmp$HE
   envtmp$HE <- NULL
   envtmp$obs_x <- y_env$yo$x
   envtmp$obs_y <- y_env$yo$y

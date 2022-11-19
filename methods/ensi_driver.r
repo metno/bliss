@@ -44,10 +44,22 @@ ensi_driver <- function( argv, y_env, fg_env, env) {
       cat( paste( "number of observations, p dim >", env$p_dim, "\n"))
     }
     envtmp$Eb[,e] <- getValues(rb)[ixb]
-    envtmp$D[,e] <- y_env$yo$value - extract( rb, cbind(y_env$yo$x, y_env$yo$y))
+    # perturb the observations
+    obs <- y_env$yo$value
+    if (argv$obs_perturb) {
+      if (!is.na(y_env$rain)) {
+        ixo <- which( y_env$yo$value >= y_env$rain)
+      } else {
+        ixo <- 1:y_env$yo$n
+      }
+      if ( length(ixo) > 0)
+        obs[ixo] <- obs[ixo] * runif( length(ixo), min=argv$obs_perturb_rmin, max=argv$obs_perturb_rmax) 
+      rm(ixo)
+    }
+    envtmp$D[,e] <- obs - extract( rb, cbind(y_env$yo$x, y_env$yo$y))
+    rm(obs)
   }
   rm(rb)
-
   # background ensemble correlation matrices 
   Emean <- rowMeans(envtmp$Eb)
   Esd <- apply( envtmp$Eb, FUN=function(x){sd(x)}, MAR=1)
