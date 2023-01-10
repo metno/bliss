@@ -10,11 +10,8 @@ checkargs <- function( argv, env) {
 
 if (!(file.exists(argv$iff_obs))) boom(paste0("file not found ",argv$iff_obs))
 
-if ( argv$mode == "OI_multiscale") {
-  if (argv$verbose) {
-    if (!(file.exists(argv$iff_rf))) 
-      cat( paste("warning: file not found",argv$iff_rf,"\n"))
-  }
+if ( argv$mode == "oi_multiscale_senorge_prec") {
+  cat("chosen mode is OI multiscale developed for the spatial analysis of seNorge precipitation\n")
 } else if ( argv$mode == "OI_firstguess") {
   if (!(file.exists(argv$iff_fg))) 
     boom(paste0("file not found ",argv$iff_fg))
@@ -65,8 +62,12 @@ argv$iff_fg.epos     <- set_NAs_to_NULL( argv$iff_fg.epos)
 
 #
 # load external C functions
-#dyn.load(file.path(argv$path2src,"oi_rr_first.so"))
-#dyn.load(file.path(argv$path2src,"oi_rr_fast.so"))
+if (argv$mode %in% c("oi_multiscale_senorge_prec")) {
+  if ( !( file.exists(argv$path2src))) ext <- boom("path2src not found")
+  # remember: to get .so you have to "$>R CMD SHLIB oi_rr_fast.c"
+  dyn.load( file.path( argv$path2src, "oi_rr_first.so"))
+  dyn.load( file.path( argv$path2src, "oi_rr_fast.so"))
+}
 #dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
 #dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
 #dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))

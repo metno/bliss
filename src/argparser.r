@@ -24,7 +24,7 @@ p <- add_argument(p, "--fg.files",
                   default=NULL,
                   nargs=Inf)
 p <- add_argument(p, "--fg.filenames",
-                  help="file names of the first-guess nc-files. It is an optional argument, if specified: i) must have the same length of --fg.files ii) override the main.file arguments in the fg.files",
+                  help="file names of the first-guess nc-files. It is an optional argument, if specified: i) must have the same length of --fg.files ii) it overrides the main.file arguments of the fg.files",
                   type="character",
                   default=NULL,
                   nargs=Inf)
@@ -91,7 +91,7 @@ p <- add_argument(p, "--twostep_nogrid",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"rasterize\",\"OI_multiscale\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"oi_multiscale_senorge_prec\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -202,10 +202,18 @@ p <- add_argument(p, "--dhloc",
                   help="horizontal decorrelation lenght scale (used for localization)",
                   type="numeric",
                   default=100000)
+p <- add_argument(p, "--dh_idi",
+                  help="horizontal decorrelation lenght scale used only for IDI calculations",
+                  type="numeric",
+                  default=10000)
 p <- add_argument(p, "--eps2",
-                  help="ration observation and background error variances",
+                  help="ratio between observation and background error variances",
                   type="numeric",
                   default=0.1)
+p <- add_argument(p, "--use_relativeAnomalies",
+                  help="use relative anomalies (observation/background)",
+                  flag=T)
+
 #------------------------------------------------------------------------------
 # MSA
 p <- add_argument(p, "--msa_ididense",
@@ -537,10 +545,6 @@ p <- add_argument(p, "--iff_fg",
                   help="full file name for the first-guess field (nc)",
                   type="character",
                   default="none")
-p <- add_argument(p, "--iff_rf",
-                  help="full file name for the rescaling factor (nc)",
-                  type="character",
-                  default="none")
 p <- add_argument(p, "--iff_dem",
                   help="full file name for the digital elevation model (nc)",
                   type="character",
@@ -816,78 +820,6 @@ p <- add_argument(p, "--iff_mask.e",
                   help="label of the ensemble member to read from file (default is null)",
                   type="numeric",
                   default=NULL)
-#------------------------------------------------------------------------------
-# Rescaling factor file netcdf parameters
-p <- add_argument(p, "--iff_rf.varname",
-                  help="name of the variable to read from the file",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.varname_lat",
-                  help="name of the latitude variable to read from the file",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.varname_lon",
-                  help="name of the longitude variable to read from the file",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.topdown",
-                  help="turn the field upside-down",
-                  type="logical",
-                  default=F)
-p <- add_argument(p, "--iff_rf.ndim",
-                  help="number of dimensions for the variable",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.ndim_ll",
-                  help="number of dimensions for the lat-lon variables",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.tpos",
-                  help="position of the time variable among the dimensions",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.tpos_ll",
-                  help="position of the time variable among the dimensions",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.epos",
-                  help="position of the ensemble_member variable among the dimensions",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.names",
-                  help="dimension names for the variable",
-                  type="character",
-                  nargs=Inf,
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.names_ll",
-                  help="dimension names for the lat-lon variables",
-                  type="character",
-                  nargs=Inf,
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.proj4",
-                  help="proj4 string identyfing the coordinate reference system",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.t",
-                  help="timestamp to read from file (defualt, read the first)",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.tfmt",
-                  help="timestamp time format",
-                  type="character",
-                  default="none")
-p <- add_argument(p, "--iff_rf.e",
-                  help="label of the ensemble member to read from file (default is null)",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--iff_rf.adjfact",
-                  help="correction factor",
-                  type="character",
-                  default="1")
-p <- add_argument(p, "--iff_rf.adjval",
-                  help="adjustment value",
-                  type="character",
-                  default="0")
 #------------------------------------------------------------------------------
 # Land area fraction file netcdf parameters
 p <- add_argument(p, "--iff_laf.varname",
@@ -1329,7 +1261,7 @@ if ( any( !is.na( argv$fg.filenames))) {
     if ( file.exists( argv$fg.filenames[f])) {
       fg_env$fg[[f]]$main.file <- argv$fg.filenames[f]
     } else {
-      boom( paste( "ERROR: file not foud", argv$fg.filenames[f]))
+      boom( paste( "ERROR: file not found", argv$fg.filenames[f]))
     }
   }
 }
@@ -1368,6 +1300,8 @@ if ( argv$mode %in% c( "corensi", "msa", "msaensi", "oi", "ensi")) {
   if (argv$mode == "corensi") {
     if ( is.na(argv$corensi_k_dim_corr)) argv$corensi_k_dim_corr <- argv$k_dim
   }
+} else if (argv$mode %in% c("oi_multiscale_senorge_prec")) {
+  y_env$rain <- argv$rain_yo
 }
 
 #

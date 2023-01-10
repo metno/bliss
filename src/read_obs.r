@@ -501,11 +501,11 @@ read_obs <- function( argv, env, y_env) {
 
   #
   # observation error variance correction factor
-  ovarc <- rep( 1, y_env$yo$n)
+  y_env$yo$ovarc <- rep( 1, y_env$yo$n)
   if ( any( !is.na( argv$ovarc.prId))) {
     for (i in 1:length(argv$ovarc.prId)) {
       if ( any( prId == argv$ovarc.prId[i])) 
-        ovarc[which(prId==argv$ovarc.prId[i])] <- argv$ovarc[i]
+        y_env$yo$ovarc[which(prId==argv$ovarc.prId[i])] <- argv$ovarc[i]
     }
   }
 

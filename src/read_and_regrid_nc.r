@@ -9,7 +9,6 @@ read_and_regrid_nc <- function( nc.file,
                                 adjfact,
                                 adjval,
                                 rmaster,
-                                grid_master.proj4,
                                 nc.varname_lat="none",
                                 nc.varname_lon="none",
                                 out.dim_ll,
@@ -17,6 +16,7 @@ read_and_regrid_nc <- function( nc.file,
                                 upscale_fun="mean",
                                 projectraster_method="bilinear") {
 #------------------------------------------------------------------------------
+  grid_master.proj4 <- projection(rmaster, asText=TRUE)
   out.dim$epos    <- set_NAs_to_NULL(out.dim$epos)
   out.dim$tpos    <- set_NAs_to_NULL(out.dim$tpos)
   out.dim_ll$tpos <- set_NAs_to_NULL(out.dim_ll$tpos)

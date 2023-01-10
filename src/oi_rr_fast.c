@@ -34,7 +34,8 @@ void oi_rr_fast(int *ng,
   for (i=0;i<ng[0];i++) {
     xa[i]=xb[i];
     for (j=0;j<no[0];j++) { 
-      hd2=((xg[i]-xo[j])*(xg[i]-xo[j])+(yg[i]-yo[j])*(yg[i]-yo[j])) / (1000.*1000.);
+/*      hd2=((xg[i]-xo[j])*(xg[i]-xo[j])+(yg[i]-yo[j])*(yg[i]-yo[j])) / (1000.*1000.);*/
+      hd2=((xg[i]-xo[j])*(xg[i]-xo[j])+(yg[i]-yo[j])*(yg[i]-yo[j]));
       if (hd2<(49*Dh2)) { 
         vd2=(zg[i]-zo[j])*(zg[i]-zo[j]);
         g=exp(-0.5*(hd2/Dh2+vd2/Dz2));

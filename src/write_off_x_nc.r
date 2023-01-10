@@ -31,16 +31,13 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
       uo[uo<u_env$rain] <- 0
       uo[uo>u_env$rain] <- 1
       xout <- uo[env$mask]
-#    } else if (argv$off_x.variables[i]=="rel_an") {
-#      if (!exists("xrela")) {xrela<-aix;xrela[]<-NA}
-#      xout<-xrela
+    } else if (argv$off_x.variables[i]=="rel_an") {
+      xout <- env$Xa_rel
 #    } else if (argv$off_x.variables[i]=="idi") {
 #      if (!exists("xidi")) {xidi<-aix;xidi[]<-NA}
 #      xout<-xidi
-#    } else if (argv$off_x.variables[i]=="dh" | 
-#               argv$off_x.variables[i]=="scale") {
-#      if (!exists("xdh")) {xdh<-aix;xdh[]<-NA}
-#      xout<-xdh
+    } else if (argv$off_x.variables[i]=="scale") {
+      xout <- as.vector(env$Xscale)
 #    } else if (argv$off_x.variables[i]=="gamma_shape") {
 #      if (!exists("a_gamma_shape")) {a_gamma_shape<-aix;a_gamma_shape[]<-NA}
 #      xout<-xa_pdf_par[,1]

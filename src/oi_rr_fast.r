@@ -1,5 +1,5 @@
 #+ header to c function
-OI_RR_fast<-function(yo,
+OI_RR_fast <- function(yo,
                        yb,
                        xb,
                        xgrid,
@@ -24,7 +24,7 @@ OI_RR_fast<-function(yo,
   d<-yo-yb
   out<-.C("oi_rr_first",no=as.integer(no), 
                         innov=as.double(d),
-                        SRinv=as.numeric(InvD),
+                        SRinv=as.numeric(envtmp$InvD),
                         vec=as.double(vec) ) 
   vec[1:no]<-out$vec[1:no]
   rm(out)

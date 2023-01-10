@@ -40,10 +40,8 @@ write_off_xb_nc <- function( argv,  y_env, fg_env, u_env, env) {
 #    } else if (argv$off_xb.variables[i]=="idi") {
 #      if (!exists("xidi")) {xidi<-aix;xidi[]<-NA}
 #      xout<-xidi
-#    } else if (argv$off_xb.variables[i]=="dh" | 
-#               argv$off_xb.variables[i]=="scale") {
-#      if (!exists("xdh")) {xdh<-aix;xdh[]<-NA}
-#      xout<-xdh
+    } else if ( argv$off_xb.variables[i]=="scale") {
+      xout <- as.vector(env$Xscale)
 #    } else if (argv$off_xb.variables[i]=="gamma_shape") {
 #      if (!exists("a_gamma_shape")) {a_gamma_shape<-aix;a_gamma_shape[]<-NA}
 #      xout<-xa_pdf_par[,1]

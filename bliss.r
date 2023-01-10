@@ -92,7 +92,9 @@ u_env$uo <- list()
 #
 #-----------------------------------------------------------------------------
 # read command line arguments and/or configuration file
+cat("Read command line arguments...")
 argv <- argparser( env, fg_env, y_env, u_env)
+cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
@@ -106,7 +108,9 @@ rm(file)
 #
 #-----------------------------------------------------------------------------
 # define constants
+cat("Define constants...")
 define_constants( env)
+cat("OK\n")
 
 #
 #-----------------------------------------------------------------------------
@@ -119,7 +123,9 @@ if ( !is.na( argv$cores)) {
 
 #-----------------------------------------------------------------------------
 # checks on input arguments
+cat("Checking command line arguments: ")
 argv <- checkargs( argv, env)
+#cat("OK\n")
 
 #--------debug or test
 #dirdeb <- "/home/cristianl/data/msaensi/debug"
@@ -131,7 +137,9 @@ argv <- checkargs( argv, env)
 #
 #------------------------------------------------------------------------------
 # Create master grid (output env$rmaster)
+cat("Defining mastergrid...")
 define_mastergrid( argv, env)
+cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
@@ -144,19 +152,25 @@ if ( argv$empty_grid & !is.na( argv$off_x) ) {
 #
 #------------------------------------------------------------------------------
 # read rescaling factor
-read_rescaling_factor( argv, env)
+#cat("Read Rescaling Factor (if needed)...")
+#read_rescaling_factor( argv, env)
+#cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
 # read land area fraction
 # output: env$rlaf_exists, env$rlaf
+cat("Read LAF ...")
 read_laf( argv, env)
+cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
 # read digital elevation model 
 # output: env$rlaf_exists, env$rlaf
+cat("Read DEM ...")
 read_dem( argv, env)
+cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
@@ -164,6 +178,7 @@ read_dem( argv, env)
 # fg_env$nfg = number of files where the background fields are stored
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
+cat("Read FG:\n")
 res <- read_fg( argv, fg_env, u_env, env)
 if (!res) boom( code=1, str="ERROR problems while reading the background")
 #
@@ -174,17 +189,17 @@ if (!res) boom( code=1, str="ERROR problems while reading the observations")
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
-if (argv$mode=="OI_multiscale") 
-  source( file.path( bliss_mod_path, "main_oi_multicale_setpar.r"))
+#if (argv$mode=="OI_multiscale") 
+#  source( file.path( bliss_mod_path, "main_oi_multicale_setpar.r"))
 #
 #------------------------------------------------------------------------------
 # compute Disth (symmetric) matrix: 
 #  Disth(i,j)=horizontal distance between i-th station and j-th station [Km]
-if ( !(argv$mode %in% c( "rasterize", "ensi", "oi", "corensi", "msa", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
-  Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
-  Disth <- ( outer(VecY,VecY,FUN="-")**2.+
-             outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
-}
+#if ( !(argv$mode %in% c( "rasterize", "ensi", "oi", "corensi", "msa", "msaensi")) & y_env$yo$n < argv$maxobs_for_matrixInv ) {
+#  Disth <- matrix( ncol=y_env$yo$n, nrow=y_env$yo$n, data=0.)
+#  Disth <- ( outer(VecY,VecY,FUN="-")**2.+
+#             outer(VecX,VecX,FUN="-")**2. )**0.5/1000.
+#}
 ##------debug and test
 #save( file=ffdeb, argv, env, y_env, fg_env, u_env)
 #}
@@ -203,8 +218,10 @@ if (argv$mode=="rasterize") { # still to test
   source( file.path( bliss_mod_path, "main_oi_fg.r"))
 #..............................................................................
 # ===>  OI multiscale (without background)   <===
-} else if (argv$mode=="OI_multiscale") {
-  source( file.path( bliss_mod_path, "main_oi_multiscale.r"))
+} else if (argv$mode=="oi_multiscale_senorge_prec") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- oi_multiscale_senorge_prec( argv, y_env, fg_env, env)
+  rm(envtmp)
 #..............................................................................
 # ===>  OI two-step spatial interpolation (without background)   <===
 } else if (argv$mode=="OI_twosteptemperature") {

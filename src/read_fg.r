@@ -131,6 +131,10 @@ read_fg <- function( argv, fg_env, u_env, env) {
       fg_env$fg[[f]]$main.t <- NA
     if ( is.null( fg_env$fg[[f]]$main.acc)) 
       fg_env$fg[[f]]$main.acc <- F
+    if ( is.null( fg_env$fg[[f]]$main.varname_lat))
+      fg_env$fg[[f]]$main.varname_lat <- "none"
+    if ( is.null( fg_env$fg[[f]]$main.varname_lon))
+      fg_env$fg[[f]]$main.varname_lon <- "none"
 
     # read the main file
     if ( !is.null( fg_env$fg[[f]]$main.file)) {
@@ -170,13 +174,12 @@ read_fg <- function( argv, fg_env, u_env, env) {
                                      adjfact=fg_env$fg[[f]]$main.cfact,
                                      adjval=fg_env$fg[[f]]$main.offset,
                                      rmaster = env$rmaster,
-                                     grid_master.proj4 = as.character( env$rmaster),
-                                     nc.varname_lat ="none",
-                                     nc.varname_lon ="none",
-                                     out.dim_ll = list( ndim  = NA,
-                                                        tpos  = NA,
-                                                        epos  = NA,
-                                                        names = NA),
+                                     nc.varname_lat = fg_env$fg[[f]]$main.varname_lat,
+                                     nc.varname_lon = fg_env$fg[[f]]$main.varname_lon,
+                                     out.dim_ll = list( ndim  = fg_env$fg[[f]]$main.ndim_ll,
+                                                        tpos  = fg_env$fg[[f]]$main.tpos_ll,
+                                                        epos  = fg_env$fg[[f]]$main.epos_ll,
+                                                        names = fg_env$fg[[f]]$main.dimnames_ll),
                                      upscale = F,
                                      upscale_fun = "mean",
                                      projectraster_method = "bilinear") 
@@ -219,7 +222,7 @@ read_fg <- function( argv, fg_env, u_env, env) {
  
   #----------------------------------------------------------------------------
   # print info
-  if (argv$verbose) {
+#  if (argv$verbose) {
     t1a<-Sys.time()
 
     for (f in 1:fg_env$nfg) {
@@ -254,7 +257,7 @@ read_fg <- function( argv, fg_env, u_env, env) {
     }
     cat( paste( "total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
     cat( "+---------------------------------+\n")
-  }
+#  }
 
   return( TRUE)
 }
