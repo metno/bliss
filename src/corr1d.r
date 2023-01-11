@@ -10,7 +10,7 @@ corr1d <- function( values, par, label) {
     } else if (label == "soar")  {
       res <- (1+dist/dh)*exp(-dist/dh)
     } else if (label == "powerlaw")  {
-    res <- 1 / (1 + 0.5*(dist*dist)/(dh*dh))
+      res <- 1 / (1 + 0.5*(dist*dist)/(dh*dh))
     } else if (label == "toar")  {
       res <- (1 + dist/dh + (dist*dist)/(3*dh*dh)) * exp(-dist/dh)
     } else {

@@ -62,12 +62,12 @@ argv$iff_fg.epos     <- set_NAs_to_NULL( argv$iff_fg.epos)
 
 #
 # load external C functions
-if (argv$mode %in% c("oi_multiscale_senorge_prec")) {
-  if ( !( file.exists(argv$path2src))) ext <- boom("path2src not found")
-  # remember: to get .so you have to "$>R CMD SHLIB oi_rr_fast.c"
-  dyn.load( file.path( argv$path2src, "oi_rr_first.so"))
-  dyn.load( file.path( argv$path2src, "oi_rr_fast.so"))
-}
+#if (argv$mode %in% c("oi_multiscale_senorge_prec")) {
+#  if ( !( file.exists(argv$path2src))) ext <- boom("path2src not found")
+#  # remember: to get .so you have to "$>R CMD SHLIB oi_rr_fast.c"
+#  dyn.load( file.path( argv$path2src, "oi_rr_first.so"))
+#  dyn.load( file.path( argv$path2src, "oi_rr_fast.so"))
+#}
 #dyn.load(file.path(argv$path2src,"oi_rr_var.so"))
 #dyn.load(file.path(argv$path2src,"oi_t_xb_upd.so"))
 #dyn.load(file.path(argv$path2src,"obsop_LapseRateConst.so"))

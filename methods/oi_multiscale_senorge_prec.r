@@ -7,121 +7,190 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
   # If there is at least one observation of precipitation (not dry everywhere)
   if (y_env$yo$nwet > 0) {
 
-    # number of background ensemble members
+    # We need to have just one background field
     if ( ( nfg <- length( fg_env$fg)) != 1) return( FALSE)
     rrf <- subset( fg_env$fg[[1]]$r_main, subset=1)
+    yrf <- extract( rrf, cbind(y_env$yo$x, y_env$yo$y))
 
-    # number of observations
+    # Master grid average grid spacing
     res_master <- mean( res(env$rmaster))
 
-    # define sequence of nearest station values
+    # Distances between all stations
+    envtmp$dist2 <- outer(y_env$yo$x,y_env$yo$x,FUN="-")**2.+
+                    outer(y_env$yo$y,y_env$yo$y,FUN="-")**2.
+
+    # IDI
+    if ( !is.na(argv$dh_idi)) {
+      cat("IDI")
+      D <- corr2d( par=argv$dh_idi, label=argv$corrfun, dist2_is_global=T)
+      diag(D) <- diag(D) + 0.1
+      envtmp$SRinv_di <- crossprod( chol2inv(chol(D)), array(data=rep(1,y_env$yo$n),dim=c(y_env$yo$n,1)))
+      envtmp$Eb  <- array( data=0, dim=c( env$ngrid, 1))
+      envtmp$x <- env$xgrid[env$mask]
+      envtmp$y <- env$ygrid[env$mask]
+      envtmp$m_dim <- env$ngrid
+      envtmp$obs_x <- y_env$yo$x
+      envtmp$obs_y <- y_env$yo$y
+      # run OI gridpoint by gridpoint
+      if (!is.na(argv$cores)) {
+        res <- t( mcmapply( enoi_basicFaster_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            mc.cores=argv$cores,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$corrfun,
+                                             dh=argv$dh_idi,
+                                             idi=F)))
+      # no-multicores
+      } else {
+        res <- t( mapply( enoi_basicFaster_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$corrfun, 
+                                           dh=argv$dh_idi,
+                                           idi=F)))
+      }
+      xidi <- res[,1]
+      rm(res)
+      cat("OK\n")
+    } else {
+      xidi <- rep( 0, env$ngrid)
+    }
+
+    # Define sequence of spatial scales (coarser to finer)
     if (y_env$yo$n < 100) {
       kseq <- rev( unique( c(2,3,4,seq(5,y_env$yo$n,by=5), y_env$yo$n)))
     } else {
       kseq <- rev( unique( c(2,3,4,seq(5,100,by=5),seq(100,y_env$yo$n,by=200), y_env$yo$n)))
     }
-    nn2 <- nn2( cbind(y_env$yo$x,y_env$yo$y), 
+    # distances between each station and all the others (increasing order) 
+    nn2 <- nn2( cbind( y_env$yo$x,y_env$yo$y), 
                        query = cbind(y_env$yo$x,y_env$yo$y), 
                        k = y_env$yo$n, searchtype = "radius", 
                        radius = 100000000)
     vecd_tmp <- unique( sort( c( (res_master*round(colMeans(nn2$nn.dists)[kseq]/res_master)), (2:100)*res_master), decreasing=T))
     vecf_tmp <- pmin( res_master*min(c(env$nx,env$ny))/3, pmax( 1*res_master, round(vecd_tmp/2)))
+    # vecd: sequence of spatial scales
     vecd <- unique( sort( c( vecd_tmp[which(!duplicated(vecf_tmp,fromLast=T) & vecd_tmp >= (2*res_master))],
                              vecd_tmp[which(!duplicated(vecf_tmp,fromLast=F) & vecd_tmp >= (2*res_master))]),
                              decreasing=T))
+    nl   <- length(vecd)
+    # vecf: sequence of aggregation factor to save computational time
     # aggregation factor is half the horizontal decorrelation length
     vecf <- round( vecd/(2*1000), 0)
     rm( vecf_tmp, vecd_tmp)
-    # same weight to the obs and the background from previous iteration
-    vece<-rep(argv$eps2,length(vecf))
-    nl<-length(vecd)
-    vece[]<-1
-    print("+---------------------------------------------------------------+")
-    print("vecd vecf vece")
-    print(" km   -    -")
-    print(cbind(vecd,vecf,vece))
-    print("+---------------------------------------------------------------+")
+    # vece: observation to background ratios
+    vece <- rep( argv$eps2, length(vecf))
+    cat("+---------------------------------------------------------------+\n")
+    cat("vecd vecf vece\n")
+    cat(" m    -    -\n")
+    for (l in 1:nl) cat(paste(vecd[l],vecf[l],vece[l],"\n"))
+    cat("+---------------------------------------------------------------+\n")
 
-    # Distances between all stations
-    Disth <- ( outer(y_env$yo$x,y_env$yo$x,FUN="-")**2.+
-               outer(y_env$yo$x,y_env$yo$y,FUN="-")**2. )**0.5
-  
-    yrf <- extract( rrf, cbind(y_env$yo$x, y_env$yo$y))
-    # if rescaling factor exists, multi-scale OI operates on relative anomalies 
+    # Define relative anomalies 
     if (argv$use_relativeAnomalies) {
-      if (any(yrf==0)) yrf[which(yrf==0)] <- 1
-      yo_relan <- y_env$yo$value / yrf
+      if (any(yrf==0)) {
+        cat("Warning: rescaling factor is equal to 0 for some grid point, this may cause weird patterns in the analysis")
+        yrf[which(yrf==0)] <- 1
+      }
+      yo <- y_env$yo$value / yrf
     } else {
-      yo_relan <- y_env$yo$value
+      yo <- y_env$yo$value
     }
+
+    # Transformation 
     zero <- 0
     if ( argv$transf == "Box-Cox") {
-      yo_relan <- boxcox( yo_relan, argv$transf.boxcox_lambda)
-      zero <- boxcox( 0, argv$transf.boxcox_lambda)
+      yo   <- boxcox( yo, argv$transf.boxcox_lambda)
+      zero <- boxcox(  0, argv$transf.boxcox_lambda)
     } else if (argv$transf!="none") {
       boom("transformation not defined")
     }
 
-    # multi-scale OI
+    # Multi-scale OI loop
+    envtmp$obs_x <- y_env$yo$x
+    envtmp$obs_y <- y_env$yo$y
     for (l in 1:nl) {
+      t0b <- Sys.time()
       cat( paste0( "scale # ",formatC(l,width=3,flag="0"),
                    " of ",nl,
                    " (",formatC(vecd[l],width=8,flag="0",format="d"),"m ",
-                   "fact=",formatC(vecf[l],width=3,flag="0"),")\n"))
-      D <- exp(-0.5*(Disth/vecd[l])**2.)
-      # ovarc is observation error variance correction factor (read_obs)
-      diag(D) <- diag(D) + vece[l] * y_env$yo$ovarc
-      envtmp$InvD <- chol2inv(chol(D))
+                   "fact=",formatC(vecf[l],width=3,flag="0"),")"))
+      # prepare grid for the l-th iteration
       if (l==nl | vecf[l]==1) {
         r <- env$rmaster
       } else {
         r <- aggregate(env$rmaster, fact=vecf[l], expand=T, na.rm=T)
       }
-      zvalues.l <- getValues(r)
-      storage.mode(zvalues.l) <- "numeric"
-      xy.l <- xyFromCell(r,1:ncell(r))
-#      x.l <- sort(unique(xy.l[,1]))
-#      y.l <- sort(unique(xy.l[,2]),decreasing=T)
-      mask.l  <- which(!is.na(zvalues.l))
-#      zgrid.l <- zvalues.l[mask.l]
-      xgrid.l <- xy.l[mask.l,1]
-      ygrid.l <- xy.l[mask.l,2]
-      rm(xy.l,zvalues.l)
+      xy.l    <- xyFromCell( r, 1:ncell(r))
+      mask.l  <- which( !is.na( getValues(r)))
+      envtmp$x <- xy.l[mask.l,1]
+      envtmp$y <- xy.l[mask.l,2]
+      envtmp$m_dim <- length(envtmp$x)
+      envtmp$Eb  <- array( data=NA, dim=c( envtmp$m_dim, 1))
+      rm(xy.l)
+      # prepare background for the l-th iteration
       if (l==1) {
-        yb <- rep( mean(yo_relan), length=y_env$yo$n)
-        xb <- rep( mean(yo_relan), length=length(xgrid.l))
+        # first one, background is the avegare of all observations
+        yb            <- rep( mean(yo), length=y_env$yo$n)
+        envtmp$Eb[,1] <- rep( mean(yo), length=envtmp$m_dim)
       } else {
-        if ("scale" %in% argv$off_x.variables) 
-          xl_tmp <- getValues( resample( rl, r, method="ngb"))[mask.l]
+        # second to last, background is the previous analysis
         rb <- resample( ra, r, method="bilinear")
-        xb <- getValues(rb)[mask.l]
+        envtmp$Eb[,1] <- getValues(rb)[mask.l]
+        # fill in NAs in the background
         count <- 0
-        while ( any( is.na(xb))) {
+        while ( any( is.na(envtmp$Eb[,1]))) {
           count <- count+1
           buffer_length <- round(vecd[l]/(10-(count-1)))
           if (!is.finite(buffer_length)) break 
-          ib <- which(is.na(xb))
-          aux <- extract( rb, cbind(xgrid.l[ib],ygrid.l[ib]),
+          ib <- which(is.na(envtmp$Eb[,1]))
+          aux <- extract( rb, cbind(envtmp$x[ib],envtmp$y[ib]),
                           na.rm=T,
                           buffer=buffer_length)
-          for (ll in 1:length(aux)) xb[ib[ll]] <- mean(aux[[ll]],na.rm=T)
-          rb[mask.l] <- xb
+          for (ll in 1:length(aux)) envtmp$Eb[,1][ib[ll]] <- mean(aux[[ll]],na.rm=T)
+          rb[mask.l] <- envtmp$Eb[,1]
           rm(aux,ib)
         }
         yb <- extract( rb, cbind(y_env$yo$x,y_env$yo$y), method="bilinear")
         rm(rb)
+        if ("scale" %in% argv$off_x.variables) 
+          xl_tmp <- getValues( resample( rl, r, method="ngb"))[mask.l]
       }
-      if (any(is.na(xb))) print("xb is NA")
-      if (any(is.na(yb))) print("yb is NA")
-      xa.l <- OI_RR_fast( yo    = yo_relan,
-                          yb    = yb,
-                          xb    = xb,
-                          xgrid = xgrid.l,
-                          ygrid = ygrid.l,
-                          VecX  = y_env$yo$x,
-                          VecY  = y_env$yo$y,
-                          Dh    = vecd[l],
-                          zero  = zero) 
+      if (any(is.na(envtmp$Eb[,1]))) cat("Warning: xb is NA\n")
+      if (any(is.na(yb))) cat("Warning: yb is NA\n")
+      # compute correlations among observation locations
+      D <- corr2d( par=vecd[l], label=argv$corrfun, dist2_is_global=T)
+      # prepare for OI faster
+      diag(D) <- diag(D) + vece[l] * y_env$yo$ovarc
+      envtmp$SRinv <- chol2inv(chol(D))
+      envtmp$di <- array(data=(yo-yb),dim=c(y_env$yo$n,1))
+      envtmp$SRinv_di <- crossprod( envtmp$SRinv, envtmp$di)
+#      envtmp$SRinv_di <- crossprod( chol2inv(chol(D)), array(data=(yo-yb),dim=c(y_env$yo$n,1)))
+#save(file="tmp.rdata",argv, envtmp,D,yo,yb,y_env, fg_env, env,vecd)
+#q()
+      # run OI gridpoint by gridpoint
+      if (!is.na(argv$cores)) {
+        res <- t( mcmapply( enoi_basicFaster_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            mc.cores=argv$cores,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$corrfun,
+                                             dh=vecd[l],
+                                             safecheck=T,
+                                             idi=F)))
+      # no-multicores
+      } else {
+        res <- t( mapply( enoi_basicFaster_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$corrfun, 
+                                           dh=vecd[l],
+                                           safecheck=T,
+                                           idi=F)))
+      }
+      xa.l <- res[,1]
+#      xidi.l <- res[,2]
+      rm(res)
       ra <- r
       ra[] <- NA
       ra[mask.l] <- xa.l
@@ -129,33 +198,18 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
         rl <- ra
         rl[mask.l] <- vecd[l]
         if (l>1) {
-          ixl <- which( abs(xa.l-xb) < 0.005)
+          ixl <- which( abs(xa.l-envtmp$Eb[,1]) < 0.005)
           if (length(ixl)>0) rl[mask.l[ixl]] <- xl_tmp[ixl]
         }
       }
-      print(range(yo_relan,na.rm=T))
-      print(range(yb,na.rm=T))
-      print(range(xb,na.rm=T))
-      print(range(xa.l,na.rm=T))
+#      print(range(yo,na.rm=T))
+#      print(range(yb,na.rm=T))
+#      print(range(envtmp$Eb[,1],na.rm=T))
+#      print(range(xa.l,na.rm=T))
+#      print(range(xidi.l,na.rm=T))
+      t1b <- Sys.time()
+      cat( paste( " time", round(t1b-t0b,1), attr(t1b-t0b,"unit"), "\n"))
     } # end of multi-scale OI
-
-    # compute IDI
-    if ( !is.na(argv$dh_idi)) {
-      D <- exp(-0.5*(Disth/argv$dh_idi)**2.)
-      # ovarc is observation error variance correction factor (read_obs)
-      diag(D) <- diag(D) + 0.1
-      envtmp$InvD <- chol2inv(chol(D))
-      xidi <- OI_RR_fast( yo    = rep(1,y_env$yo$n),
-                          yb    = rep(0,y_env$yo$n),
-                          xb    = rep(0,length(xgrid.l)),
-                          xgrid = xgrid.l,
-                          ygrid = ygrid.l,
-                          VecX  = y_env$yo$x,
-                          VecY  = y_env$yo$y,
-                          Dh    = argv$dh_idi)
-    } else {
-      xidi <- rep( 0, length(xgrid.l))
-    }
 
     # back to precipitation values (from relative anomalies)
     if ( argv$transf == "Box-Cox") {
@@ -193,7 +247,6 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
     ra[mask] <- 0
     rl <- ra
   } # END IF dry everywhere
-save(file="tmp.rdata",argv, y_env, fg_env, env,ra,xa_rel,rl,xidi)
   # Initialization
   env$Xa <- array( data=NA, dim=c( env$ngrid, 1))
   env$Xa_rel <- array( data=NA, dim=c( env$ngrid, 1))
