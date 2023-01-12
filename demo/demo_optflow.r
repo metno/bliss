@@ -1,6 +1,7 @@
 library(raster)
-source("~/projects/bliss/src/optflow_util.r")
-source("~/projects/bliss/src/optflow_msa.r")
+bliss_path <- "~/projects/bliss/"
+source( file.path( bliss_path, "functions/optflow/optflow_util.r"))
+source( file.path( bliss_path, "functions/optflow/optflow_msa.r"))
 x <- y <- matrix(0, 100, 100)
 x[11:20,31:40] <- 1
 x[61:70,61:70] <- 1

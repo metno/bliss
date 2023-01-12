@@ -25,6 +25,8 @@ The following R-libraries are needed:
 * igraph
 * rgdal
 * ncdf4
+* RANN
+* parallel (only in case of multi-core runs)
 * dotnc (not available for public download, write a mail to Cristian Lussana)
 
 bliss.r expect the envirnment variable BLISS\_PATH to be defined

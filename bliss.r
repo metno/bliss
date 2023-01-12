@@ -67,8 +67,14 @@ t0 <- Sys.time() # ladies and gentlemen, start your engines
 # get path from system environment
 bliss_path <- Sys.getenv( "BLISS_PATH")
 
-# load the function we need to read the command line arguments
-source( file.path( bliss_path, "src", "argparser.r"))
+#
+#------------------------------------------------------------------------------
+# Load functions
+for (file in list.files(path = file.path( bliss_path, "methods"), pattern = ".r$", full.names=T)) 
+  source(file)
+for (file in list.files(path = file.path( bliss_path, "functions"), pattern = ".r$", full.names=T, recursive=T)) 
+  source(file)
+rm(file)
 
 #
 #-----------------------------------------------------------------------------
@@ -89,28 +95,16 @@ y_env$yov <- list() # list for cv
 # observation environment (alignment)
 u_env    <- new.env( parent=emptyenv())
 u_env$uo <- list()
+
 #
 #-----------------------------------------------------------------------------
 # read command line arguments and/or configuration file
-cat("Read command line arguments...")
 argv <- argparser( env, fg_env, y_env, u_env)
-cat("OK\n")
-
-#
-#------------------------------------------------------------------------------
-# Load functions
-for (file in list.files(path = file.path( bliss_path, "src"), pattern = ".r$", full.names=T)) 
-  source(file)
-for (file in list.files(path = file.path( bliss_path, "methods"), pattern = ".r$", full.names=T)) 
-  source(file)
-rm(file)
 
 #
 #-----------------------------------------------------------------------------
 # define constants
-cat("Define constants...")
 define_constants( env)
-cat("OK\n")
 
 #
 #-----------------------------------------------------------------------------
@@ -123,9 +117,7 @@ if ( !is.na( argv$cores)) {
 
 #-----------------------------------------------------------------------------
 # checks on input arguments
-cat("Checking command line arguments: ")
 argv <- checkargs( argv, env)
-#cat("OK\n")
 
 #--------debug or test
 #dirdeb <- "/home/cristianl/data/msaensi/debug"
@@ -137,9 +129,7 @@ argv <- checkargs( argv, env)
 #
 #------------------------------------------------------------------------------
 # Create master grid (output env$rmaster)
-cat("Defining mastergrid...")
 define_mastergrid( argv, env)
-cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
@@ -151,26 +141,15 @@ if ( argv$empty_grid & !is.na( argv$off_x) ) {
 
 #
 #------------------------------------------------------------------------------
-# read rescaling factor
-#cat("Read Rescaling Factor (if needed)...")
-#read_rescaling_factor( argv, env)
-#cat("OK\n")
-
-#
-#------------------------------------------------------------------------------
 # read land area fraction
 # output: env$rlaf_exists, env$rlaf
-cat("Read LAF ...")
 read_laf( argv, env)
-cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
 # read digital elevation model 
 # output: env$rlaf_exists, env$rlaf
-cat("Read DEM ...")
 read_dem( argv, env)
-cat("OK\n")
 
 #
 #------------------------------------------------------------------------------
@@ -178,7 +157,6 @@ cat("OK\n")
 # fg_env$nfg = number of files where the background fields are stored
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
-cat("Read FG:\n")
 res <- read_fg( argv, fg_env, u_env, env)
 if (!res) boom( code=1, str="ERROR problems while reading the background")
 #
@@ -186,6 +164,7 @@ if (!res) boom( code=1, str="ERROR problems while reading the background")
 # Read observations
 res <- read_obs( argv, env, y_env)
 if (!res) boom( code=1, str="ERROR problems while reading the observations")
+
 #
 #------------------------------------------------------------------------------
 # Set the OI multi-scale parameters
@@ -206,8 +185,7 @@ if (!res) boom( code=1, str="ERROR problems while reading the observations")
 #
 #------------------------------------------------------------------------------
 # ANALYSIS
-if (argv$verbose) 
-  cat("+-------------------------------------------------------+\nAnalysis\n")
+cat("+-------------------------------------------------------+\nAnalysis\n")
 #..............................................................................
 # ===> Rasterize  <===
 if (argv$mode=="rasterize") { # still to test
@@ -224,8 +202,10 @@ if (argv$mode=="rasterize") { # still to test
   rm(envtmp)
 #..............................................................................
 # ===>  OI two-step spatial interpolation (without background)   <===
-} else if (argv$mode=="OI_twosteptemperature") {
-  source( file.path( bliss_mod_path, "main_oi_twosteps.r"))
+} else if (argv$mode=="oi_twostep_senorge_temperature") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- oi_twostep_senorge_temperature( argv, y_env, env)
+  rm(envtmp)
 #..............................................................................
 # ===>  OI Bratseth, Brathset's iterative method for OI (with background)  <===
 } else if (argv$mode=="OI_Bratseth") {

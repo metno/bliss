@@ -14,7 +14,7 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
 #      if (!exists("xa_errsd")) {xa_errsd<-aix;xa_errsd[]<-NA}
 #      xout<-xa_errsd
     } else if (argv$off_x.variables[i] == "idi") {
-      xout <- as.vector(env$Xidi)
+      xout <- env$Xidi
     } else if (argv$off_x.variables[i] == "background") {
 #      if (!exists("xb")) {xb<-aix;xb[]<-NA}
 #      xout <- xb
@@ -33,11 +33,8 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
       xout <- uo[env$mask]
     } else if (argv$off_x.variables[i]=="rel_an") {
       xout <- env$Xa_rel
-#    } else if (argv$off_x.variables[i]=="idi") {
-#      if (!exists("xidi")) {xidi<-aix;xidi[]<-NA}
-#      xout<-xidi
     } else if (argv$off_x.variables[i]=="scale") {
-      xout <- as.vector(env$Xscale)
+      xout <- env$Xscale
 #    } else if (argv$off_x.variables[i]=="gamma_shape") {
 #      if (!exists("a_gamma_shape")) {a_gamma_shape<-aix;a_gamma_shape[]<-NA}
 #      xout<-xa_pdf_par[,1]

@@ -130,32 +130,38 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
       rm(xy.l)
       # prepare background for the l-th iteration
       if (l==1) {
-        # first one, background is the avegare of all observations
-        yb            <- rep( mean(yo), length=y_env$yo$n)
-        envtmp$Eb[,1] <- rep( mean(yo), length=envtmp$m_dim)
+        # first one, background is the regional average of observations
+        rb <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=r, field=yo, fun=mean, na.rm=T) 
       } else {
-        # second to last, background is the previous analysis
         rb <- resample( ra, r, method="bilinear")
-        envtmp$Eb[,1] <- getValues(rb)[mask.l]
-        # fill in NAs in the background
-        count <- 0
-        while ( any( is.na(envtmp$Eb[,1]))) {
-          count <- count+1
-          buffer_length <- round(vecd[l]/(10-(count-1)))
-          if (!is.finite(buffer_length)) break 
-          ib <- which(is.na(envtmp$Eb[,1]))
-          aux <- extract( rb, cbind(envtmp$x[ib],envtmp$y[ib]),
-                          na.rm=T,
-                          buffer=buffer_length)
-          for (ll in 1:length(aux)) envtmp$Eb[,1][ib[ll]] <- mean(aux[[ll]],na.rm=T)
-          rb[mask.l] <- envtmp$Eb[,1]
-          rm(aux,ib)
-        }
-        yb <- extract( rb, cbind(y_env$yo$x,y_env$yo$y), method="bilinear")
-        rm(rb)
         if ("scale" %in% argv$off_x.variables) 
           xl_tmp <- getValues( resample( rl, r, method="ngb"))[mask.l]
+        # fill in NAs in the scale field
+        if (any(is.na(xl_tmp))) {
+          ix_to   <- which(  is.na(xl_tmp))
+          ix_from <- which( !is.na(xl_tmp))
+          xl_tmp[ix_to] <- ngb_gridpoint_by_gridpoint( x_from=envtmp$x[ix_from], 
+                                                       y_from=envtmp$y[ix_from], 
+                                                       val_from=xl_tmp[ix_from], 
+                                                       x_to=envtmp$x[ix_to], 
+                                                       y_to=envtmp$y[ix_to])
+        }
+        if (any(is.na(xl_tmp))) cat("Warning: NAs found is scale field\n") 
       }
+      envtmp$Eb[,1] <- getValues(rb)[mask.l]
+      # fill in NAs in the background
+      if ( any( is.na(envtmp$Eb[,1]))) {
+        ix_to   <- which(  is.na(envtmp$Eb[,1]))
+        ix_from <- which( !is.na(envtmp$Eb[,1]))
+        envtmp$Eb[ix_to,1] <- ngb_gridpoint_by_gridpoint( x_from=envtmp$x[ix_from], 
+                                                          y_from=envtmp$y[ix_from], 
+                                                          val_from=envtmp$Eb[ix_from,1], 
+                                                          x_to=envtmp$x[ix_to], 
+                                                          y_to=envtmp$y[ix_to])
+      }
+      rb[mask.l] <- envtmp$Eb[,1]
+      yb <- extract( rb, cbind(y_env$yo$x,y_env$yo$y), method="bilinear")
+      rm(rb)
       if (any(is.na(envtmp$Eb[,1]))) cat("Warning: xb is NA\n")
       if (any(is.na(yb))) cat("Warning: yb is NA\n")
       # compute correlations among observation locations
@@ -165,9 +171,6 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
       envtmp$SRinv <- chol2inv(chol(D))
       envtmp$di <- array(data=(yo-yb),dim=c(y_env$yo$n,1))
       envtmp$SRinv_di <- crossprod( envtmp$SRinv, envtmp$di)
-#      envtmp$SRinv_di <- crossprod( chol2inv(chol(D)), array(data=(yo-yb),dim=c(y_env$yo$n,1)))
-#save(file="tmp.rdata",argv, envtmp,D,yo,yb,y_env, fg_env, env,vecd)
-#q()
       # run OI gridpoint by gridpoint
       if (!is.na(argv$cores)) {
         res <- t( mcmapply( enoi_basicFaster_gridpoint_by_gridpoint,
@@ -189,7 +192,6 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
                                            idi=F)))
       }
       xa.l <- res[,1]
-#      xidi.l <- res[,2]
       rm(res)
       ra <- r
       ra[] <- NA
@@ -198,15 +200,13 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
         rl <- ra
         rl[mask.l] <- vecd[l]
         if (l>1) {
-          ixl <- which( abs(xa.l-envtmp$Eb[,1]) < 0.005)
+#          ixl <- which( abs(xa.l-envtmp$Eb[,1]) < 0.005)
+          cond <- (envtmp$Eb[,1]==0 & xa.l==0) | 
+                  ((abs(xa.l-envtmp$Eb[,1])/abs(envtmp$Eb[,1]))<0.001)
+          ixl <- which(cond)
           if (length(ixl)>0) rl[mask.l[ixl]] <- xl_tmp[ixl]
         }
       }
-#      print(range(yo,na.rm=T))
-#      print(range(yb,na.rm=T))
-#      print(range(envtmp$Eb[,1],na.rm=T))
-#      print(range(xa.l,na.rm=T))
-#      print(range(xidi.l,na.rm=T))
       t1b <- Sys.time()
       cat( paste( " time", round(t1b-t0b,1), attr(t1b-t0b,"unit"), "\n"))
     } # end of multi-scale OI
@@ -223,7 +223,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
     }
 
     # refine analysis
-    print("refine prec/no-prec borders and remove wet regions with no obs in them")
+    cat("refine prec/no-prec borders and remove wet regions with no obs in them\n")
     for (frac_rr in c(100,50,10)) {
       if (frac_rr==100) xa[which(!is.na(xa) & xa<(y_env$rain/frac_rr))]<-0
       ra[mask.l]<-xa
