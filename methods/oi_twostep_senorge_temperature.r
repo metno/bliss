@@ -1,87 +1,111 @@
 #+
 oi_twostep_senorge_temperature <- function( argv, y_env, env) {
+# Spatial scale definitions. 
+#  Regional=whole domain
+#  Sub-regional (or local scale)=dozens of observations (10-100)
+#  small-scale=few observations (1-10)
+#  sub-grid scale=not observed
 #------------------------------------------------------------------------------
-  mask<-which(!is.na(xgrid) & 
-              !is.na(ygrid) &
-              !is.na(getValues(rmaster)) &
-              !is.na(dem) &
-              !is.na(laf))
-  xgrid<-xgrid[mask]
-  ygrid<-ygrid[mask]
-  dem<-dem[mask]
-  laf<-laf[mask]
-  # superobbing for the background field
+  t0a <- Sys.time()
+
+  cat( "-- OI two-step developed for seNorge --\n")
+
+  y_env$super_yo  <- list()
+  y_env$centroids <- list()
+
   if (argv$twostep_superobbing) {
-    if (argv$verbose) {
-      print("+----------------------------+")
-      print("superobbing for the bg field")
-      t00<-Sys.time()
-    }
-    # remove_me vector, to identify obs that have been used for the so
-    rm_me<-vector(mode="logical",length=n0)
-    rm_me[]<-F
-    # identify (1x1) boxes with more than 3 obs within them
-    r<-rmaster
-    r[]<-1:ncell(r)
-    VecI<-extract(r,cbind(VecX,VecY))
-    nobs<-getValues(rasterize(cbind(VecX,VecY),r,yo,fun=function(x,...)length(x)))
-    ix<-which(!is.na(nobs) & nobs>3)
-    if (length(ix)>10) {
-      box_ixy<-cbind(ix,xy[ix,1],xy[ix,2])
-      rm(r,xy,ix)
-      # initialize bg vectors
-      VecX_bg<-integer(0)
-      VecY_bg<-integer(0)
-      VecZ_bg<-integer(0)
-      yo_bg<-integer(0)
-      VecLaf_bg<-integer(0)
-      for (i in 1:length(box_ixy[,1])) {
-        so_i<-superobs(ixy=box_ixy[i,],res=c(dx,dy),n=c(2,2))
-        if (so_i$n==0) next
-        VecX_bg<-c(VecX_bg,so_i$x)
-        VecY_bg<-c(VecY_bg,so_i$y)
-        VecZ_bg<-c(VecZ_bg,so_i$z)
-        yo_bg<-c(yo_bg,so_i$yo)
-        VecLaf_bg<-c(VecLaf_bg,so_i$laf)
-        rm(so_i)
-      }
-      ix<-which(!rm_me)
-      if (length(ix)>0) {
-        VecX_bg<-c(VecX_bg,VecX[ix])
-        VecY_bg<-c(VecY_bg,VecY[ix])
-        VecZ_bg<-c(VecZ_bg,VecZ[ix])
-        yo_bg<-c(yo_bg,yo[ix])
-        VecLaf_bg<-c(VecLaf_bg,VecLaf[ix])
-      }
-      rm(ix,rm_me)
-      nbg<-length(VecX_bg)
-      if (argv$verbose) {
-        print(paste("# observations (after superobbing) =",nbg))
-        t11<-Sys.time()
-        print(t11-t00)
-      }
-    } else {
-      print(paste("not enough observations for the",
-                  "superobbing to make a difference"))
-      VecX_bg<-VecX
-      VecY_bg<-VecY
-      VecZ_bg<-VecZ
-      yo_bg<-yo
-      VecLaf_bg<-VecLaf
-    }
+    # not yet implemented
+    y_env$super_yo$x     <- y_env$yo$x
+    y_env$super_yo$y     <- y_env$yo$y
+    y_env$super_yo$z     <- y_env$yo$z
+    y_env$super_yo$value <- y_env$yo$value
+    y_env$super_yo$laf   <- y_env$yo$laf
   } else {
-    VecX_bg<-VecX
-    VecY_bg<-VecY
-    VecZ_bg<-VecZ
-    yo_bg<-yo
-    VecLaf_bg<-VecLaf
+    y_env$super_yo$x     <- y_env$yo$x
+    y_env$super_yo$y     <- y_env$yo$y
+    y_env$super_yo$z     <- y_env$yo$z
+    y_env$super_yo$value <- y_env$yo$value
+    y_env$super_yo$laf   <- y_env$yo$laf
   }
+  y_env$super_yo$n <- length(y_env$yo$value)
+
   # Regional backgrounds
-  if (argv$verbose) {
-    print("+----------------------------+")
-    print("two-step interpolation: regional bg field")
-    t00<-Sys.time()
-  }
+  cat("+----------------------------+\n")
+  cat("Regional backgroundg field\n")
+  # Regional background field is the average of local vertical temperature profiles, 
+  # each of them computed around a so-called centroid (a point at the center of a
+  # sub-region)
+
+  # define grid used to compute local backgrounds 
+  # (grid nodes are centroid candidates)
+  y_env$centroids$r <- raster( extent(env$rmaster),
+                               ncol=argv$oi2step.bg_centroids_nrnc[2],
+                               nrow=argv$oi2step.bg_centroids_nrnc[1],
+                               crs=crs(env$rmaster))
+  y_env$centroids$res_mean <- round( mean( res(y_env$centroids$r)))
+  xy    <- xyFromCell( y_env$centroids$r, 1:ncell(y_env$centroids$r))
+  # xr and yr are the candidate centroids
+  xr    <- xy[,1]
+  yr    <- xy[,2]
+  rm(xy)
+  y_env$centroids$r[] <- 1:ncell(y_env$centroids$r)
+  r_notmasked <- extract( env$rmaster, cbind( xr, yr), 
+                          buffer=argv$oi2step.bg_centroids_buffer, 
+                          na.rm=T, fun=mean)
+  # selection of centroids
+  #  centroids are nodes of r where within a predefined distance (oi2step.bg_obsbufferlength)
+  #  these two conditions hold true
+  #  (a) there is at least one grid point of rmaster that is not masked
+  #  (b) there are at least oi2step.bg_obsnmin4centroid observations
+#  irx <- which( ( (1:ncell(r)) %in% as.vector( na.omit( unique( 
+#                   extract( r, cbind(y_env$super_yo$x,y_env$super_yo$y)))))) & 
+#                ( !is.na( extract( env$rmaster, cbind(xr,yr), 
+#                          buffer=argv$oi2step.bg_obsbufferlength, 
+#                          na.rm=T, fun=mean))))
+#  irx <- which( ( !is.na( extract( env$rmaster, cbind(xr,yr), 
+#                          buffer=argv$oi2step.bg_obsbufferlength, 
+#                          na.rm=T, fun=mean))))
+  nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                     query = cbind( xr, yr), 
+                     k = argv$oi2step.bg_centroids_nobsmin, searchtype = "radius", 
+                     radius = argv$oi2step.bg_centroids_buffer)
+  y_env$centroids$i <- integer(0)
+  for (i in 1:length(xr)) {
+    if ( (length( which(nn2$nn.idx[i,]!=0)) < argv$oi2step.bg_centroids_nobsmin) | 
+         is.na(r_notmasked[i])) next
+    y_env$centroids$i <- c(y_env$centroids$i, i)
+  } 
+  y_env$centroids$n <- length(y_env$centroids$i)
+
+  cat(paste("the master grid has been divided in",
+              argv$oi2step.bg_centroids_nrnc[1],"x",argv$oi2step.bg_centroids_nrnc[2],"boxes\n"))
+  cat(paste("sub-regional area extensions (length x (m),length y (m))=",
+        round(res(y_env$centroids$r)[1]),round(res(y_env$centroids$r)[2])),"\n")
+  cat(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mean(res(y_env$centroids$r))),"\n"))
+  cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
+
+  # save results in a global variable
+  y_env$centroids$x <- xr[y_env$centroids$i]
+  y_env$centroids$y <- yr[y_env$centroids$i]
+
+  # clean memory
+#  rm(r_notmasked, xr, yr)
+
+  # count the number of observations in each box
+  rnobs <- rasterize( cbind( y_env$super_yo$x, y_env$super_yo$y), y_env$centroids$r, 
+                      y_env$super_yo$value,fun=function(x,...)length(x))
+  nr <- getValues(rnobs)
+  # create the 4D array for the function call ...
+  # ... via apply centroids=(xr[irx],yr[irx])
+#  ixyn <- cbind( (1:ncell(r))[irx], xr[irx], yr[irx], nr[irx])
+save(file="tmp.rdata",y_env,env,nn2,xr,yr,r_notmasked)
+  # Bye-bye
+  t1a <- Sys.time()
+  cat( paste( "OI two-step developed for seNorge, total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
+q()
+  # Regional backgrounds
+  cat("+----------------------------+")
+  print("two-step interpolation: regional bg field")
   # Spatial scale definitions. 
   #  Regional=whole domain
   #  Sub-regional (or local scale)=dozens of observations (10-100)
@@ -89,10 +113,10 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   #  sub-grid scale=not observed
   # define grid used to compute local backgrounds 
   #  (grid nodes are candidates for the centroids)
-  r<-raster(extent(xmn,xmx,ymn,ymx),
-            ncol=argv$grid.bg[2],
-            nrow=argv$grid.bg[1],
-            crs=argv$grid_master.proj4)
+  r<-raster( extent(xmn,xmx,ymn,ymx),
+             ncol=argv$grid.bg[2],
+             nrow=argv$grid.bg[1],
+             crs=argv$grid_master.proj4)
   res<-res(r)
   mures<-round(mean(res),0)
   xy<-xyFromCell(r,1:ncell(r))

@@ -216,7 +216,6 @@ p <- add_argument(p, "--eps2",
 p <- add_argument(p, "--use_relativeAnomalies",
                   help="use relative anomalies (observation/background)",
                   flag=T)
-
 #------------------------------------------------------------------------------
 # MSA
 p <- add_argument(p, "--msa_ididense",
@@ -228,7 +227,7 @@ p <- add_argument(p, "--msa_eps2",
                   type="numeric",
                   default=0.1)
 #------------------------------------------------------------------------------
-# MSA
+# MSA-EnSI
 p <- add_argument(p, "--msaensi_ididense",
                   help="MSA-EnSI IDI threshold for defining data dense regions (IDI is defined with respect to preproc-mergeobs OI",
                   type="numeric",
@@ -245,7 +244,6 @@ p <- add_argument(p, "--msaensi_boundary",
                   help="MSA-EnSI boundary",
                   type="character",
                   default="periodic")
-
 #------------------------------------------------------------------------------
 # rasterize
 # output variables in the netcdf are "mean_raster", "sd_raster",
@@ -314,6 +312,21 @@ p <- add_argument(p, "--oifg.xta_errvar_smooth",
                   default=50000)
 
 # additional OI parameters two-step temperature
+# Background parameters
+p <- add_argument(p, "--oi2step.bg_nrnc",
+                  help="nrow ncol (i.e. \"nr\" number_of_rows, \"nc\" number_of_columns) used to define grid of sub-regional centroids (each node of this grid is a candidate centroid)",
+                  type="integer",
+                  nargs=2,
+                  default=c(5,5))
+p <- add_argument(p, "--oi2step.bg_centroids_buffer",
+                  help="this is the radius of a circular region (m) around each candidate centroid where we check if (a) there is at least one grid point of the master grid that is not masked (b) there are at least \"oi2step.bg_centroids_nobsmin\" observations. If the two conditions hold true, then we have found a suitable centroid",
+                  type="numeric",
+                  default=100000)
+p <- add_argument(p, "--oi2step.bg_centroids_nobsmin",
+                  help="see the help for \"oi2step.bg_centroids_buffer\"",
+                  type="integer",
+                  default=1)
+
 p <- add_argument(p, "--nmaxo",
                   help="number of closest observations to be used in the OI to adjust background values at a grid point",
                   type="numeric",
@@ -360,10 +373,6 @@ p <- add_argument(p, "--maxboxl",
                   help="maximum length (m) of the box used to define a sub-region",
                   type="numeric",
                   default=250000)
-p <- add_argument(p, "--obs.outbuffer",
-                  help="distance (m) defining the \"buffer\" region outside the masked region where to consider the observation, so to reduce border effects",
-                  type="numeric",
-                  default=50000)
 #------------------------------------------------------------------------------
 # OI_Bratseth
 p <- add_argument(p, "--oibr.nSCloops",
@@ -1295,6 +1304,7 @@ if ( !is.na( argv$uo.filename)) {
 #
 #-----------------------------------------------------------------------------
 # set variables of the env environment
+y_env$rain <- NA
 if ( argv$mode %in% c( "corensi", "msa", "msaensi", "oi", "ensi")) {
   env$k_dim <- argv$k_dim
   u_env$rain <- argv$rain_uo

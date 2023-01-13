@@ -1,6 +1,14 @@
 #+ Read first-guess fields 
 read_fg <- function( argv, fg_env, u_env, env) {
 #==============================================================================
+
+  if (argv$mode %in% c("oi_twostep_senorge_temperature")) {
+    fg_env$ktot_dim <- 0
+    u_env$nuo  <- 0
+    fg_env$nfg <- 0
+    return(TRUE)
+  }
+
   cat("Read FG:\n")
   t0a<-Sys.time()
 

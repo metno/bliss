@@ -37,7 +37,7 @@ if ( argv$mode == "oi_multiscale_senorge_prec") {
 } else if ( argv$mode == "rasterize") {
   cat("chosen mode is rasterize\n")
 } else {
-  cat("error statistical interpolation scheme undefined\n")
+  boom("error statistical interpolation scheme undefined\n")
 }
 
 # define/check paths and load external functions
