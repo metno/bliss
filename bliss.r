@@ -204,7 +204,7 @@ if (argv$mode=="rasterize") { # still to test
 # ===>  OI two-step spatial interpolation (without background)   <===
 } else if (argv$mode=="oi_twostep_senorge_temperature") {
   envtmp <- new.env( parent = emptyenv())
-  res <- oi_twostep_senorge_temperature( argv, y_env, env)
+  res <- oi_twostep_senorge_temperature( argv, y_env, env, )
   rm(envtmp)
 #..............................................................................
 # ===>  OI Bratseth, Brathset's iterative method for OI (with background)  <===

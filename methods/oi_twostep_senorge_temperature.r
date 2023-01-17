@@ -53,7 +53,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                           buffer=argv$oi2step.bg_centroids_buffer, 
                           na.rm=T, fun=mean)
   # selection of centroids
-  #  centroids are nodes of r where within a predefined distance (oi2step.bg_obsbufferlength)
+  #  centroids are nodes of r where -within a predefined distance (oi2step.bg_obsbufferlength)-
   #  these two conditions hold true
   #  (a) there is at least one grid point of rmaster that is not masked
   #  (b) there are at least oi2step.bg_obsnmin4centroid observations
@@ -67,7 +67,8 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
 #                          na.rm=T, fun=mean))))
   nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
                      query = cbind( xr, yr), 
-                     k = argv$oi2step.bg_centroids_nobsmin, searchtype = "radius", 
+                     k = argv$oi2step.bg_centroids_nobsmin, 
+                     searchtype = "radius", 
                      radius = argv$oi2step.bg_centroids_buffer)
   y_env$centroids$i <- integer(0)
   for (i in 1:length(xr)) {
@@ -89,8 +90,29 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   y_env$centroids$y <- yr[y_env$centroids$i]
 
   # clean memory
-#  rm(r_notmasked, xr, yr)
+  rm(nn2, r_notmasked, xr, yr)
 
+  #
+  envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                            query = cbind( y_env$centroids$x, y_env$centroids$y), 
+                            k = y_env$super_yo$n, 
+                            searchtype = "radius", 
+                            radius = argv$oi2step.bg_centroids_buffer)
+
+  # run OI gridpoint by gridpoint
+  if (!is.na(argv$cores)) {
+    res <- t( mcmapply( vertical_profile_at_centroid_senorge2018,
+                        1:y_env$centroids$n,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T))
+  # no-multicores
+  } else {
+    res <- t( mapply( vertical_profile_at_centroid_senorge2018,
+                      1:y_env$centroids$n,
+                      SIMPLIFY=T))
+  }
+save(file="tmp.rdata",envtmp,y_env,res,env,argv)
+q()
   # count the number of observations in each box
   rnobs <- rasterize( cbind( y_env$super_yo$x, y_env$super_yo$y), y_env$centroids$r, 
                       y_env$super_yo$value,fun=function(x,...)length(x))

@@ -326,6 +326,23 @@ p <- add_argument(p, "--oi2step.bg_centroids_nobsmin",
                   help="see the help for \"oi2step.bg_centroids_buffer\"",
                   type="integer",
                   default=1)
+p <- add_argument(p, "--oi2step.bg_vertprof_gamma",
+                  help="standard value for the moist adiabatic temperature lapse rate dT/dz (degC/m)",
+                  type="numeric",
+                  default=-0.0065)
+p <- add_argument(p, "--oi2step.bg_vertprof_vmin",
+                  help="minimum allowed value [units of the variable specified]",
+                  type="numeric",
+                  default=-50)
+p <- add_argument(p, "--oi2step.bg_vertprof_vmax",
+                  help="maximum allowed value [units of the variable specified]",
+                  type="numeric",
+                  default=40)
+p <- add_argument(p, "--oi2step.bg_vertprof_dzmin",
+                  help="elevation difference. If the elevation range (=elev 95th-perc minus elev 5th-perc) is less than this value, then fit a linear profile of temperature. Otherwise, fit a non-linear profile.",
+                  type="numeric",
+                  default=30)
+
 
 p <- add_argument(p, "--nmaxo",
                   help="number of closest observations to be used in the OI to adjust background values at a grid point",
