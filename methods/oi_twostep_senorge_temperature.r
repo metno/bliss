@@ -11,6 +11,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   cat( "-- OI two-step developed for seNorge --\n")
 
   y_env$super_yo  <- list()
+  y_env$super_yb  <- list()
   y_env$centroids <- list()
 
   if (argv$twostep_superobbing) {
@@ -85,6 +86,30 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   cat(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mean(res(y_env$centroids$r))),"\n"))
   cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
 
+  # Alternative way to find the centroids via clustering (instead of using a coarser grid)
+#  obs_clusters <- kmeans( cbind(y_env$super_yo$x,y_env$super_yo$y), centers=argv$oi2step.bg_centroids_nclusters)
+#  xr <- obs_clusters$centers[,1]
+#  yr <- obs_clusters$centers[,2]
+#  nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+#                     query = cbind( xr, yr), 
+#                     k = argv$oi2step.bg_centroids_nobsmin, 
+#                     searchtype = "radius", 
+#                     radius = argv$oi2step.bg_centroids_buffer)
+#  y_env$centroids$i <- integer(0)
+#  for (i in 1:length(xr)) {
+##    if (length( which(nn2$nn.idx[i,]!=0)) < argv$oi2step.bg_centroids_nobsmin) next
+#    if ( any( nn2$nn.idx[i,] == 0)) next
+#    y_env$centroids$i <- c( y_env$centroids$i, i)
+#  } 
+#  y_env$centroids$n <- length(y_env$centroids$i)
+#
+#  cat(paste("the master grid has been divided in",
+#              argv$oi2step.bg_centroids_nclusters,"clusters\n"))
+#  cat(paste("sub-regional area extensions (length x (m),length y (m))=",
+#        round(res(y_env$centroids$r)[1]),round(res(y_env$centroids$r)[2])),"\n")
+#  cat(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mean(res(y_env$centroids$r))),"\n"))
+  cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
+
   # save results in a global variable
   y_env$centroids$x <- xr[y_env$centroids$i]
   y_env$centroids$y <- yr[y_env$centroids$i]
@@ -99,7 +124,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                             searchtype = "radius", 
                             radius = argv$oi2step.bg_centroids_buffer)
 
-  # run OI gridpoint by gridpoint
+  # estimate vertical profiles at centroids (sub-regional)
   if (!is.na(argv$cores)) {
     res <- t( mcmapply( vertical_profile_at_centroid_senorge2018,
                         1:y_env$centroids$n,
@@ -111,8 +136,164 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                       1:y_env$centroids$n,
                       SIMPLIFY=T))
   }
+  y_env$centroids$vert_prof <- res
+
+  # NOTE: move to argparser
+  argv$oi2step.bg_blending_deltam <- 10000
+  argv$oi2step.bg_blending_corr <- "soar"
+  argv$oi2step.bg_blending_dh <- 100000
+
+  # blend at observation points the sub-regional profiles into a regional one
+  # initialization
+  y_env$super_yb$value <- array( data=NA, dim=c(y_env$super_yo$n,1))
+  envtmp$x <- y_env$super_yo$x
+  envtmp$y <- y_env$super_yo$y
+  envtmp$z <- y_env$super_yo$z
+  envtmp$m_dim <- y_env$super_yo$n 
+  envtmp$nn2 <- nn2( cbind( y_env$centroids$x, y_env$centroids$y), 
+                            query = cbind( envtmp$x, envtmp$y), 
+                            k = y_env$centroids$n, 
+                            searchtype = "radius", 
+                            radius = 99999999)
+  # blending based on IDI
+  if (!is.na(argv$cores)) {
+    res <- t( mcmapply( blend_vertical_profiles_senorge2018,
+                        1:envtmp$m_dim,
+                        mc.cores=argv$cores,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                         dh=argv$oi2step.bg_blending_dh)))
+  # no-multicores
+  } else {
+    res <- t( mapply( blend_vertical_profiles_senorge2018,
+                      1:envtmp$m_dim,
+                      SIMPLIFY=T,
+                      MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                       dh=argv$oi2step.bg_blending_dh)))
+  }
+  # save results in background data structure
+  y_env$super_yb$value[,1] <- res
+
+  cat(paste("RMS(yo-yb)=",round(sqrt(mean((y_env$super_yo$value-y_env$super_yb$value[,1])**2)),2),"degC\n"))
+
+  # blend at gridpoints the sub-regional profiles into a regional one
+  # initialization
+  m <- 0
+  envtmp$Eb <- array( data=NA, dim=c(env$ngrid,1))
+  # helpers
+  envtmp$n1 <- length( envtmp$ix1 <- which( y_env$centroids$vert_prof[,1] == 1))
+  envtmp$n2 <- length( envtmp$ix2 <- which( y_env$centroids$vert_prof[,1] == 2))
+  while (m <= env$ngrid) {
+    m1 <- m + 1; m2 <- min( c( m + argv$oi2step.bg_blending_deltam, env$ngrid))
+    envtmp$x <- env$xgrid[env$mask][m1:m2]
+    envtmp$y <- env$ygrid[env$mask][m1:m2]
+    envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
+    envtmp$m_dim <- m2 - m1 + 1
+    #
+    envtmp$nn2 <- nn2( cbind( y_env$centroids$x, y_env$centroids$y), 
+                              query = cbind( envtmp$x, envtmp$y), 
+                              k = y_env$centroids$n, 
+                              searchtype = "radius", 
+                              radius = 99999999)
+    # blending based on IDI
+    if (!is.na(argv$cores)) {
+      res <- t( mcmapply( blend_vertical_profiles_senorge2018,
+                          1:envtmp$m_dim,
+                          mc.cores=argv$cores,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                           dh=argv$oi2step.bg_blending_dh)))
+    # no-multicores
+    } else {
+      res <- t( mapply( blend_vertical_profiles_senorge2018,
+                        1:envtmp$m_dim,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                         dh=argv$oi2step.bg_blending_dh)))
+    }
+    # save results in background data structure
+    envtmp$Eb[m1:m2,1] <- res
+    # next bunch of gridpoints
+    m <- m + argv$oi2step.bg_blending_deltam
+  } # end loop over gridpoints
+
+  # NOTE: adaptive Dh must be implemented
+
+  # NOTE: move to argparser
+  argv$oi2step.loop_deltam <- 10000
+  argv$oi2step.analysis_dh <- 60000
+  argv$oi2step.analysis_dz <- c(800,600,400,200)
+  argv$oi2step.analysis_lafmin <- 0 
+  argv$oi2step.analysis_nclose <- 50
+
+  # Analysis 
+  m <- 0
+  envtmp$Ea <- array( data=NA, dim=c(env$ngrid,1))
+  # Matrix of distances between all stations
+  envtmp$dist2 <- outer(y_env$super_yo$x,y_env$super_yo$x,FUN="-")**2.+
+                  outer(y_env$super_yo$y,y_env$super_yo$y,FUN="-")**2.
+  # Matrix of elevation differences between all stations
+  envtmp$dist2_z <- outer(y_env$super_yo$z,y_env$super_yo$z,FUN="-")**2.
+  # Matrix of distances between all stations
+  envtmp$dist2_laf <- outer(y_env$super_yo$laf,y_env$super_yo$laf,FUN="-")**2.
+
+  for (zloop in 1:length(argv$oi2step.analysis_dz)) {
+    # analysis at observation points
+
+    # analysis at grid points
+    while (m <= env$ngrid) {
+      m1 <- m + 1; m2 <- min( c( m + argv$oi2step.bg_blending_deltam, env$ngrid))
+      envtmp$x <- env$xgrid[env$mask][m1:m2]
+      envtmp$y <- env$ygrid[env$mask][m1:m2]
+      envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
+      envtmp$laf <- getValues(env$rlaf)[env$mask][m1:m2]
+      envtmp$m_dim <- m2 - m1 + 1
+      #
+      envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                                query = cbind( envtmp$x, envtmp$y), 
+                                k = argv$oi2step.analysis_nclose, 
+                                searchtype = "radius", 
+                                radius = 99999999)
+  
+      # blending based on IDI
+      if (!is.na(argv$cores)) {
+        res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            mc.cores=argv$cores,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                             dh=argv$oi2step.bg_blending_dh)))
+      # no-multicores
+      } else {
+        res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                           dh=argv$oi2step.bg_blending_dh)))
+      }
+      # save results in background data structure
+      envtmp$Eb[m1:m2,1] <- res
+      # next bunch of gridpoints
+      m <- m + argv$oi2step.bg_blending_deltam
+    } # end loop over gridpoints
+  } # end loop over elevation decorellation parameters
+
+
+  # 
+
 save(file="tmp.rdata",envtmp,y_env,res,env,argv)
 q()
+
+  # save background in the output data structures
+  env$k_dim <- 1
+  fg_env$ixs <- 1
+  fg_env$ixf <- 1
+  fg_env$ixe <- 1
+  fg_env$fg[[1]]$r_main <- env$rmaster
+  fg_env$fg[[1]]$r_main[] <- NA
+  fg_env$fg[[1]]$r_main[env$mask] <- envtmp$Eb[,1]
+
+
   # count the number of observations in each box
   rnobs <- rasterize( cbind( y_env$super_yo$x, y_env$super_yo$y), y_env$centroids$r, 
                       y_env$super_yo$value,fun=function(x,...)length(x))

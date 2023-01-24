@@ -22,7 +22,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
     # IDI
     if ( !is.na(argv$dh_idi)) {
       cat("IDI")
-      D <- corr2d( par=argv$dh_idi, label=argv$corrfun, dist2_is_global=T)
+      D <- corr2d( par=argv$dh_idi, label=argv$corrfun, values_as_globalVar=T)
       diag(D) <- diag(D) + 0.1
       envtmp$SRinv_di <- crossprod( chol2inv(chol(D)), array(data=rep(1,y_env$yo$n),dim=c(y_env$yo$n,1)))
       envtmp$Eb  <- array( data=0, dim=c( env$ngrid, 1))
@@ -165,7 +165,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
       if (any(is.na(envtmp$Eb[,1]))) cat("Warning: xb is NA\n")
       if (any(is.na(yb))) cat("Warning: yb is NA\n")
       # compute correlations among observation locations
-      D <- corr2d( par=vecd[l], label=argv$corrfun, dist2_is_global=T)
+      D <- corr2d( par=vecd[l], label=argv$corrfun, values_as_globalVar=T)
       # prepare for OI faster
       diag(D) <- diag(D) + vece[l] * y_env$yo$ovarc
       envtmp$SRinv <- chol2inv(chol(D))
