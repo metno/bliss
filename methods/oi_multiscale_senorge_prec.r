@@ -247,6 +247,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
     ra[mask] <- 0
     rl <- ra
   } # END IF dry everywhere
+
   # Initialization
   env$Xa <- array( data=NA, dim=c( env$ngrid, 1))
   env$Xa_rel <- array( data=NA, dim=c( env$ngrid, 1))

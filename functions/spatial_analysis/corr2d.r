@@ -1,10 +1,11 @@
 #+ Define correlations
-corr2d <- function( values, par, label, values_as_globalVar=F) {
+corr2d <- function( values, par, label, values_as_globalVar=F, 
+                    values2=NULL, values3=NULL) {
 # correlations between pair of points
 #------------------------------------------------------------------------------
 
 
-  res <- rep( 1, length(value[,1]))
+  res <- rep( 1, length(values))
 
   for (i in 1:length(par)) {
     
@@ -16,12 +17,10 @@ corr2d <- function( values, par, label, values_as_globalVar=F) {
       } else if (i==3) { 
         mat2 <- envtmp$dist2_laf 
       }
-    } else {
-      if (length(par)==1) { 
-        mat2 <- values 
-      } else {
-        mat2 <- values[,,i]
-      }
+    } else if (i==2) {
+      mat2 <- values2 
+    } else if (i==3) {
+      mat2 <- values3
     } # end if 
 
     if (label[i] == "gaussian") {

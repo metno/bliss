@@ -12,6 +12,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
 
   y_env$super_yo  <- list()
   y_env$super_yb  <- list()
+  y_env$super_ya  <- list()
   y_env$centroids <- list()
 
   if (argv$twostep_superobbing) {
@@ -30,8 +31,20 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   }
   y_env$super_yo$n <- length(y_env$yo$value)
 
+  do_cv <- FALSE
+  if (env$cv_mode | env$cv_mode_random) do_cv <- TRUE
+  do_xa <- FALSE
+  if ( !is.na( argv$off_x)) do_xa <- TRUE
+  do_ya <- argv$twostep_superobbing
+
+  cat(paste("Perform analysis over observation points is always TRUE\n"))
+  cat(paste("(but if superobbing is requested then we need to perform analysis over actual observation points. "))
+  cat(paste("Superobbing is",do_ya,")\n"))
+  cat(paste("Perform cv-analysis over selected observation points is",do_cv,"\n"))
+  cat(paste("Perform analysis over grid points is",do_xa,"\n"))
+
   # Regional backgrounds
-  cat("+----------------------------+\n")
+  cat("+--------------------------------------------------------------+\n")
   cat("Regional backgroundg field\n")
   # Regional background field is the average of local vertical temperature profiles, 
   # each of them computed around a so-called centroid (a point at the center of a
@@ -108,7 +121,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
 #  cat(paste("sub-regional area extensions (length x (m),length y (m))=",
 #        round(res(y_env$centroids$r)[1]),round(res(y_env$centroids$r)[2])),"\n")
 #  cat(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mean(res(y_env$centroids$r))),"\n"))
-  cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
+#  cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
 
   # save results in a global variable
   y_env$centroids$x <- xr[y_env$centroids$i]
@@ -117,14 +130,14 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   # clean memory
   rm(nn2, r_notmasked, xr, yr)
 
-  #
+  # estimate vertical profiles at centroids (sub-regional)
   envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
                             query = cbind( y_env$centroids$x, y_env$centroids$y), 
                             k = y_env$super_yo$n, 
                             searchtype = "radius", 
                             radius = argv$oi2step.bg_centroids_buffer)
 
-  # estimate vertical profiles at centroids (sub-regional)
+  # multicores 
   if (!is.na(argv$cores)) {
     res <- t( mcmapply( vertical_profile_at_centroid_senorge2018,
                         1:y_env$centroids$n,
@@ -144,6 +157,12 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   argv$oi2step.bg_blending_dh <- 100000
 
   # blend at observation points the sub-regional profiles into a regional one
+
+  cat("At observation points, blend sub-regional profiles into a regional one\n")
+  # helpers
+  envtmp$n1 <- length( envtmp$ix1 <- which( y_env$centroids$vert_prof[,1] == 1))
+  envtmp$n2 <- length( envtmp$ix2 <- which( y_env$centroids$vert_prof[,1] == 2))
+
   # initialization
   y_env$super_yb$value <- array( data=NA, dim=c(y_env$super_yo$n,1))
   envtmp$x <- y_env$super_yo$x
@@ -175,21 +194,17 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   y_env$super_yb$value[,1] <- res
 
   cat(paste("RMS(yo-yb)=",round(sqrt(mean((y_env$super_yo$value-y_env$super_yb$value[,1])**2)),2),"degC\n"))
+  
+  # blend at observation points (if superobbing is TRUE) the sub-regional profiles into a regional one
+  if (do_ya) {
+    cat("At actual observation points (not at superobbing points), blend sub-regional profiles into a regional one\n")
 
-  # blend at gridpoints the sub-regional profiles into a regional one
-  # initialization
-  m <- 0
-  envtmp$Eb <- array( data=NA, dim=c(env$ngrid,1))
-  # helpers
-  envtmp$n1 <- length( envtmp$ix1 <- which( y_env$centroids$vert_prof[,1] == 1))
-  envtmp$n2 <- length( envtmp$ix2 <- which( y_env$centroids$vert_prof[,1] == 2))
-  while (m <= env$ngrid) {
-    m1 <- m + 1; m2 <- min( c( m + argv$oi2step.bg_blending_deltam, env$ngrid))
-    envtmp$x <- env$xgrid[env$mask][m1:m2]
-    envtmp$y <- env$ygrid[env$mask][m1:m2]
-    envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
-    envtmp$m_dim <- m2 - m1 + 1
-    #
+    # initialization
+    y_env$yo$value_b <- array( data=NA, dim=c(y_env$yo$n,1))
+    envtmp$x <- y_env$yo$x
+    envtmp$y <- y_env$yo$y
+    envtmp$z <- y_env$yo$z
+    envtmp$m_dim <- y_env$yo$n 
     envtmp$nn2 <- nn2( cbind( y_env$centroids$x, y_env$centroids$y), 
                               query = cbind( envtmp$x, envtmp$y), 
                               k = y_env$centroids$n, 
@@ -212,52 +227,71 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                                          dh=argv$oi2step.bg_blending_dh)))
     }
     # save results in background data structure
-    envtmp$Eb[m1:m2,1] <- res
-    # next bunch of gridpoints
-    m <- m + argv$oi2step.bg_blending_deltam
-  } # end loop over gridpoints
+    y_env$yo$value_b[,1] <- res
 
-  # NOTE: adaptive Dh must be implemented
+    cat(paste("RMS(yo-yb)=",round(sqrt(mean((y_env$yo$value-y_env$yo$value_b[,1])**2)),2),"degC\n"))
+  } # end if do_cv
 
-  # NOTE: move to argparser
-  argv$oi2step.loop_deltam <- 10000
-  argv$oi2step.analysis_dh <- 60000
-  argv$oi2step.analysis_dz <- c(800,600,400,200)
-  argv$oi2step.analysis_lafmin <- 0 
-  argv$oi2step.analysis_nclose <- 50
+  # blend at cv-points the sub-regional profiles into a regional one
+  if (do_cv) {
+    cat("At observation points, blend sub-regional profiles into a regional one\n")
 
-  # Analysis 
-  m <- 0
-  envtmp$Ea <- array( data=NA, dim=c(env$ngrid,1))
-  # Matrix of distances between all stations
-  envtmp$dist2 <- outer(y_env$super_yo$x,y_env$super_yo$x,FUN="-")**2.+
-                  outer(y_env$super_yo$y,y_env$super_yo$y,FUN="-")**2.
-  # Matrix of elevation differences between all stations
-  envtmp$dist2_z <- outer(y_env$super_yo$z,y_env$super_yo$z,FUN="-")**2.
-  # Matrix of distances between all stations
-  envtmp$dist2_laf <- outer(y_env$super_yo$laf,y_env$super_yo$laf,FUN="-")**2.
+    # initialization
+    y_env$yov$value_b <- array( data=NA, dim=c(y_env$yov$n,1))
+    envtmp$x <- y_env$yov$x
+    envtmp$y <- y_env$yov$y
+    envtmp$z <- y_env$yov$z
+    envtmp$m_dim <- y_env$yov$n 
+    envtmp$nn2 <- nn2( cbind( y_env$centroids$x, y_env$centroids$y), 
+                              query = cbind( envtmp$x, envtmp$y), 
+                              k = y_env$centroids$n, 
+                              searchtype = "radius", 
+                              radius = 99999999)
+    # blending based on IDI
+    if (!is.na(argv$cores)) {
+      res <- t( mcmapply( blend_vertical_profiles_senorge2018,
+                          1:envtmp$m_dim,
+                          mc.cores=argv$cores,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                           dh=argv$oi2step.bg_blending_dh)))
+    # no-multicores
+    } else {
+      res <- t( mapply( blend_vertical_profiles_senorge2018,
+                        1:envtmp$m_dim,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
+                                         dh=argv$oi2step.bg_blending_dh)))
+    }
+    # save results in background data structure
+    y_env$yov$value_b[,1] <- res
 
-  for (zloop in 1:length(argv$oi2step.analysis_dz)) {
-    # analysis at observation points
+    cat(paste("RMS(yo-yb)=",round(sqrt(mean((y_env$yov$value-y_env$yov$value_b[,1])**2)),2),"degC\n"))
+  } # end if do_cv
 
-    # analysis at grid points
+  # blend at gridpoints the sub-regional profiles into a regional one
+  if (do_xa) {
+  
+    cat("At grid points, blend sub-regional profiles into a regional one\n")
+
+    # initialization
+    m <- 0
+    env$Xb <- array( data=NA, dim=c(env$ngrid,1))
     while (m <= env$ngrid) {
       m1 <- m + 1; m2 <- min( c( m + argv$oi2step.bg_blending_deltam, env$ngrid))
       envtmp$x <- env$xgrid[env$mask][m1:m2]
       envtmp$y <- env$ygrid[env$mask][m1:m2]
       envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
-      envtmp$laf <- getValues(env$rlaf)[env$mask][m1:m2]
       envtmp$m_dim <- m2 - m1 + 1
       #
-      envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+      envtmp$nn2 <- nn2( cbind( y_env$centroids$x, y_env$centroids$y), 
                                 query = cbind( envtmp$x, envtmp$y), 
-                                k = argv$oi2step.analysis_nclose, 
+                                k = y_env$centroids$n, 
                                 searchtype = "radius", 
                                 radius = 99999999)
-  
       # blending based on IDI
       if (!is.na(argv$cores)) {
-        res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+        res <- t( mcmapply( blend_vertical_profiles_senorge2018,
                             1:envtmp$m_dim,
                             mc.cores=argv$cores,
                             SIMPLIFY=T,
@@ -265,286 +299,273 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                                              dh=argv$oi2step.bg_blending_dh)))
       # no-multicores
       } else {
-        res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+        res <- t( mapply( blend_vertical_profiles_senorge2018,
                           1:envtmp$m_dim,
                           SIMPLIFY=T,
                           MoreArgs = list( corr=argv$oi2step.bg_blending_corr,
                                            dh=argv$oi2step.bg_blending_dh)))
       }
       # save results in background data structure
-      envtmp$Eb[m1:m2,1] <- res
+      env$Xb[m1:m2,1] <- res
       # next bunch of gridpoints
       m <- m + argv$oi2step.bg_blending_deltam
     } # end loop over gridpoints
+  
+    cat( paste( "range(xb) (min max, degC)=",
+                round(min(env$Xb[,1],na.rm=T),2),
+                round(max(env$Xb[,1],na.rm=T),2),"\n"))
+    cat(paste("is any of xb set to NA?",any(is.na(env$Xb[,1])),"\n"))
+  } # end if do_xa
+
+  # NOTE: adaptive Dh must be implemented
+  envtmp$dh_obs <- rep(60000,env$ngrid)
+  if (do_ya) envtmp$dh_yaobs <- rep( 60000, y_env$yo$n) 
+  if (do_cv) envtmp$dh_cvobs <- rep( 60000, y_env$yov$n)
+  if (do_xa) envtmp$dh_grid  <- rep( 60000, env$ngrid)
+
+  # NOTE: move to argparser
+  argv$oi2step.loop_deltam <- 10000
+  argv$oi2step.analysis_dz <- c(800,600,400,200)
+  argv$oi2step.analysis_eps2 <- c(0.5,0.5,0.5,0.25)
+  argv$oi2step.analysis_lafmin <- 0 
+  argv$oi2step.analysis_nclose <- 50
+  argv$oi2step.analysis_corr <- c("soar","gaussian","linear")
+
+  # Analysis 
+  cat("+--------------------------------------------------------------+\n")
+  cat("Analysis\n")
+
+  # initalization
+  m <- 0
+  nzloop <- length(argv$oi2step.analysis_dz)
+  # observation points
+  y_env$super_ya$value <- array( data=NA, dim=c(y_env$super_yo$n,1))
+  y_env$super_ya$idi_loop <- array( data=NA, dim=c(y_env$super_yo$n,nzloop))
+  y_env$super_yb$value_loop <- array( data=NA, dim=c(y_env$super_yo$n,nzloop))
+  y_env$super_yb$value_loop[,1] <- y_env$super_yb$value[,1]
+  # observation points (if different from superobbing)
+  if (do_ya) {
+    y_env$yo$value_a <- array( data=NA, dim=c(y_env$super_yo$n,1))
+    y_env$yo$idi_loop <- array( data=NA, dim=c(y_env$super_yo$n,nzloop))
+    y_env$yo$value_b_loop <- array( data=NA, dim=c(y_env$yo$n,nzloop))
+    y_env$yo$value_b_loop[,1] <- y_env$yo$value_b[,1]
+  }
+  # cv points
+  if (do_cv) {
+    y_env$yov$value_a <- array( data=NA, dim=c(y_env$super_yo$n,1))
+    y_env$yov$idi_loop <- array( data=NA, dim=c(y_env$super_yo$n,nzloop))
+    y_env$yov$value_b_loop <- array( data=NA, dim=c(y_env$yov$n,nzloop))
+    y_env$yov$value_b_loop[,1] <- y_env$yov$value_b[,1]
+  }
+  # grid points
+  if (do_xa) {
+    env$Xa <- array( data=NA, dim=c(env$ngrid,1))
+    env$Xidi <- array( data=NA, dim=c(env$ngrid,1))
+    envtmp$Eb_loop <- array( data=NA, dim=c(env$ngrid,nzloop))
+    envtmp$Eb_loop[,1] <- env$Xb[,1] 
+    envtmp$Xidi_loop <- array( data=NA, dim=c(env$ngrid,nzloop))
+  }
+
+  # Matrix of distances between all stations
+  envtmp$dist2 <- outer(y_env$super_yo$x,y_env$super_yo$x,FUN="-")**2.+
+                  outer(y_env$super_yo$y,y_env$super_yo$y,FUN="-")**2.
+  # Matrix of elevation differences between all stations
+  envtmp$dist2_z <- outer(y_env$super_yo$z,y_env$super_yo$z,FUN="-")**2.
+  # Matrix of distances between all stations
+  envtmp$dist2_laf <- outer(y_env$super_yo$laf,y_env$super_yo$laf,FUN="-")**2.
+  
+  # Loop over vertical decorrelation lengths
+  for (zloop in 1:nzloop) {
+
+    cat(paste("set vertical decorrelation length=",argv$oi2step.analysis_dz[zloop],"\n"))
+
+    # analysis at observation points
+    envtmp$x <- y_env$super_yo$x
+    envtmp$y <- y_env$super_yo$y 
+    envtmp$z <- y_env$super_yo$z
+    envtmp$laf <- y_env$super_yo$laf
+    envtmp$m_dim <- y_env$super_yo$n
+    envtmp$par <- cbind( envtmp$dh_obs, 
+                         rep(argv$oi2step.analysis_dz[zloop],y_env$super_yo$n),
+                         rep(argv$oi2step.analysis_lafmin,y_env$super_yo$n))
+    envtmp$eps2 <- rep(argv$oi2step.analysis_eps2[zloop],envtmp$m_dim)
+    envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                              query = cbind( envtmp$x, envtmp$y), 
+                              k = argv$oi2step.analysis_nclose, 
+                              searchtype = "radius", 
+                              radius = 99999999)
+    envtmp$Eb <- array( data=y_env$super_yb$value_loop[,zloop], dim=c(envtmp$m_dim,1))
+    envtmp$D  <- array( data=(y_env$super_yo$value - y_env$super_yb$value_loop[,zloop]), dim=c(envtmp$m_dim,1))
+    # analysis based on IDI
+    if (!is.na(argv$cores)) {
+      res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          mc.cores=argv$cores,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+    # no-multicores
+    } else {
+      res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                        1:envtmp$m_dim,
+                        SIMPLIFY=T,
+                        MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+    }
+    y_env$super_ya$value[,1]        <- res[,1]
+    y_env$super_ya$idi_loop[,zloop] <- res[,2]
+    cat(paste("RMS(yo-ya)=",round(sqrt(mean((y_env$super_yo$value-y_env$super_ya$value[,1])**2)),2),"degC\n"))
+
+    # analysis at observation points (if different from superobbing)
+    if (do_ya) {
+      envtmp$x <- y_env$yo$x
+      envtmp$y <- y_env$yo$y 
+      envtmp$z <- y_env$yo$z
+      envtmp$laf <- y_env$yo$laf
+      envtmp$m_dim <- y_env$yo$n
+      envtmp$par <- cbind( envtmp$dh_yaobs, 
+                           rep(argv$oi2step.analysis_dz[zloop],y_env$yo$n),
+                           rep(argv$oi2step.analysis_lafmin,y_env$yo$n))
+      envtmp$eps2 <- rep(argv$oi2step.analysis_eps2[zloop],envtmp$m_dim)
+      envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                                query = cbind( envtmp$x, envtmp$y), 
+                                k = argv$oi2step.analysis_nclose, 
+                                searchtype = "radius", 
+                                radius = 99999999)
+      envtmp$Eb <- array( data=y_env$yo$value_b_loop[,zloop], dim=c(envtmp$m_dim,1))
+      # analysis based on IDI
+      if (!is.na(argv$cores)) {
+        res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            mc.cores=argv$cores,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+      # no-multicores
+      } else {
+        res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+      }
+      y_env$yo$value_a[,1]      <- res[,1]
+      y_env$yo$idi_loop[,zloop] <- res[,2]
+      cat(paste("not-at-superobbing-sites RMS(yo-ya)=",round(sqrt(mean((y_env$super_yo$value-y_env$super_ya$value[,1])**2)),2),"degC\n"))
+    } # end if do_ya
+
+    # analysis at cv-observation points
+    if (do_cv) {
+      envtmp$x <- y_env$yov$x
+      envtmp$y <- y_env$yov$y 
+      envtmp$z <- y_env$yov$z
+      envtmp$laf <- y_env$yov$laf
+      envtmp$m_dim <- y_env$yov$n
+      envtmp$par <- cbind( envtmp$dh_cvobs, 
+                           rep(argv$oi2step.analysis_dz[zloop],y_env$yov$n),
+                           rep(argv$oi2step.analysis_lafmin,y_env$yov$n))
+      envtmp$eps2 <- rep(argv$oi2step.analysis_eps2[zloop],envtmp$m_dim)
+      envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                                query = cbind( envtmp$x, envtmp$y), 
+                                k = argv$oi2step.analysis_nclose, 
+                                searchtype = "radius", 
+                                radius = 99999999)
+      envtmp$Eb <- array( data=y_env$yov$value_b_loop[,zloop], dim=c(envtmp$m_dim,1))
+      # analysis based on IDI
+      if (!is.na(argv$cores)) {
+        res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            mc.cores=argv$cores,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+      # no-multicores
+      } else {
+        res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                          1:envtmp$m_dim,
+                          SIMPLIFY=T,
+                          MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+      }
+      y_env$yov$value_a[,1]      <- res[,1]
+      y_env$yov$idi_loop[,zloop] <- res[,2]
+      cat(paste("RMS(yo-yav)=",round(sqrt(mean((y_env$super_yo$value-y_env$super_ya$value[,1])**2)),2),"degC\n"))
+    } # end if do_cv
+
+    # analysis at grid points
+    if (do_xa) {
+      while (m <= env$ngrid) {
+        m1 <- m + 1; m2 <- min( c( m + argv$oi2step.loop_deltam, env$ngrid))
+        envtmp$x <- env$xgrid[env$mask][m1:m2]
+        envtmp$y <- env$ygrid[env$mask][m1:m2]
+        envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
+        envtmp$laf <- getValues(env$rlaf)[env$mask][m1:m2]
+        envtmp$m_dim <- m2 - m1 + 1
+        envtmp$par <- cbind( envtmp$dh_grid[m1:m2], 
+                             rep(argv$oi2step.analysis_dz[zloop],envtmp$m_dim),
+                             rep(argv$oi2step.analysis_lafmin,envtmp$m_dim))
+        envtmp$eps2 <- rep(argv$oi2step.analysis_eps2[zloop],envtmp$m_dim)
+        envtmp$nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+                                  query = cbind( envtmp$x, envtmp$y), 
+                                  k = argv$oi2step.analysis_nclose, 
+                                  searchtype = "radius", 
+                                  radius = 99999999)
+        envtmp$Eb <- array( data=envtmp$Eb_loop[m1:m2,zloop], dim=c(envtmp$m_dim,1))
+        # analysis based on IDI
+        if (!is.na(argv$cores)) {
+          res <- t( mcmapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                              1:envtmp$m_dim,
+                              mc.cores=argv$cores,
+                              SIMPLIFY=T,
+                              MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+        # no-multicores
+        } else {
+          res <- t( mapply( oi_senorge_temperature_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            SIMPLIFY=T,
+                            MoreArgs = list( corr=argv$oi2step.analysis_corr, idi=T)))
+        }
+        # save results in background data structure
+        env$Xa[m1:m2,1]               <- res[,1]
+        envtmp$Xidi_loop[m1:m2,zloop] <- res[,2]
+        # next bunch of gridpoints
+        m <- m + argv$oi2step.loop_deltam
+      } # end loop over gridpoints
+      cat( paste( "range(xa-xb) (min max, degC)=",
+                  round(min(env$Xa[,1]-envtmp$Eb_loop[,zloop],na.rm=T),2),
+                  round(max(env$Xa[,1]-envtmp$Eb_loop[,zloop],na.rm=T),2),"\n"))
+      cat(paste("is any of xa set to NA?",any(is.na(env$Xa)),"\n"))
+    } # end if do_xa
+
+    # prepare for next iteration
+    if (zloop < nzloop) {
+      y_env$super_yb$value_loop[,zloop+1] <- y_env$super_ya$value[,1] 
+      if (do_ya) y_env$yo$value_b_loop[,zloop+1] <- y_env$yo$value_a[,1]
+      if (do_cv) y_env$yov$value_b_loop[,zloop+1] <- y_env$yov$value_a[,1]
+      if (do_xa) envtmp$Eb_loop[,zloop+1] <- env$Xa[,1]
+    }
   } # end loop over elevation decorellation parameters
 
+  # save special results for Output
+  if (do_xa) {
 
-  # 
+    # Initialization
+    env$Xidi <- array( data=NA, dim=c( env$ngrid, 1))
+    env$Xscale <- array( data=NA, dim=c( env$ngrid, 1))
 
-save(file="tmp.rdata",envtmp,y_env,res,env,argv)
-q()
+    # Output  
+    env$Xscale[,1] <- envtmp$dh_grid
+    env$Xidi[,1] <- rowSums(envtmp$Xidi_loop)
 
-  # save background in the output data structures
-  env$k_dim <- 1
-  fg_env$ixs <- 1
-  fg_env$ixf <- 1
-  fg_env$ixe <- 1
-  fg_env$fg[[1]]$r_main <- env$rmaster
-  fg_env$fg[[1]]$r_main[] <- NA
-  fg_env$fg[[1]]$r_main[env$mask] <- envtmp$Eb[,1]
+    # save background in the output data structures
+    env$k_dim <- 1
+    fg_env$ixs <- 1
+    fg_env$ixf <- 1
+    fg_env$ixe <- 1
+    fg_env$fg[[1]]$r_main <- env$rmaster
+    fg_env$fg[[1]]$r_main[] <- NA
+    fg_env$fg[[1]]$r_main[env$mask] <- env$Xb[,1]
 
+  }
 
-  # count the number of observations in each box
-  rnobs <- rasterize( cbind( y_env$super_yo$x, y_env$super_yo$y), y_env$centroids$r, 
-                      y_env$super_yo$value,fun=function(x,...)length(x))
-  nr <- getValues(rnobs)
-  # create the 4D array for the function call ...
-  # ... via apply centroids=(xr[irx],yr[irx])
-#  ixyn <- cbind( (1:ncell(r))[irx], xr[irx], yr[irx], nr[irx])
-save(file="tmp.rdata",y_env,env,nn2,xr,yr,r_notmasked)
   # Bye-bye
   t1a <- Sys.time()
   cat( paste( "OI two-step developed for seNorge, total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
-q()
-  # Regional backgrounds
-  cat("+----------------------------+")
-  print("two-step interpolation: regional bg field")
-  # Spatial scale definitions. 
-  #  Regional=whole domain
-  #  Sub-regional (or local scale)=dozens of observations (10-100)
-  #  small-scale=few observations (1-10)
-  #  sub-grid scale=not observed
-  # define grid used to compute local backgrounds 
-  #  (grid nodes are candidates for the centroids)
-  r<-raster( extent(xmn,xmx,ymn,ymx),
-             ncol=argv$grid.bg[2],
-             nrow=argv$grid.bg[1],
-             crs=argv$grid_master.proj4)
-  res<-res(r)
-  mures<-round(mean(res),0)
-  xy<-xyFromCell(r,1:ncell(r))
-  xr<-xy[,1]
-  yr<-xy[,2]
-  ir<-1:ncell(r)
-  r[]<-1:ncell(r)
-  # attribute each station to a grid box
-  VecI_bg<-extract(r,cbind(VecX_bg,VecY_bg))
-  # selection of centroids
-  VecI4w<-extract(rmaster,
-                  cbind(xr,yr),
-                  buffer=(2*argv$obs.outbuffer),
-                  na.rm=T,
-                  fun=mean)
-  ir_in<-unique(VecI_bg[which(!is.na(VecI_bg))])
-  irx<-which( (ir %in% ir_in) & (!is.na(VecI4w)))
-  if (argv$verbose) {
-    print(paste("the master grid has been divided in",
-                argv$grid.bg[1],"x",argv$grid.bg[2],"boxes"))
-    print(paste("sub-regional area extensions (length x (m),length y (m))=",
-          round(res[1],0),round(res[2],0)))
-    print(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mures,0)))
-    print(paste("# sub-regional centroids",length(irx)))
-  }
-  # count the number of observations in each box
-  rnobs<-rasterize(cbind(VecX_bg,VecY_bg),r,yo,fun=function(x,...)length(x))
-  nr<-getValues(rnobs)
-  # create the 4D array for the function call ...
-  # ... via apply centroids=(xr[irx],yr[irx])
-  ixyn<-cbind(ir[irx],xr[irx],yr[irx],nr[irx])
-  # initialization
-  # xb=background at grid points; xw=weights; xdh_oi=
-  b_ok<-F
-  na<--999.
-  for (i in 1:10) {
-    if (!(argv$cv_mode|argv$cv_mode_random)) {
-      xb<-xgrid
-      xw<-xgrid
-      xdh_oi<-xgrid
-      xb[]<-na
-      xw[]<-na
-      xdh_oi[]<-na
-    # CVmode
-    } else {
-      xb<-VecX_cv
-      xw<-VecX_cv
-      xdh_oi<-VecX_cv
-      xb[]<-na
-      xw[]<-na
-      xdh_oi[]<-na
-    }
-    yb<-VecX
-    yw<-VecX
-    ydh_oi<-VecX
-    yb[]<-na
-    yw[]<-na
-    ydh_oi[]<-na
-    out<-apply(ixyn,
-               FUN=background_incAv,
-               MARGIN=1,
-               nmin=argv$n.bg,
-               refdist=mures, # Dh used to compute IDI
-               maxboxl=(i*argv$maxboxl),
-               dzmin=argv$dz.bg,
-               eps2=0.1,
-               closeNth=argv$nclose.bg)
-    if (argv$twostep_nogrid) {
-      if (!any(yb==na)) {
-        b_ok<-T
-        print(paste("maxboxl=",(i*argv$maxboxl),"m"))
-        break
-      }
-    } else {
-      if (!(any(yb==na) | ((!(argv$cv_mode|argv$cv_mode_random)) & (any(xb==na))))) {
-        b_ok<-T
-        print(paste("maxboxl=",(i*argv$maxboxl),"m"))
-        break
-      }
-    }
-  }
-  if (!b_ok) {
-    if (any(yb==na)) 
-      boom("ERROR: found NAs in background values at station locations (try to increase \"maxboxl\"")
-    if (!(argv$cv_mode|argv$cv_mode_random)) {
-      if (any(xb==na)) boom("ERROR: found NAs in background values at grid points")
-    } 
-  }
-  # smooth out dh
-  #save.image("img0.RData")
-  #r<-rmaster
-  #r[mask]<-xdh_oi
-  #afact<-round((mures/mean(res(rmaster)))/2.,0)
-  #print(afact)
-  #rf<-focal(r, w=matrix(1,21,21), fun=mean,na.rm=T)
-  #xdh_oi<-getValues(rf)[mask]
-  #ydh_oi_tmp<-extract(rf,cbind(VecX,VecY))
-  #ydh_oi[which(!is.na(ydh_oi_tmp))]<-ydh_oi_tmp[which(!is.na(ydh_oi_tmp))]
-  #rm(ydh_oi_tmp,rf,r)
-  if (argv$verbose) {
-    if (!(argv$cv_mode|argv$cv_mode_random)) {
-      print(paste("RMS(yo-yb)=", round(sqrt(mean((yo-yb)**2)),2), "degC" ))
-    } else {
-      print(paste("RMS(yo-yb)=", round(sqrt(mean((yo_cv-xb)**2)),2), "degC" ))
-    }
-    t11<-Sys.time()
-    print(t11-t00)
-  } 
-  # Analysis, OI
-  if (argv$verbose) {
-    print("Analysis")
-    t00<-Sys.time()
-  }
-  innov<-yo-yb
-  # standar mode (no cv)
-  if (!(argv$cv_mode|argv$cv_mode_random)) {
-    if (!argv$twostep_nogrid) {
-      ngrid<-length(xgrid)
-      length_tot<-ngrid
-      xout<-apply(cbind(xgrid,ygrid,dem,laf,xdh_oi,xb,1:ngrid),
-                  FUN=oiIT,
-                  MARGIN=1,
-                  eps2=argv$eps2,
-                  dz=argv$dz,
-                  lafmn=argv$lafmin,
-                  nmaxo=argv$nmaxo,
-                  cv=FALSE)
-      if (argv$debug) {
-        save.image("img.RData")
-        file<-file.path(argv$debug.dir,"deb_xa.png")
-        rdeb<-rmaster
-        rdeb[mask]<-xout[1,]
-        writeRaster(rdeb, file, format="CDF",overwrite=T)
-      }
-      if (argv$verbose) print(paste("grid points, time",(Sys.time()-t00)))
-      if (argv$verbose) t000<-Sys.time()
-      for (i in 1:length(argv$off_x.variables)) {
-        if (!exists("r.list")) r.list<-list()
-        if (argv$off_x.variables[i]=="analysis") {
-          ra<-rmaster
-          ra[]<-NA
-          ra[mask]<-xout[1,]
-          r.list[[i]]<-matrix(data=getValues(ra),
-                              ncol=length(y),
-                              nrow=length(x))
-          xa  <- getValues(ra)
-          ng  <- length(getValues(ra))
-          aix <- 1:length(getValues(ra))
-        } else if (argv$off_x.variables[i]=="background") {
-          r<-rmaster
-          r[]<-NA
-          r[mask]<-xb
-          r.list[[i]]<-matrix(data=getValues(r),
-                              ncol=length(y),
-                              nrow=length(x))
-          xb  <- getValues(r)
-          ng  <- length(getValues(r))
-          aix <- 1:length(getValues(r))
-          rm(r)
-        } else if (argv$off_x.variables[i]=="idi") {
-          r<-rmaster
-          r[]<-NA
-          r[mask]<-xout[2,]
-          r.list[[i]]<-matrix(data=getValues(r),
-                              ncol=length(y),
-                              nrow=length(x))
-          xidi <- getValues(r)
-          ng  <- length(getValues(r))
-          aix  <- 1:length(getValues(r))
-          rm(r)
-        } else if (argv$off_x.variables[i]=="dh") {
-          r<-rmaster
-          r[]<-NA
-          r[mask]<-xdh_oi
-          r.list[[i]]<-matrix(data=getValues(r),
-                              ncol=length(y),
-                              nrow=length(x))
-          xdh <- getValues(r)
-          ng  <- length(getValues(r))
-          aix <- 1:length(getValues(r))
-          rm(r)
-        }
-      }
-      rm(xout)
-    }
-    if (!exists("t000")) t000<-Sys.time()
-    # station points
-    yout<-apply(cbind(VecX,VecY,VecZ,VecLaf,ydh_oi,yb,1:n0),
-                FUN=oiIT,
-                MARGIN=1,
-                eps2=argv$eps2,
-                dz=argv$dz,
-                lafmn=argv$lafmin,
-                nmaxo=argv$nmaxo,
-                cv=TRUE)
-    #
-    if (argv$debug) save.image("img1.RData")
-    ya<-yout[1,]
-    yav<-yout[3,]
-    if (argv$verbose) {
-      print(paste("  RMS(yo-ya)=", 
-                  round(sqrt(mean((yo-yout[1,])**2)),2), "degC" ))
-      print(paste("RMS(yo-ycva)=",
-                  round(sqrt(mean((yo-yout[3,])**2)),2), "degC" ))
-      t11<-Sys.time()
-      print(t11-t000)
-    }
-  # CVmode
-  } else {
-    length_tot<-length(VecX_cv)
-    yout<-apply(cbind(VecX_cv,VecY_cv,VecZ_cv,VecLaf_cv,xdh_oi,xb,1:length_tot),
-                FUN=oiIT,
-                MARGIN=1,
-                eps2=argv$eps2,
-                dz=argv$dz,
-                lafmn=argv$lafmin,
-                nmaxo=argv$nmaxo,
-                cv=FALSE)
-    if (argv$debug) save.image("img1.RData")
-    if (argv$verbose) {
-      print(paste("RMS(yo-ycva)=", round(sqrt(mean((yo_cv-yout[1,])**2)),2), "degC" ))
-      t11<-Sys.time()
-      print(t11-t000)
-    }
-  }
-  elev_for_verif<-VecZ
-# END of OI two-step spatial interpolation (without background)
+
+  save(file="tmp.rdata",envtmp,y_env,res,env,argv)
+  q()
 }

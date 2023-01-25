@@ -58,10 +58,8 @@ vertical_profile_at_centroid_senorge2018 <- function( i) {
 blend_vertical_profiles_senorge2018 <- function( i, 
                                                  corr = "soar",
                                                  dh = 10000) {
-if (i==1) cat(".")
-#save(file="tmp.rdata",y_env,envtmp,i,corr,dh)
-#q()
-print(i)
+  if (i==1) cat(".")
+
   rloc <- corr1d( envtmp$nn2$nn.dist[i,], dh, corr)
   values <- vector( mode="numeric", length=y_env$centroids$n)
   if ( envtmp$n1 > 0) 
