@@ -318,7 +318,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   } # end if do_xa
 
   # NOTE: adaptive Dh must be implemented
-  envtmp$dh_obs <- rep(60000,env$ngrid)
+  envtmp$dh_obs <- rep( 60000, y_env$yo$n)
   if (do_ya) envtmp$dh_yaobs <- rep( 60000, y_env$yo$n) 
   if (do_cv) envtmp$dh_cvobs <- rep( 60000, y_env$yov$n)
   if (do_xa) envtmp$dh_grid  <- rep( 60000, env$ngrid)
@@ -336,7 +336,6 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   cat("Analysis\n")
 
   # initalization
-  m <- 0
   nzloop <- length(argv$oi2step.analysis_dz)
   # observation points
   y_env$super_ya$value <- array( data=NA, dim=c(y_env$super_yo$n,1))
@@ -367,13 +366,16 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   }
 
   # Matrix of distances between all stations
-  envtmp$dist2 <- outer(y_env$super_yo$x,y_env$super_yo$x,FUN="-")**2.+
-                  outer(y_env$super_yo$y,y_env$super_yo$y,FUN="-")**2.
+  envtmp$dist2     <- outer(y_env$super_yo$x,y_env$super_yo$x,FUN="-")**2.+
+                      outer(y_env$super_yo$y,y_env$super_yo$y,FUN="-")**2.
   # Matrix of elevation differences between all stations
-  envtmp$dist2_z <- outer(y_env$super_yo$z,y_env$super_yo$z,FUN="-")**2.
+  envtmp$dist2_z   <- outer(y_env$super_yo$z,y_env$super_yo$z,FUN="-")**2.
   # Matrix of distances between all stations
   envtmp$dist2_laf <- outer(y_env$super_yo$laf,y_env$super_yo$laf,FUN="-")**2.
-  
+
+  envtmp$obs_z   <- y_env$super_yo$z
+  envtmp$obs_laf <- y_env$super_yo$laf
+ 
   # Loop over vertical decorrelation lengths
   for (zloop in 1:nzloop) {
 
@@ -488,7 +490,10 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
 
     # analysis at grid points
     if (do_xa) {
+      m <- 0
+      count_loop <- 1
       while (m <= env$ngrid) {
+        cat( paste( count_loop, "/", ceiling(env$ngrid/argv$oi2step.loop_deltam)))
         m1 <- m + 1; m2 <- min( c( m + argv$oi2step.loop_deltam, env$ngrid))
         envtmp$x <- env$xgrid[env$mask][m1:m2]
         envtmp$y <- env$ygrid[env$mask][m1:m2]
@@ -524,11 +529,13 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
         envtmp$Xidi_loop[m1:m2,zloop] <- res[,2]
         # next bunch of gridpoints
         m <- m + argv$oi2step.loop_deltam
+        count_loop <- count_loop + 1
       } # end loop over gridpoints
       cat( paste( "range(xa-xb) (min max, degC)=",
                   round(min(env$Xa[,1]-envtmp$Eb_loop[,zloop],na.rm=T),2),
                   round(max(env$Xa[,1]-envtmp$Eb_loop[,zloop],na.rm=T),2),"\n"))
       cat(paste("is any of xa set to NA?",any(is.na(env$Xa)),"\n"))
+
     } # end if do_xa
 
     # prepare for next iteration
@@ -540,6 +547,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
     }
   } # end loop over elevation decorellation parameters
 
+  save(file="tmp.rdata",envtmp,y_env,res,env,argv,fg_env)
   # save special results for Output
   if (do_xa) {
 
@@ -566,6 +574,4 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   t1a <- Sys.time()
   cat( paste( "OI two-step developed for seNorge, total time", round(t1a-t0a,1), attr(t1a-t0a,"unit"), "\n"))
 
-  save(file="tmp.rdata",envtmp,y_env,res,env,argv)
-  q()
 }

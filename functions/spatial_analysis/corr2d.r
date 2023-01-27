@@ -5,7 +5,6 @@ corr2d <- function( values, par, label, values_as_globalVar=F,
 #------------------------------------------------------------------------------
 
 
-  res <- rep( 1, length(values))
 
   for (i in 1:length(par)) {
     
@@ -17,11 +16,15 @@ corr2d <- function( values, par, label, values_as_globalVar=F,
       } else if (i==3) { 
         mat2 <- envtmp$dist2_laf 
       }
+    } else if (i==1) {
+      mat2 <- values 
     } else if (i==2) {
       mat2 <- values2 
     } else if (i==3) {
       mat2 <- values3
     } # end if 
+
+    if (i==1) { res <- mat2; res[] <- 1 }
 
     if (label[i] == "gaussian") {
       res <- res * exp( -0.5* mat2 / (par[i]*par[i]) )

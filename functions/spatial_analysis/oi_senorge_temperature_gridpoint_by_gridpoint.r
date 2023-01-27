@@ -7,7 +7,7 @@ oi_senorge_temperature_gridpoint_by_gridpoint <- function( i,
 # returned values: analysis, observation error var, analysis error var
 #------------------------------------------------------------------------------
   xidi <- NA; #o_errvar <- NA; xa_errvar <- NA
-
+  
   if( i%%(round(envtmp$m_dim/10)) == 0) cat(".")
 
   # select the observations to use
@@ -24,8 +24,8 @@ oi_senorge_temperature_gridpoint_by_gridpoint <- function( i,
     di <- array( data=envtmp$D[ixa,], dim=c(p,1))
 
     dist_1d    <- envtmp$nn2$nn.dists[i,aux]
-    diffz_1d   <- envtmp$obs_z[i] - envtmp$obs_z[ixa]
-    difflaf_1d <- envtmp$obs_laf[i] - envtmp$obs_laf[ixa]
+    diffz_1d   <- envtmp$z[i] - envtmp$obs_z[ixa]
+    difflaf_1d <- envtmp$laf[i] - envtmp$obs_laf[ixa]
 
     dist_2d    <- envtmp$dist2[ixa,ixa]
     diffz_2d   <- envtmp$dist2_z[ixa,ixa]
