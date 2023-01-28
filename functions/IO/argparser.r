@@ -85,16 +85,13 @@ p <- add_argument(p, "--idiv_instead_of_elev",
                   help="compute IDI-cv",
                   type="logical",
                   default=F)
-p <- add_argument(p, "--twostep_superobbing",
-                  help="superobbing (used only if \"OI_twosteptemperature\")",
-                  flag=T)
-p <- add_argument(p, "--twostep_nogrid",
-                  help="calculation only for station points",
+p <- add_argument(p, "--oi2step_superobbing",
+                  help="superobbing (not yet implemented, originally was used for \"oi_twostep_senorge_temperature\")",
                   flag=T)
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"rasterize\",\"oi_multiscale_senorge_prec\",\"OI_firstguess\",\"OI_twosteptemperature\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"oi_multiscale_senorge_prec\",\"oi_twostep_senorge_temperature\",\"OI_firstguess\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -342,54 +339,41 @@ p <- add_argument(p, "--oi2step.bg_vertprof_dzmin",
                   help="elevation difference. If the elevation range (=elev 95th-perc minus elev 5th-perc) is less than this value, then fit a linear profile of temperature. Otherwise, fit a non-linear profile.",
                   type="numeric",
                   default=30)
-
-
-p <- add_argument(p, "--nmaxo",
-                  help="number of closest observations to be used in the OI to adjust background values at a grid point",
+p <- add_argument(p, "--oi2step.bg_blending_corr",
+                  help="correlation function used when blending the sub-regional profiles",
+                  type="character",
+                  default="soar")
+p <- add_argument(p, "--oi2step.bg_blending_dh",
+                  help="horizontal decorellation length scale (m) used when blending the sub-regional profiles",
                   type="numeric",
-                  default=20)
-p <- add_argument(p, "--dz",
-                  help="background error covariance matrix, vertical decorrelation length scale (m)",
-                  type="numeric",
-                  default=600)
-p <- add_argument(p, "--lafmin",
-                  help="background error covariance matrix, land area fraction parameter",
-                  type="numeric",
-                  default=0.5)
-# Background parameters
-p <- add_argument(p, "--grid.bg",
-                  help="nrow ncol (i.e. number_of_rows number_of_columns) used to define grid of sub-regions.",
+                  default=100000)
+p <- add_argument(p, "--oi2step.loop_deltam",
+                  help="number of gridpoint simultaneously used when computing distances (optimization of memory usage and computing time)",
                   type="integer",
-                  nargs=2,
-                  default=c(5,5))
-p <- add_argument(p, "--vmin",
-                  help="minimum allowed value [units of the variable specified]",
+                  default=10000)
+p <- add_argument(p, "--oi2step.analysis_dz",
+                  help="vertical decorrelation length scale(s) used in the analysis loop",
                   type="numeric",
-                  default=-50)
-p <- add_argument(p, "--vmax",
-                  help="maximum allowed value [units of the variable specified]",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--oi2step.analysis_eps2",
+                  help="ratio(s) between obs error variance and backg error variance used in the analysis loop",
                   type="numeric",
-                  default=40)
-p <- add_argument(p, "--gamma.standard",
-                  help="standard value for the moist adiabatic temperature lapse rate dT/dz (degC/m)",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--oi2step.analysis_corr",
+                  help="correlation function(s) used in the analysis loop",
+                  type="character",
+                  nargs=Inf,
+                  default=NA)
+p <- add_argument(p, "--oi2step.analysis_lafmin",
+                  help="minimum correlation value for the LAF correlation function used in the analysis loop",
                   type="numeric",
-                  default=-0.0065)
-p <- add_argument(p, "--n.bg",
-                  help="minimum number of observations allowed in a sub-region",
-                  type="numeric",
+                  default=0)
+p <- add_argument(p, "--oi2step.analysis_nclose",
+                  help="number of closest observations (to each analysis point) used in the analysis loop",
+                  type="integer",
                   default=50)
-p <- add_argument(p, "--dz.bg",
-                  help="elevation difference. If the elevation range (=elev 95th-perc minus elev 5th-perc) is less than this value, then fit a linear profile of temperature. Otherwise, fit a non-linear profile.",
-                  type="numeric",
-                  default=30)
-p <- add_argument(p, "--nclose.bg",
-                  help="n-th closest observation to consider in the calculation of the OI de-correlation length",
-                  type="numeric",
-                  default=4)
-p <- add_argument(p, "--maxboxl",
-                  help="maximum length (m) of the box used to define a sub-region",
-                  type="numeric",
-                  default=250000)
 #------------------------------------------------------------------------------
 # OI_Bratseth
 p <- add_argument(p, "--oibr.nSCloops",

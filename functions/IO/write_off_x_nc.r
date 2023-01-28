@@ -13,6 +13,8 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
 #    } else if (argv$off_x.variables[i]=="analysis_errsd") {
 #      if (!exists("xa_errsd")) {xa_errsd<-aix;xa_errsd[]<-NA}
 #      xout<-xa_errsd
+    } else if (argv$off_x.variables[i] == "dh") {
+      xout <- env$Xscale
     } else if (argv$off_x.variables[i] == "idi") {
       xout <- env$Xidi
     } else if (argv$off_x.variables[i] == "background") {
@@ -22,7 +24,7 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
       for (e in 1:env$k_dim) {
         ii <- fg_env$ixs[e]
         rfxb <- subset( fg_env$fg[[fg_env$ixf[ii]]]$r_main, subset=fg_env$ixe[ii])
-        rfxb[rfxb<y_env$rain] <- 0
+        if (!is.na(y_env$rain)) rfxb[rfxb<y_env$rain] <- 0
         xout[,e] <- getValues(rfxb)[env$mask]
       } 
     } else if (argv$off_x.variables[i] == "obs_align") {
@@ -82,9 +84,9 @@ write_off_x_nc <- function( argv,  y_env, fg_env, u_env, env) {
     }
   }
   # define time for output
-  tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt),
-                    format="%Y%m%d%H%M",tz="GMT")
-  time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt),
+  tstamp_nc<-format(strptime(argv$date_out,argv$date_out_fmt,tz="UTC"),
+                    format="%Y%m%d%H%M",tz="UTC")
+  time_bnds<-array(format(rev(seq(strptime(argv$date_out,argv$date_out_fmt,tz="UTC"),
                                            length=2,by=argv$time_bnds_string)),
                    format="%Y%m%d%H%M",tz="GMT"),dim=c(1,2))
   out<-write_dotnc(grid.list=r.list,

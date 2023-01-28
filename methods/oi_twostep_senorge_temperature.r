@@ -15,7 +15,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   y_env$super_ya  <- list()
   y_env$centroids <- list()
 
-  if (argv$twostep_superobbing) {
+  if (argv$oi2step_superobbing) {
     # not yet implemented
     y_env$super_yo$x     <- y_env$yo$x
     y_env$super_yo$y     <- y_env$yo$y
@@ -35,7 +35,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   if (env$cv_mode | env$cv_mode_random) do_cv <- TRUE
   do_xa <- FALSE
   if ( !is.na( argv$off_x)) do_xa <- TRUE
-  do_ya <- argv$twostep_superobbing
+  do_ya <- argv$oi2step_superobbing
 
   cat(paste("Perform analysis over observation points is always TRUE\n"))
   cat(paste("(but if superobbing is requested then we need to perform analysis over actual observation points. "))
@@ -150,11 +150,6 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
                       SIMPLIFY=T))
   }
   y_env$centroids$vert_prof <- res
-
-  # NOTE: move to argparser
-  argv$oi2step.bg_blending_deltam <- 10000
-  argv$oi2step.bg_blending_corr <- "soar"
-  argv$oi2step.bg_blending_dh <- 100000
 
   # blend at observation points the sub-regional profiles into a regional one
 
@@ -278,7 +273,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
     m <- 0
     env$Xb <- array( data=NA, dim=c(env$ngrid,1))
     while (m <= env$ngrid) {
-      m1 <- m + 1; m2 <- min( c( m + argv$oi2step.bg_blending_deltam, env$ngrid))
+      m1 <- m + 1; m2 <- min( c( m + argv$oi2step.loop_deltam, env$ngrid))
       envtmp$x <- env$xgrid[env$mask][m1:m2]
       envtmp$y <- env$ygrid[env$mask][m1:m2]
       envtmp$z <- getValues(env$rdem)[env$mask][m1:m2]
@@ -308,7 +303,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
       # save results in background data structure
       env$Xb[m1:m2,1] <- res
       # next bunch of gridpoints
-      m <- m + argv$oi2step.bg_blending_deltam
+      m <- m + argv$oi2step.loop_deltam
     } # end loop over gridpoints
   
     cat( paste( "range(xb) (min max, degC)=",
@@ -322,14 +317,6 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
   if (do_ya) envtmp$dh_yaobs <- rep( 60000, y_env$yo$n) 
   if (do_cv) envtmp$dh_cvobs <- rep( 60000, y_env$yov$n)
   if (do_xa) envtmp$dh_grid  <- rep( 60000, env$ngrid)
-
-  # NOTE: move to argparser
-  argv$oi2step.loop_deltam <- 10000
-  argv$oi2step.analysis_dz <- c(800,600,400,200)
-  argv$oi2step.analysis_eps2 <- c(0.5,0.5,0.5,0.25)
-  argv$oi2step.analysis_lafmin <- 0 
-  argv$oi2step.analysis_nclose <- 50
-  argv$oi2step.analysis_corr <- c("soar","gaussian","linear")
 
   # Analysis 
   cat("+--------------------------------------------------------------+\n")
@@ -547,7 +534,6 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
     }
   } # end loop over elevation decorellation parameters
 
-  save(file="tmp.rdata",envtmp,y_env,res,env,argv,fg_env)
   # save special results for Output
   if (do_xa) {
 
@@ -564,6 +550,7 @@ oi_twostep_senorge_temperature <- function( argv, y_env, env) {
     fg_env$ixs <- 1
     fg_env$ixf <- 1
     fg_env$ixe <- 1
+    fg_env$fg[[1]] <- list()
     fg_env$fg[[1]]$r_main <- env$rmaster
     fg_env$fg[[1]]$r_main[] <- NA
     fg_env$fg[[1]]$r_main[env$mask] <- env$Xb[,1]

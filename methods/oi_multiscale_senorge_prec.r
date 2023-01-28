@@ -33,7 +33,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
       envtmp$obs_y <- y_env$yo$y
       # run OI gridpoint by gridpoint
       if (!is.na(argv$cores)) {
-        res <- t( mcmapply( enoi_basicFaster_gridpoint_by_gridpoint,
+        res <- t( mcmapply( oi_senorge_precipitation_gridpoint_by_gridpoint,
                             1:envtmp$m_dim,
                             mc.cores=argv$cores,
                             SIMPLIFY=T,
@@ -42,7 +42,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
                                              idi=F)))
       # no-multicores
       } else {
-        res <- t( mapply( enoi_basicFaster_gridpoint_by_gridpoint,
+        res <- t( mapply( oi_senorge_precipitation_gridpoint_by_gridpoint,
                           1:envtmp$m_dim,
                           SIMPLIFY=T,
                           MoreArgs = list( corr=argv$corrfun, 
@@ -173,7 +173,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
       envtmp$SRinv_di <- crossprod( envtmp$SRinv, envtmp$di)
       # run OI gridpoint by gridpoint
       if (!is.na(argv$cores)) {
-        res <- t( mcmapply( enoi_basicFaster_gridpoint_by_gridpoint,
+        res <- t( mcmapply( oi_senorge_precipitation_gridpoint_by_gridpoint,
                             1:envtmp$m_dim,
                             mc.cores=argv$cores,
                             SIMPLIFY=T,
@@ -183,7 +183,7 @@ oi_multiscale_senorge_prec <- function( argv, y_env, fg_env, env) {
                                              idi=F)))
       # no-multicores
       } else {
-        res <- t( mapply( enoi_basicFaster_gridpoint_by_gridpoint,
+        res <- t( mapply( oi_senorge_precipitation_gridpoint_by_gridpoint,
                           1:envtmp$m_dim,
                           SIMPLIFY=T,
                           MoreArgs = list( corr=argv$corrfun, 
