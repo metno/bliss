@@ -20,8 +20,8 @@ if ( argv$mode == "oi_multiscale_senorge_prec") {
   cat("chosen mode is Hybrid Local Ensemble Transform Kalman Filter\n")
 } else if ( argv$mode == "letkf") {
   cat("chosen mode is Local Ensemble Transform Kalman Filter\n")
-} else if ( argv$mode == "OI_Bratseth") {
-  cat("chosen mode is OI_Bratseth\n")
+} else if ( argv$mode == "successivecorrections") {
+  cat("chosen mode is Successive Corrections\n")
 } else if ( argv$mode == "oi") {
   cat("chosen mode is oi\n")
 } else if ( argv$mode == "ensi") {

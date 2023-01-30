@@ -91,7 +91,7 @@ p <- add_argument(p, "--oi2step_superobbing",
 #------------------------------------------------------------------------------
 # statistical interpolation mode
 p <- add_argument(p, "--mode",
-                  help="statistical interpolation scheme (\"rasterize\",\"oi_multiscale_senorge_prec\",\"oi_twostep_senorge_temperature\",\"OI_firstguess\",\"SC_Barnes\",\"OI_Bratseth\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
+                  help="statistical interpolation scheme (\"rasterize\",\"oi_multiscale_senorge_prec\",\"oi_twostep_senorge_temperature\",\"successivecorrections\",\"ensi\",\"ensigap\", \"corensi\", \"oi\")",
                   type="character",
                   default="none")
 #------------------------------------------------------------------------------
@@ -213,6 +213,10 @@ p <- add_argument(p, "--eps2",
 p <- add_argument(p, "--use_relativeAnomalies",
                   help="use relative anomalies (observation/background)",
                   flag=T)
+p <- add_argument(p, "--nSCloops",
+                  help="number of loops used in successive corrections",
+                  type="integer",
+                  default=100)
 #------------------------------------------------------------------------------
 # MSA
 p <- add_argument(p, "--msa_ididense",
@@ -258,15 +262,6 @@ p <- add_argument(p, "--rasterize_q",
                   nargs=Inf)
 #------------------------------------------------------------------------------
 # OI shared
-# OI_multiscale / OI_firstguess parameters
-p <- add_argument(p, "--oimult.eps2_idi",
-                  help="OI multiscale, optional, eps2 for the IDI",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--oimult.Dh_idi",
-                  help="OI multiscale, optional, horizontal de-corellation length scale for IDI (km)",
-                  type="numeric",
-                  default=NULL)
 # NOTE: ovarc is somewhat equivalent to oifg.eps2_r...
 p <- add_argument(p, "--ovarc",
                   help="observation error variance correction factor",
@@ -283,30 +278,6 @@ p <- add_argument(p, "--prId.exclude",
                   type="numeric",
                   default=NULL,
                   nargs=Inf)
-# OI_firstguess
-p <- add_argument(p, "--oifg.eps2",
-                  help="eps2 values for \"OI_firstguess\" mode, prId- and observation- dependent",
-                  type="numeric",
-                  default=NULL,
-                  nargs=Inf)
-p <- add_argument(p, "--oifg.eps2_prId",
-                  help="provided Id associated with eps2, NA stands for default",
-                  type="numeric",
-                  default=NULL,
-                  nargs=Inf)
-p <- add_argument(p, "--oifg.eps2_r",
-                  help="threshold for observed value (e.g., two different eps2 for observations [0,1) and [1,1000) is oifg.eps2_r=c(0,1,1000))",
-                  type="numeric",
-                  default=NULL,
-                  nargs=Inf)
-p <- add_argument(p, "--oifg.Dh",
-                  help="horizontal decorrelation lenght for \"OI_firstguess\" mode (km)",
-                  type="numeric",
-                  default=NULL)
-p <- add_argument(p, "--oifg.xta_errvar_smooth",
-                  help="smoothing length for the analysis error variance (m), used only in case of data transformation",
-                  type="numeric",
-                  default=50000)
 
 # additional OI parameters two-step temperature
 # Background parameters
@@ -374,165 +345,6 @@ p <- add_argument(p, "--oi2step.analysis_nclose",
                   help="number of closest observations (to each analysis point) used in the analysis loop",
                   type="integer",
                   default=50)
-#------------------------------------------------------------------------------
-# OI_Bratseth
-p <- add_argument(p, "--oibr.nSCloops",
-                  help="number of Successive Corrections loops (\"OI_Bratset\")",
-                  type="numeric",
-                  default=10)
-p <- add_argument(p, "--oibr.dh",
-                  help="horizontal decorellation length scale (m) (\"OI_Bratset\")",
-                  type="numeric",
-                  default=10000)
-p <- add_argument(p, "--oibr.delta_hor",
-                  help="horizontal displacement (m) used for adaptive estimation of dh (\"OI_Bratset\")",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--oibr.box_o_nearest_halfwidth",
-                  help="search neighbours within a box (m) (\"OI_Bratset\")",
-                  type="numeric",
-                  default=200000)
-p <- add_argument(p, "--oibr.dz",
-                  help="vertical decorellation length scale (m) (\"OI_Bratset\")",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--oibr.lafmin",
-                  help="land-area fraction minimum (\"OI_Bratset\")",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--oibr.dh_adaptive",
-                  help="adaptive estimation of dh (\"OI_Bratset\")",
-                  flag=T)
-p <- add_argument(p, "--oibr.dh_adaptive_min",
-                  help="minimum allowed distance (m) (\"OI_Bratset\")",
-                  type="numeric",
-                  default=0)
-p <- add_argument(p, "--oibr.dh_adaptive_max",
-                  help="maximum allowed distance (m) (\"OI_Bratset\")",
-                  type="numeric",
-                  default=0)
-#------------------------------------------------------------------------------
-# hyletkf
-p <- add_argument(p, "--hyletkf.eps2_prec_default",
-                  help="LETKF default value for the ratio between obs error variance and backg error variance in case of precipitation",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--hyletkf.eps2_noprec_default",
-                  help="LETKF default value for the ratio between obs error variance and backg error variance in case of no-precipitation",
-                  type="numeric",
-                  default=0.05)
-p <- add_argument(p, "--hyletkf.Dh",
-                  help="horizontal de-correlation length for the LETKF localization",
-                  type="numeric",
-                  default=10)
-p <- add_argument(p, "--hyletkf.pmax",
-                  help="maximum number of observations in the neighbourhood of a gridpoint for LETKF",
-                  type="numeric",
-                  default=200)
-p <- add_argument(p, "--hyletkf.sigma2_min",
-                  help="minimum allowed background variance (in the transformed space) for LETKF",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--hyletkf.eps2_prId",
-                  help="provider identifier corresponding to the specified ratio between obs error variance and backg error variance (LETKF)",
-                  type="numeric",
-                  nargs=Inf,
-                  default=NULL)
-p <- add_argument(p, "--hyletkf.eps2",
-                  help="observation-provider dependent ratio between obs error variance and backg error variance (LETKF)",
-                  type="numeric",
-                  nargs=Inf,
-                  default=NULL)
-p <- add_argument(p, "--hyletkf.Dh_oi",
-                  help="horizontal de-correlation length for the OI step of the HyLETKF (km)",
-                  type="numeric",
-                  default=10)
-p <- add_argument(p, "--hyletkf.eps2_oi",
-                  help="ratio between obs error variance and backg error variance for the OI step of the HyLETKF",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--hyletkf.rloc_min",
-                  help="use an observation in LETKF only if the localization weight is greater than the specified minimum value",
-                  type="numeric",
-                  default=0.0013)
-#------------------------------------------------------------------------------
-# ensip - ensemble-based statistical interpolation of precipitation
-p <- add_argument(p, "--ensip.pmax",
-                  help="max number of neighbouring observations to consider",
-                  type="numeric",
-                  default=200)
-p <- add_argument(p, "--ensip.rloc_min",
-                  help="do not use observations if they are too far from a location. pmax is still they strongest constrain. Set this parameter to 0 to use always pmax observations.",
-                  type="numeric",
-                  default=0)
-p <- add_argument(p, "--ensip.henoi_par_notadaptive",
-                  help="if true use the default values for henoi parameters",
-                  flag=T)
-p <- add_argument(p, "--ensip.henoi_Dh_loc",
-                  help="Reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
-                  type="numeric",
-                  default=20000)
-p <- add_argument(p, "--ensip.henoi_Dh",
-                  help="Reference lenght scale for static background error covariance matrix (m, or same unit as grid/observation coords).",
-                  type="numeric",
-                  default=20000)
-p <- add_argument(p, "--ensip.henoi_eps2",
-                  help="eps2",
-                  type="numeric",
-                  default=0.1)
-p <- add_argument(p, "--ensip.henoi_alpha",
-                  help="alpha",
-                  type="numeric",
-                  default=0.5)
-p <- add_argument(p, "--ensip.var_o_coeff",
-                  help="coefficient(s) for the observation error variance (default)",
-                  type="numeric",
-                  default=1)
-p <- add_argument(p, "--ensip.var_o_coeff_special",
-                  help="coefficient(s) for the observation error variance (special)",
-                  type="numeric",
-                  nargs=Inf,
-                  default=NA)
-p <- add_argument(p, "--ensip.var_o_coeff_special_prId",
-                  help="coefficient(s) for the observation error variance (special, Id)",
-                  type="numeric",
-                  nargs=Inf,
-                  default=NA)
-p <- add_argument(p, "--ensip.henoi_reflen_min",
-                  help="HEnOI adaptive parameter estimation (Dh and Dh_loc are set to the same value). Minimum value for the reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
-                  type="numeric",
-                  default=3000)
-p <- add_argument(p, "--ensip.henoi_reflen_max",
-                  help="HEnOI adaptive parameter estimation (Dh and Dh_loc are set to the same value). Maximum value for the reference lenght scale for localization of ensemble-based background error covariance matrix (m, or same unit as grid/observation coords).",
-                  type="numeric",
-                  default=10000)
-p <- add_argument(p, "--ensip.henoi_reflen_aggfact",
-                  help="HEnOI adaptive parameter estimation. The estimation needs a coarser grid and this is the aggregation factor applied to the original grid (number of grid cells).",
-                  type="numeric",
-                  default=5)
-p <- add_argument(p, "--ensip.henoi_reflen_k",
-                  help="HEnOI adaptive parameter estimation. The reflen is estimated for each grid point on a coarser grid (\"henoi_reflen_aggfact\") such that it coincides with the distance to the closest \"k\" observations, provided that is within a predetermined range (\"ensip.henoi_reflen_min\",\"ensip.henoi_reflen_max\") (k units = number of observations).",
-                  type="numeric",
-                  default=10)
-p <- add_argument(p, "--ensip.no_data_transf",
-                  help="do not transform data",
-                  flag=T)
-p <- add_argument(p, "--ensip.shape",
-                  help="Gamma distribution shape parameter",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--ensip.rate",
-                  help="Gamma distribution rate parameter",
-                  type="numeric",
-                  default=NA)
-p <- add_argument(p, "--ensip.henoi_statcov_backg",
-                  help="HEnOI static error covariance matrix function (exp or gauss)",
-                  type="character",
-                  default="gauss")
-p <- add_argument(p, "--ensip.backg_best",
-                  help="strategy to get the best background",
-                  type="character",
-                  default="mean")
 #------------------------------------------------------------------------------
 # paths
 p <- add_argument(p, "--path2src",

@@ -191,10 +191,6 @@ cat("+-------------------------------------------------------+\nAnalysis\n")
 if (argv$mode=="rasterize") { # still to test
   res <- rasterize_with_bliss( argv, y_env, env)
 #..............................................................................
-# ===> OI with deterministic background  <===
-} else if (argv$mode=="OI_firstguess") {
-  source( file.path( bliss_mod_path, "main_oi_fg.r"))
-#..............................................................................
 # ===>  OI multiscale (without background)   <===
 } else if (argv$mode=="oi_multiscale_senorge_prec") {
   envtmp <- new.env( parent = emptyenv())
@@ -207,13 +203,16 @@ if (argv$mode=="rasterize") { # still to test
   res <- oi_twostep_senorge_temperature( argv, y_env, env)
   rm(envtmp)
 #..............................................................................
-# ===>  OI Bratseth, Brathset's iterative method for OI (with background)  <===
-} else if (argv$mode=="OI_Bratseth") {
-  source( file.path( bliss_mod_path, "main_oi_bratseth.r"))
-#..............................................................................
-# ===>  SCB, Successive Correction Barnes' scheme (with background)  <===
-} else if (argv$mode=="SC_Barnes") {
-  source( file.path( bliss_mod_path, "main_sc_barnes.r"))
+# ===>  Bratseth statistical interpolation, Brathset's iterative method (with background)  <===
+# NOTE: still to test
+} else if (argv$mode=="successivecorrections") {
+  envtmp <- new.env( parent = emptyenv())
+  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  rm(envtmp)
+  res <- preproc_selensemble( argv, fg_env, env)
+  envtmp <- new.env( parent = emptyenv())
+  res <- sc_driver( argv, y_env, fg_env, env)
+  rm(envtmp)
 #..............................................................................
 # ===>  OI applied to an Ensemble (static covariances) <===
 } else if (argv$mode=="oi") {
