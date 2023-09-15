@@ -50,7 +50,6 @@ corr2d <- function( values, par, label, values_as_globalVar=F,
     } # end if
 
   } # end for
-
   res
 }
 

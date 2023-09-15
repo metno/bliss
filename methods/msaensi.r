@@ -6,6 +6,13 @@ msaensi <- function( argv, y_env, fg_env, env) {
 
   t0a <- Sys.time()
 
+  env$Xa <- array( data=NA, dim=c( ncell(env$rmaster), env$k_dim))
+  y_env$yo$value_a <- array( data=NA, dim=c( y_env$yo$n, env$k_dim))
+  if (env$cv_mode | env$cv_mode_random) {
+    y_env$yov$value_a <- array( data=NA, dim=c( y_env$yov$n, env$k_dim))
+  }
+return()
+
   cat( "-- MSA-EnSI --\n")
 
   # number of background ensemble members

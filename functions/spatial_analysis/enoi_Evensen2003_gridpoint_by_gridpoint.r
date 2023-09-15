@@ -41,12 +41,12 @@ enoi_Evensen2003_gridpoint_by_gridpoint <- function( i,
     eps2 <- envtmp$eps2[i]
 
     # localization
-    loc1d <- corr1d( dist, dh_loc, corr)
-    loc2d <- corr2d( cbind(x,y), dh_loc, corr)
+    loc1d <- corr1d( values=dist, par=dh_loc, label=corr)
+    loc2d <- corr2d( values=outer(x,x,FUN="-")**2.+outer(y,y,FUN="-")**2., par=dh_loc, label=corr)
 
     # static correlations
-    rloc <- corr1d( dist, dh, corr)
-    Cyy_s <- corr2d( cbind(x,y), dh, corr)
+    rloc <- corr1d( values=dist, par=dh, label=corr)
+    Cyy_s <- corr2d( values=outer(x,x,FUN="-")**2.+outer(y,y,FUN="-")**2., par=dh, label=corr)
 
     # combine static and dynamic correlations
     Cxy <- alpha * rloc + (1-alpha) * loc1d * tcrossprod( Zi, Yi)

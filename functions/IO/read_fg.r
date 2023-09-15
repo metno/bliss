@@ -75,7 +75,7 @@ read_fg <- function( argv, fg_env, u_env, env) {
                                      adjfact=u_env$uo[[1]]$main.cfact,
                                      adjval=u_env$uo[[1]]$main.offset,
                                      rmaster = env$rmaster,
-                                     grid_master.proj4 = as.character( env$rmaster),
+#                                     grid_master.proj4 = as.character( env$rmaster),
                                      nc.varname_lat ="none",
                                      nc.varname_lon ="none",
                                      out.dim_ll = list( ndim  = NA,

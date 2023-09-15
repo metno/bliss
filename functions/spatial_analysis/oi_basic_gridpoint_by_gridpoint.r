@@ -60,8 +60,8 @@ oi_basic_gridpoint_by_gridpoint<-function( i,
     eps2 <- envtmp$eps2[i]
 
     # compute correlations
-    rloc <- corr1d( dist, dh, corr) 
-    S    <- corr2d( cbind(x,y), dh, corr)
+    rloc <- corr1d( values=dist, par=dh, label=corr)
+    S    <- corr2d( values=outer(x,x,FUN="-")**2.+outer(y,y,FUN="-")**2., par=dh, label=corr)
 
     # OI equations
     SRinv <- chol2inv( chol( (S+diag(x=eps2,p))))
