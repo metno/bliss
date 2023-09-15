@@ -283,7 +283,6 @@ if ( !is.na( argv$off_uenv_rdata))  write_rdata( file=argv$off_uenv_rdata,  argu
 
 #
 # -- netcdf - gridded output --
-save.image(file="tmp.rdata")
 if ( !is.na( argv$off_x))  write_off_x_nc(  argv,  y_env, fg_env, u_env, env) 
 if ( !is.na( argv$off_xb)) write_off_xb_nc( argv,  y_env, fg_env, u_env, env) 
 
