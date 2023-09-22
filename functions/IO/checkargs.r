@@ -34,6 +34,8 @@ if ( argv$mode == "oi_multiscale_senorge_prec") {
   cat("chosen mode is msa\n")
 } else if ( argv$mode == "msaensi") {
   cat("chosen mode is msaensi\n")
+} else if ( argv$mode == "msaensi_dev") {
+  cat("chosen mode is msaensi_dev\n")
 } else if ( argv$mode == "rasterize") {
   cat("chosen mode is rasterize\n")
 } else {

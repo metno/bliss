@@ -1118,7 +1118,7 @@ if ( !is.na( argv$uo.filename)) {
 #-----------------------------------------------------------------------------
 # set variables of the env environment
 y_env$rain <- NA
-if ( argv$mode %in% c( "corensi", "msa", "msaensi", "oi", "ensi")) {
+if ( argv$mode %in% c( "corensi", "msa", "msaensi_dev", "msaensi", "oi", "ensi")) {
   env$k_dim <- argv$k_dim
   u_env$rain <- argv$rain_uo
   y_env$rain <- argv$rain_yo

@@ -1,5 +1,5 @@
 #+
-msaensi <- function( argv, y_env, fg_env, env) {
+msaensi_dev <- function( argv, y_env, fg_env, env) {
 #------------------------------------------------------------------------------
   library(waveslim)
   library(smoothie)
@@ -9,7 +9,212 @@ msaensi <- function( argv, y_env, fg_env, env) {
   cat( "-- MSA-EnSI --\n")
 
   # number of background ensemble members
-  if ( ( nfg <- length( fg_env$ixs)) == 0) return( FALSE)
+#  if ( ( nfg <- length( fg_env$ixs)) == 0) return( FALSE)
+
+  # observations
+  r <- env$rmaster
+  
+  m_dim <- ncell(r)
+  xy <- xyFromCell( r, 1:ncell(r))
+  envtmp$m_dim <- m_dim
+  envtmp$x <- xy[,1]
+  envtmp$y <- xy[,2]
+#argv$mergeobs_eps2 <- 0.1
+#  envtmp$eps2 <- rep( argv$mergeobs_eps2, m_dim)
+#  envtmp$obs_x <- y_env$yo$x
+#  envtmp$obs_y <- y_env$yo$y
+  cat( paste( "         number of grid points, m dim >", m_dim, "\n"))
+  cat( paste( "number of in-situ observations, p dim >", y_env$yo$n, "\n"))
+
+  # rasterize observations
+  robs_on_master <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=env$rmaster, field=y_env$yo$value, fun=mean, na.rm=T )
+#  ix <- which( !is.na(getValues(raux)))
+#  envtmp$obs_value <- getValues(raux)[ix]
+#  envtmp$obs_x <- xy[ix,1]
+#  envtmp$obs_y <- xy[ix,2]
+#  envtmp$obs_n <- length(ix)
+#  envtmp$eps2 <- rep( argv$mergeobs_eps2, m_dim)
+#  cat( paste( "number of rasterized observations, p dim >", envtmp$obs_n, "\n"))
+  
+  # Loop over ensembles
+  envtmp$Eb  <- array( data=NA, dim=c( ncell(env$rmaster), env$k_dim))
+  ra <- env$rmaster; ra[] <- NA
+  rb <- env$rmaster; rb[] <- NA
+
+#  for (e in 1:env$k_dim) {
+  for (e in 1:env$k_dim) {
+    first <- T
+    eps2 <- 0.1
+    dh_vec <- c(100000,50000,10000,5000)
+    pmax_vec <- c(20,20,20,20)
+    for (j in 1:length(dh_vec)) {
+      cat( paste("===========================================================\n"))
+      dh <- dh_vec[j]
+      pmax <- pmax_vec[j]
+      cat( paste("dh pmax",dh,pmax,"\n"))
+      fact <- ceiling( (dh / 3) / mean(res(env$rmaster)))
+      if (fact == 1) {
+        raux_agg <- env$rmaster 
+      } else {
+        raux_agg <- aggregate(env$rmaster, fact=fact, expand=T)
+      }
+      raux <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=raux_agg, 
+#                         field=y_env$yo$value, fun=mean, na.rm=T )
+                         field=y_env$yo$value, fun=max, na.rm=T )
+      ix <- which( !is.na(getValues(raux)))
+      xy <- xyFromCell( raux, 1:ncell(raux))
+      envtmp$obs_value <- getValues(raux)[ix]
+      envtmp$obs_x <- xy[ix,1]
+      envtmp$obs_y <- xy[ix,2]
+      envtmp$obs_n <- length(ix)
+      cat( paste( "number of rasterized observations, p dim >", envtmp$obs_n, "\n"))
+      if (first) {
+        rb <- subset( fg_env$fg[[1]]$r_main, subset=e)
+        first <- F
+      } else {
+        rb <- rbmod
+        rb[is.na(rb)] <- 0
+        rb[rb<0] <- 0
+      }
+      envtmp$xb <- getValues(rb)
+      envtmp$yb <- extract( rb, cbind(envtmp$obs_x, envtmp$obs_y))
+      envtmp$d  <- envtmp$obs_value - envtmp$yb
+      m_step <- 100000
+      xa <- getValues(ra); xa[] <- NA
+      for (i in 1:ceiling(m_dim/m_step)) {
+        m1 <- (i-1) * m_step + 1
+        m2 <- min( c( i * m_step, m_dim))
+        envtmp$m_dim <- m2 - m1 + 1
+        envtmp$eps2 <- rep( eps2, envtmp$m_dim)
+
+        xy <- xyFromCell( r, m1:m2)
+        envtmp$x <- xy[,1]
+        envtmp$y <- xy[,2]
+        envtmp$xb <- getValues(rb)[m1:m2]
+
+        cat( paste("-----------------------------------------------------------\n"))
+        cat( paste("m1 m2 range / m_dim",m1,m2,envtmp$m_dim,"/",m_dim,"\n"))
+        t00 <- Sys.time()
+        envtmp$nn2 <- nn2( cbind( envtmp$obs_x, envtmp$obs_y), 
+                           query = cbind( envtmp$x, envtmp$y), 
+                           k = pmax, searchtype = "radius", 
+                           radius = (7*dh))
+        t11 <- Sys.time()
+        cat( paste( "nn2 total time", round(t11-t00,1), attr(t11-t00,"unit"), "\n"))
+        t00 <- Sys.time()
+        # run oi gridpoint by gridpoint (idi the first time only)
+        if (!is.na(argv$cores)) {
+          res <- t( mcmapply( oi_basic_gridpoint_by_gridpoint,
+                              1:envtmp$m_dim,
+                              mc.cores=argv$cores,
+                              SIMPLIFY=T,
+                              MoreArgs=list( corr=argv$mergeobs_corrfun,
+                                             dh=dh,
+                                             idi=F,
+                                             uncertainty=F)))
+        # no-multicores
+        } else {
+          res <- t( mapply( oi_basic_gridpoint_by_gridpoint,
+                            1:envtmp$m_dim,
+                            SIMPLIFY=T,
+                            MoreArgs=list( corr=argv$mergeobs_corrfun,
+                                           dh=dh,
+                                           idi=F,
+                                           uncertainty=F)))
+        }
+        t11 <- Sys.time()
+        cat( paste( "oi total time", round(t11-t00,1), attr(t11-t00,"unit"), "\n"))
+        res[,1][res[,1]<0] <- 0
+        xa[m1:m2] <- res[,1]
+      }
+      ra[] <- xa
+      ra_norm <- ra; ra_norm[] <- xa / max(xa)
+      rb_norm <- rb; rb_norm[] <- getValues(rb) / max(getValues(rb))
+
+      t00 <- Sys.time()
+      of_nlevel <- min( c( floor(log2(nrow(env$rmaster))), floor(log2(ncol(env$rmaster)))))
+      if ( floor(log2(nrow(env$rmaster))) == of_nlevel & 
+           floor(log2(ncol(env$rmaster))) == of_nlevel) 
+        of_nlevel <- of_nlevel - 1
+#      of <- optical_flow_HS( rb_norm, ra_norm, nlevel=of_nlevel, 
+      of <- optical_flow_HS( rb, ra, nlevel=of_nlevel, 
+                             niter=100, w1=100, w2=0, tol=0.00001)
+      t11 <- Sys.time()
+      cat( paste( "optflow total time", round(t11-t00,1), attr(t11-t00,"unit"), "\n"))
+      u <- env$rmaster
+      v <- env$rmaster
+#    u[] <- t( matrix( data=as.vector(of$u[,,1]), 
+#              ncol=nrow(env$rmaster), nrow=ncol(env$rmaster)))
+#    v[] <- t( matrix( data=as.vector(of$v[,,1]), 
+#              ncol=nrow(env$rmaster), nrow=ncol(env$rmaster)))
+#    rbmod <- warp( rb, -u, -v, method="simple")
+      rbmod <- warp( rb, -of$u, -of$v, method="simple")
+save(file=paste0("tmp_e",formatC(e,width=2,flag="0"),"_j",j,".rdata"),argv,raux,ra,rb,ra_norm,rb_norm,res,y_env,xa,envtmp,env,of,u,v,rbmod,robs_on_master)
+    }
+  }
+q()
+source("~/projects/bliss/functions/optflow/optflow_util.r")
+###
+save(file=paste0("of_",j,"_",formatC(e,width=2,flag="0"),".rdata"),of,ra,rb)
+
+e<-"03"; load(paste0("tmp_e",e,"_j1.rdata")); rb1<-rb; load(paste0("tmp_e",e,"_j4.rdata"));image(rb1,breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64),col=c("gray",rev(rainbow(9))))
+image(rbmod,breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64),col=c("gray",rev(rainbow(9))))
+breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64); col=c("gray",rev(rainbow(9))); for (i in 1:length(col)) { ixx<-which(envtmp$obs_value>=breaks[i] & envtmp$obs_value<breaks[i+1]); points(envtmp$obs_x[ixx],envtmp$obs_y[ixx],pch=21,bg=col[i])}
+
+
+#        print( paste( "j e of_par",j,e,of_par$par[1],of_par$par[2],of_par$par[3],
+#                      round(range(getValues(of$u))[1],0),round(range(getValues(of$u))[2],0),
+#                      round(range(getValues(of$v))[1],0),round(range(getValues(of$v))[2],0)))
+      # Align smaller scales
+      of_u <- of$u
+      of_v <- of$v
+      rm(of)
+      # do not align when idi is 0
+      # note: idi is calculated by mergeobs
+      of_u[mrobs$idi[[j]]==0] <- 0
+      of_v[mrobs$idi[[j]]==0] <- 0
+      # Loop over scales
+      for (jj in j:2) {
+        jjw <- jj-1
+#        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="bilinear")
+#        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="bilinear")
+        of_u <- resample( of_u, mrtree$raster[[jj]]$r, method="ngb")
+        of_v <- resample( of_v, mrtree$raster[[jj]]$r, method="ngb")
+
+###
+save(file=paste0("of_",j,"_",formatC(e,width=2,flag="0"),"_",jj,".rdata"),of_u,of_v)
+
+        rb_finer <- mrtree$raster[[jj]]$r
+        for (ww in 1:3) {
+          rb_finer[] <- dwt[[e]][[3*(jjw-1)+ww]]
+#          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="bilinear")
+          rbmod_finer <- warp( rb_finer, -of_u, -of_v, method="simple")
+          if ( any( is.na(getValues(rbmod_finer)))) 
+            rbmod_finer[is.na(rbmod_finer)] <- 0
+          dwt[[e]][[3*(jjw-1)+ww]][] <- as.matrix(rbmod_finer)
+        }
+      }  # END - Loop over scales
+      rm(rb_finer,rbmod_finer)
+      r <- mrtree$raster[[j]]$r  
+      r[] <- Ea[,e] * 2**jw
+      dwt[[e]][[3*jw+1]][] <- as.matrix(r)
+      rm(r)
+###
+save(file=paste0("dwt_",j,"_",formatC(e,width=2,flag="0"),".rdata"),dwt)
+#      rm( rb_finer, of_u, of_v, rbmod_finer)
+#e<-1;Eaj <- idwt.2d( dwt[[e]]);r <- mrtree$raster[[1]]$r;r[] <- array(data=as.matrix(Eaj),dim=c(sqrt(mrtree$m_dim[[1]]),sqrt(mrtree$m_dim[[1]])));r[r<0.1]<-0;image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
+#s<-r;s[]<-mrbkg$data[[1]]$Eor[,e]; image(s,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
+#t<-r;t[]<-mrobs$idi[[1]]; image(t,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4))))
+#png(file="test.png",width=1200,height=1200)
+#image(r,breaks=c(-100,0,0.1,1,2,4,8),col=c("beige","gray",rev(rainbow(4)))) 
+
+#save(file="tmp.rdata",r,env,dwt,mrbkg,envtmp,j,jw,mrtree,mrobs,argv,y_env)
+#dev.off()
+#q()
+#    } # END - Loop over ensembles
+
+q()
+
 
   # set dyadic domain
   xmn <- as.numeric(argv$grid_master.x1) - as.numeric(argv$grid_master.resx)/2
@@ -182,7 +387,7 @@ save(file=paste0("envtmp_before_oi_",j,".rdata"),envtmp)
     envtmp$eps2 <- rep( argv$msa_eps2, envtmp$m_dim) 
     envtmp$nn2 <- nn2( cbind(mrobs$x[[j]],mrobs$y[[j]]), 
                        query = cbind(mrtree$x[[j]],mrtree$y[[j]]), 
-                       k = min( c(argv$pmax,mrobs$d_dim[[j]])), 
+                       k = min( c(pmax,mrobs$d_dim[[j]])), 
                        searchtype = "radius", 
                        radius = (7*mrtree$mean_res[[j]]))
     # run EnKF/EnOI gridpoint by gridpoint
