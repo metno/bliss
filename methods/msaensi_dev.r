@@ -47,12 +47,16 @@ msaensi_dev <- function( argv, y_env, fg_env, env) {
     eps2 <- 0.1
     dh_vec <- c(100000,50000,10000,5000)
     pmax_vec <- c(20,20,20,20)
+#    dh_vec <- c(10000,5000)
+#    pmax_vec <- c(20,20)
+    cat( paste("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"))
+    cat( paste("ensemble",e,"\n"))
     for (j in 1:length(dh_vec)) {
       cat( paste("===========================================================\n"))
       dh <- dh_vec[j]
       pmax <- pmax_vec[j]
-      cat( paste("dh pmax",dh,pmax,"\n"))
       fact <- ceiling( (dh / 3) / mean(res(env$rmaster)))
+      cat( paste("dh pmax fact",dh,pmax,fact,"\n"))
       if (fact == 1) {
         raux_agg <- env$rmaster 
       } else {
@@ -64,8 +68,14 @@ msaensi_dev <- function( argv, y_env, fg_env, env) {
       ix <- which( !is.na(getValues(raux)))
       xy <- xyFromCell( raux, 1:ncell(raux))
       envtmp$obs_value <- getValues(raux)[ix]
-      envtmp$obs_x <- xy[ix,1]
-      envtmp$obs_y <- xy[ix,2]
+#      envtmp$obs_x <- xy[ix,1]
+#      envtmp$obs_y <- xy[ix,2]
+      raux_x <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=raux_agg, 
+                           field=y_env$yo$x, fun=mean, na.rm=T )
+      envtmp$obs_x <- getValues(raux_x)[ix]
+      raux_y <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=raux_agg, 
+                           field=y_env$yo$y, fun=mean, na.rm=T )
+      envtmp$obs_y <- getValues(raux_y)[ix]
       envtmp$obs_n <- length(ix)
       cat( paste( "number of rasterized observations, p dim >", envtmp$obs_n, "\n"))
       if (first) {
@@ -136,10 +146,12 @@ msaensi_dev <- function( argv, y_env, fg_env, env) {
       if ( floor(log2(nrow(env$rmaster))) == of_nlevel & 
            floor(log2(ncol(env$rmaster))) == of_nlevel) 
         of_nlevel <- of_nlevel - 1
+      of_nlevel <- min( 1+c( ceiling(max(c(3,log2(fact)))), of_nlevel))
 #      of <- optical_flow_HS( rb_norm, ra_norm, nlevel=of_nlevel, 
       of <- optical_flow_HS( rb, ra, nlevel=of_nlevel, 
                              niter=100, w1=100, w2=0, tol=0.00001)
       t11 <- Sys.time()
+      cat( paste( "optflow of_nlevel", of_nlevel, "\n"))
       cat( paste( "optflow total time", round(t11-t00,1), attr(t11-t00,"unit"), "\n"))
       u <- env$rmaster
       v <- env$rmaster
@@ -160,6 +172,32 @@ save(file=paste0("of_",j,"_",formatC(e,width=2,flag="0"),".rdata"),of,ra,rb)
 e<-"03"; load(paste0("tmp_e",e,"_j1.rdata")); rb1<-rb; load(paste0("tmp_e",e,"_j4.rdata"));image(rb1,breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64),col=c("gray",rev(rainbow(9))))
 image(rbmod,breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64),col=c("gray",rev(rainbow(9))))
 breaks=c(0,0.1,0.25,0.5,1,2,4,8,16,32,64); col=c("gray",rev(rainbow(9))); for (i in 1:length(col)) { ixx<-which(envtmp$obs_value>=breaks[i] & envtmp$obs_value<breaks[i+1]); points(envtmp$obs_x[ixx],envtmp$obs_y[ixx],pch=21,bg=col[i])}
+
+
+  # Alternative way to find the centroids via clustering (instead of using a coarser grid)
+#  obs_clusters <- kmeans( cbind(y_env$super_yo$x,y_env$super_yo$y), centers=argv$oi2step.bg_centroids_nclusters)
+#  xr <- obs_clusters$centers[,1]
+#  yr <- obs_clusters$centers[,2]
+#  nn2 <- nn2( cbind( y_env$super_yo$x, y_env$super_yo$y), 
+#                     query = cbind( xr, yr), 
+#                     k = argv$oi2step.bg_centroids_nobsmin, 
+#                     searchtype = "radius", 
+#                     radius = argv$oi2step.bg_centroids_buffer)
+#  y_env$centroids$i <- integer(0)
+#  for (i in 1:length(xr)) {
+##    if (length( which(nn2$nn.idx[i,]!=0)) < argv$oi2step.bg_centroids_nobsmin) next
+#    if ( any( nn2$nn.idx[i,] == 0)) next
+#    y_env$centroids$i <- c( y_env$centroids$i, i)
+#  } 
+#  y_env$centroids$n <- length(y_env$centroids$i)
+#
+#  cat(paste("the master grid has been divided in",
+#              argv$oi2step.bg_centroids_nclusters,"clusters\n"))
+#  cat(paste("sub-regional area extensions (length x (m),length y (m))=",
+#        round(res(y_env$centroids$r)[1]),round(res(y_env$centroids$r)[2])),"\n")
+#  cat(paste("reference (horizontal) length scale to weight the sub-regional backgrounds (m)=",round(mean(res(y_env$centroids$r))),"\n"))
+#  cat(paste("# sub-regional centroids", y_env$centroids$n, "\n"))
+
 
 
 #        print( paste( "j e of_par",j,e,of_par$par[1],of_par$par[2],of_par$par[3],
