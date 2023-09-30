@@ -41,6 +41,47 @@ msaensi_dev <- function( argv, y_env, fg_env, env) {
   ra <- env$rmaster; ra[] <- NA
   rb <- env$rmaster; rb[] <- NA
 
+  # structure functions
+  y_env$yo$value[y_env$yo$value>=0.1] <- 1
+  y_env$yo$value[y_env$yo$value< 0.1] <- 0
+  dh_vec <- seq(5000,500000,by=10000)
+  rmse <- array(data=NA,dim=c(length(dh_vec),env$k_dim))
+  for (e in 1:env$k_dim) {
+    rb <- subset( fg_env$fg[[1]]$r_main, subset=e)
+    yb <- extract( rb, cbind(y_env$yo$x,y_env$yo$y))
+    yb[yb>=0.1] <- 1
+    yb[yb< 0.1] <- 0
+#    dist <- sqrt( outer( y_env$yo$x,y_env$yo$x,FUN="-")**2 + outer( y_env$yo$y,y_env$yo$y,FUN="-")**2)
+#save(file="tmp.rdata",yb,y_env,dist)
+    cat( paste("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"))
+    cat( paste("ensemble",e,"\n"))
+    for (j in 1:length(dh_vec)) {
+      cat( paste("===========================================================\n"))
+      dh <- dh_vec[j]
+      fact <- ceiling( (dh / 3) / mean(res(env$rmaster)))
+      cat( paste("dh pmax fact",dh,fact,"\n"))
+      if (fact == 1) {
+        raux_agg <- env$rmaster 
+      } else {
+        raux_agg <- aggregate(env$rmaster, fact=fact, expand=T)
+      }
+      rauxo <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=raux_agg, 
+                         field=y_env$yo$value, fun=mean, na.rm=T )
+      ix <- which( !is.na(getValues(rauxo)))
+      vo <- getValues(rauxo)[ix]
+      rauxb <- rasterize( x=cbind(y_env$yo$x,y_env$yo$y), y=raux_agg, 
+                          field=yb, fun=mean, na.rm=T )
+      ix <- which( !is.na(getValues(rauxb)))
+      vb <- getValues(rauxb)[ix]
+      rmse[j,e] <- sqrt(mean((vo-vb)**2))
+    }
+  }
+save(file="tmp.rdata",rmse,dh_vec)
+ plot(dh_vec,rmse[,1],ylim=c(0,3),col="white"); for (i in 1:30) lines(dh_vec,rmse[,i])
+ plot(dh_vec,rmse[,1],ylim=c(0.1,0.5),col="white"); for (i in 1:30) lines(dh_vec,rmse[,i])
+points(dh_vec,rowMeans(rmse),pch=21,bg="red")
+# try with spatial correlaiton instead of rmse (see Casati's euqation)
+q()
 #  for (e in 1:env$k_dim) {
   for (e in 1:env$k_dim) {
     first <- T
