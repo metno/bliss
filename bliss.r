@@ -251,7 +251,7 @@ if (argv$mode=="rasterize") { # still to test
 # ===>  Multiscale Alignment as a pre-proc for Ensemble Statistical Interpolation  <===
 } else if ( argv$mode == "msa") {
   envtmp <- new.env( parent = emptyenv())
-  res <- preproc_mergeobs( argv, y_env, u_env, env)
+  if (argv$preproc_mergeobs) res <- preproc_mergeobs( argv, y_env, u_env, env)
   rm(envtmp)
   res <- preproc_selensemble( argv, fg_env, env)
   envtmp <- new.env( parent = emptyenv())
@@ -266,14 +266,6 @@ if (argv$mode=="rasterize") { # still to test
   res <- preproc_selensemble( argv, fg_env, env)
   envtmp <- new.env( parent = emptyenv())
   res <- msaensi( argv, y_env, fg_env, env)
-  rm(envtmp)
-} else if ( argv$mode == "msaensi_dev") {
-#  envtmp <- new.env( parent = emptyenv())
-#  res <- preproc_mergeobs( argv, y_env, u_env, env)
-#  rm(envtmp)
-#  res <- preproc_selensemble( argv, fg_env, env)
-  envtmp <- new.env( parent = emptyenv())
-  res <- msaensi_dev( argv, y_env, fg_env, env)
   rm(envtmp)
 } # end if selection among spatial analysis methods
 
