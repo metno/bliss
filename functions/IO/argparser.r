@@ -110,6 +110,10 @@ p <- add_argument(p, "--time_bnds_string",
                   default="none")
 #------------------------------------------------------------------------------
 # preproc - mergeobs
+p <- add_argument(p, "--preproc_mergeobs",
+                  help="preprocess the observations yes/no",
+                  type="logical",
+                  default=F)
 p <- add_argument(p, "--mergeobs_eps2",
                   help="eps2 for mergeobs",
                   type="numeric",
@@ -227,6 +231,38 @@ p <- add_argument(p, "--msa_eps2",
                   help="MSA ratio between observation and background error variances (0.1-1)",
                   type="numeric",
                   default=0.1)
+p <- add_argument(p, "--dh_vec_min",
+                  help="define a sequence of spatial scales, this is the smallest scale",
+                  type="numeric",
+                  default=2500)
+p <- add_argument(p, "--dh_vec_max",
+                  help="define a sequence of spatial scales, this is the largest scale",
+                  type="numeric",
+                  default=200000)
+p <- add_argument(p, "--dh_vec_by",
+                  help="define a sequence of spatial scales, this is the largest scale",
+                  type="numeric",
+                  default=5000)
+p <- add_argument(p, "--dh_r_max",
+                  help="maximum value of the horizontal decorrelation lenght scale used in the Multiscal alignement procedure, analysis step",
+                  type="numeric",
+                  default=10000)
+p <- add_argument(p, "--dh_obs_fact",
+                  help="factor used to optimize calculation times. Given the value of Dh, the grid is defined with resolution of Dh/dh_obs_fact and it is used in the Multiscal alignement procedure, analysis step",
+                  type="numeric",
+                  default=3)
+p <- add_argument(p, "--delta_sbe_mean_r",
+                  help="SBE threshold used to stop the optimization. The score used in the optimization is the SBE computed over the sequence of spatial scales defined by dh_vec_min, dh_vec_max, dh_vec_by. Specifically, the Multiscal alignement optimization stops when the difference between two consecutive optimization iteration is less than delta_sbe_mean_r.",
+                  type="numeric",
+                  default=0.1)
+p <- add_argument(p, "--sbe_filter",
+                  help="number of time steps used to smooth the SBE vector (e.g. 3 means that the SBE used for optimization at the i-th spatial scale is mean(sbe(i-1),sbe(i),sbe(i+1)).",
+                  type="integer",
+                  default=3)
+p <- add_argument(p, "--m_step",
+                  help="The analysis is processed in batches of m_steps points. This parameter can be adjusted to keep memory usage within acceptable limits.",
+                  type="integer",
+                  default=10000)
 #------------------------------------------------------------------------------
 # MSA-EnSI
 p <- add_argument(p, "--msaensi_ididense",

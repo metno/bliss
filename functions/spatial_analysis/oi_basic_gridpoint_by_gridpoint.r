@@ -40,7 +40,7 @@ oi_basic_gridpoint_by_gridpoint<-function( i,
   xa <- NA; xidi <- NA; o_errvar <- NA; xa_errvar <- NA
   
   # print some stuff now and then
-  if( i %% (round(envtmp$m_dim/10)) == 0) cat(".")
+#  if( i %% (round(envtmp$m_dim/10)) == 0) cat(".")
 
   # select the observations to use
   if ( (p <- length( aux <- which(envtmp$nn2$nn.idx[i,]!=0))) == 0) {

@@ -29,7 +29,7 @@ preproc_selensemble <- function( argv, fg_env, env) {
     score <- NA
 
   # compute score for each potential background field
-  } else if (argv$selens_mode %in% ( "ets", "maxoverlap")) {
+  } else if (argv$selens_mode %in% c( "ets", "maxoverlap")) {
     cat (" compute score for each potential background field \n")
     # reference observed field
     if (argv$preproc_mergeobs) {
