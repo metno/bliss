@@ -1,5 +1,5 @@
 #+ Read first-guess fields 
-read_fg <- function( argv, fg_env, u_env, env) {
+read_fg <- function( argv, env, fg_env) {
 #
 # fg_env structure:
 #  fg_env$nfg, number of input files
@@ -33,7 +33,6 @@ read_fg <- function( argv, fg_env, u_env, env) {
 
   if (argv$mode %in% c("oi_twostep_senorge_temperature")) {
     fg_env$ktot_dim <- 0
-    u_env$nuo  <- 0
     fg_env$nfg <- 0
     return(TRUE)
   }
@@ -44,108 +43,6 @@ read_fg <- function( argv, fg_env, u_env, env) {
   if ( ( fg_env$nfg <- length( fg_env$fg)) == 0) return( FALSE)
 
   if (argv$verbose) cat("+----------------------------------------------------+\n")
-
-  #
-  #----------------------------------------------------------------------------
-  # u_env$uo configuration file to read observations (not in-situ)
-  if ( ( u_env$nuo <- length( u_env$uo)) == 1) {
-
-    if (argv$verbose) cat("Read observations for alignment ...")
- 
-    # initializations
-
-    u_env$uo[[1]]$r_main <- NULL
-
-    if ( is.null( u_env$uo[[1]]$main.proj4)) 
-      u_env$uo[[1]]$main.proj4 <- ""
-    if ( is.null( u_env$uo[[1]]$main.proj4_var)) 
-      u_env$uo[[1]]$main.proj4_var <- ""
-    if ( is.null( u_env$uo[[1]]$main.proj4_att)) 
-      u_env$uo[[1]]$main.proj4_att <- ""
-    if ( is.null( u_env$uo[[1]]$main.t)) 
-      u_env$uo[[1]]$main.t <- NA
-    if ( is.null( u_env$uo[[1]]$main.acc)) 
-      u_env$uo[[1]]$main.acc <- F
-
-    # read the main file
-    if ( !is.null( u_env$uo[[1]]$main.file)) {
-      if ( file.exists( u_env$uo[[1]]$main.file)) {
-        first <- T
-        if ( is.null( u_env$uo[[1]]$main.epos)) {
-          ei <- 0
-        } else {
-          if ( is.null( u_env$uo[[1]]$main.e)) {
-            ei <- nc4.getDim( u_env$uo[[1]]$main.file, 
-                              varid = u_env$uo[[1]]$main.dimnames[u_env$uo[[1]]$main.epos])
-          } else {
-            ei <- u_env$uo[[1]]$main.e
-          }
-        }
-        if ( is.null( u_env$uo[[1]]$main.t) | is.na(u_env$uo[[1]]$main.t)) {
-            ti <- nc4.getTime( u_env$uo[[1]]$main.file)
-        } else {
-            ti <- u_env$uo[[1]]$main.t
-        }
-        for (ens in 1:length(ei)) {
-          if( ei[ens] == 0) { nc_e <- NA} else { nc_e <- ei[ens]}
-          res <- read_and_regrid_nc( nc.file    = u_env$uo[[1]]$main.file,
-                                     nc.varname = u_env$uo[[1]]$main.varname,
-                                     topdown    = u_env$uo[[1]]$main.topdown,
-                                     out.dim    = list( ndim  = u_env$uo[[1]]$main.ndim,
-                                                        tpos  = u_env$uo[[1]]$main.tpos,
-                                                        epos  = u_env$uo[[1]]$main.epos,
-                                                        names = u_env$uo[[1]]$main.dimnames),
-                                     proj4      = u_env$uo[[1]]$main.proj4,
-                                     nc.proj4   = list( var = u_env$uo[[1]]$main.proj4_var, 
-                                                        att = u_env$uo[[1]]$main.proj4_att),
-                                     selection  = list( t      = ti,
-                                                        format = "%Y%m%d%H%M",
-                                                        e      = nc_e),
-                                     adjfact=u_env$uo[[1]]$main.cfact,
-                                     adjval=u_env$uo[[1]]$main.offset,
-                                     rmaster = env$rmaster,
-#                                     grid_master.proj4 = as.character( env$rmaster),
-                                     nc.varname_lat ="none",
-                                     nc.varname_lon ="none",
-                                     out.dim_ll = list( ndim  = NA,
-                                                        tpos  = NA,
-                                                        epos  = NA,
-                                                        names = NA),
-                                     upscale = F,
-                                     upscale_fun = "mean",
-                                     projectraster_method = "bilinear") 
-#b<-readOGR("/home/cristianl/data/geoinfo/TM_WORLD_BORDERS_LATLON/TM_WORLD_BORDERS-0.2.shp","TM_WORLD_BORDERS-0.2")
-#proj4ll<-"+proj=longlat +datum=WGS84"
-#proj4lcc<-"+proj=lcc +lat_0=63 +lon_0=15 +lat_1=63 +lat_2=63 +no_defs +R=6.371e+06"
-#aux<-which(b@data$LON>=-10 & b@data$LON<=90 & b@data$LAT>=0 & b@data$LAT<=85)
-##145<-Antarctica
-#subset<-b[aux,]
-##ETRS89 / ETRS-LAEA
-##EPSG:32633 +proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs 
-## Russia not included
-#blcc<-spTransform(subset, CRS(proj4lcc))
-#png(file="test.png", height=1200, width=1200)
-#plot(res$raster)
-#plot(blcc,add=T)
-#dev.off()
-#q()
-          if ( !is.null( res)) {
-            if ( first) {
-              u_env$uo[[1]]$r_main <- u_env$uo[[1]]$main.offset + res$raster * u_env$uo[[1]]$main.cfact 
-            } else {
-              u_env$uo[[1]]$r_main <- stack( u_env$uo[[1]]$r_main,
-                                             u_env$uo[[1]]$main.offset + res$raster * u_env$uo[[1]]$main.cfact)
-            }
-            first <- F
-          }
-          rm(res)
-        } # end loop over ensemble 
-      } # end if main file exists 
-    } # end read the main file
-
-    if (argv$verbose) cat("done!\n")
-
-  }
 
   #
   #----------------------------------------------------------------------------
