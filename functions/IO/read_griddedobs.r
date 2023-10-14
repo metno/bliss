@@ -1,5 +1,5 @@
 #+ Read first-guess fields 
-read_fg <- function( argv, fg_env, u_env, env) {
+read_griddedobs <- function( argv, u_env, env) {
 #
 # fg_env structure:
 #  fg_env$nfg, number of input files

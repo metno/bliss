@@ -158,12 +158,19 @@ read_dem( argv, env)
 # fg_env$fg[[f]] = f-th element of the list, corresponding to the f-th file,
 #                  where the background data and metadata are stored
 res <- read_fg( argv, fg_env, u_env, env)
-if (!res) boom( code=1, str="ERROR problems while reading the background")
+if (!res) boom( code=1, str="ERROR while reading the background(s)")
+
+#
+#------------------------------------------------------------------------------
+# Read gridded observations
+res <- read_griddedobs( argv, env, y_env)
+if (!res) boom( code=1, str="ERROR while reading gridded observations")
+
 #
 #------------------------------------------------------------------------------
 # Read observations
 res <- read_obs( argv, env, y_env)
-if (!res) boom( code=1, str="ERROR problems while reading the observations")
+if (!res) boom( code=1, str="ERROR while reading observations")
 
 #
 #------------------------------------------------------------------------------
